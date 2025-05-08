@@ -15,14 +15,15 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
-  server: {
-    port: 5555,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8686',
-        changeOrigin: true,
-        secure: false
-      }
+  // In vite.config.js
+server: {
+  port: 5555,
+  proxy: {
+    '/api': {
+      target: 'http://localhost:9999', // Change this to 9999
+      changeOrigin: true,
+      secure: false
     }
-  },
+  }
+},
 })
