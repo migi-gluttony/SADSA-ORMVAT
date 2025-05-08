@@ -1,15 +1,13 @@
 package ormvat.sadsa.model;
 
-import java.util.Collection;
-import java.util.Date;
-import java.util.List;
-
+import jakarta.persistence.*;
+import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import jakarta.persistence.*;
-import lombok.*;
+import java.util.Collection;
+import java.util.List;
 
 @Entity
 @Table(name = "utilisateur")
@@ -33,27 +31,27 @@ public class Utilisateur implements UserDetails {
     private String email;
 
     @Column(unique = true)
-    private String cni;
-
-    @Column(unique = true)
-    private String cne;
-
-    @Column(name = "date_naissance")
-    @Temporal(TemporalType.DATE)
-    private Date dateNaissance;
+    private String telephone;
 
     @Column(name = "mot_de_passe", nullable = false)
     private String motDePasse;
+
+    @Column
+    private String statut; // actif, inactif
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;
 
-    // Enum for role type
+    @ManyToOne
+    @JoinColumn(name = "id_cda")
+    private CDA cda;
+
+    // SADSA specific roles
     public enum Role {
-        ETUDIANT, CHEF_DE_DEPARTEMENT, ENCADRANT, JURY
+        ADMIN, AGENT_ANTENNE, AGENT_GUC, AGENT_COMMISSION
     }
-    // UserDetails implementation
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
@@ -86,6 +84,6 @@ public class Utilisateur implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return "actif".equalsIgnoreCase(statut);
     }
 }

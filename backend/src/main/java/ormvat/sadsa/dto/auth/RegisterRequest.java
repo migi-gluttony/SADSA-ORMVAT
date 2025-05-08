@@ -1,7 +1,5 @@
 package ormvat.sadsa.dto.auth;
 
-import java.util.Date;
-
 import lombok.Data;
 import ormvat.sadsa.model.Utilisateur;
 
@@ -10,9 +8,8 @@ public class RegisterRequest {
     private String nom;
     private String prenom;
     private String email;
-    private String cni;
-    private String cne;
-    private Date dateNaissance;
+    private String telephone;
     private String motDePasse;
     private Utilisateur.Role role;
+    private Long cdaId; // Optional: CDA assignment for users
 }

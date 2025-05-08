@@ -1,13 +1,11 @@
 package ormvat.sadsa.controller;
 
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import lombok.RequiredArgsConstructor;
 import ormvat.sadsa.dto.auth.*;
 import ormvat.sadsa.service.auth.AuthenticationService;
-
 
 @RestController
 @RequestMapping("/api/auth")
@@ -27,19 +25,13 @@ public class AuthController {
         return ResponseEntity.ok(service.login(loginRequest));
     }
     
-    /**
-     * Step 1 of password reset - validate user info and issue token
-     */
-    @PostMapping("/reset-password-request")
-    public ResponseEntity<AuthResponse> requestPasswordReset(@RequestBody PasswordResetRequest request) {
-        return ResponseEntity.ok(service.requestPasswordReset(request));
-    }
-
-    /**
-     * Step 2 of password reset - validate token and update password
-     */
-    @PostMapping("/reset-password-confirm")
-    public ResponseEntity<AuthResponse> confirmPasswordReset(@RequestBody PasswordResetConfirm request) {
-        return ResponseEntity.ok(service.confirmPasswordReset(request));
+    @PostMapping("/change-password")
+    public ResponseEntity<Void> changePassword(
+            @RequestHeader("Authorization") String token,
+            @RequestBody PasswordChangeRequest request) {
+        // Extract email from token (this would typically be done with a security context)
+        String email = "user@example.com"; // You'll need to extract this from the token
+        service.changePassword(email, request);
+        return ResponseEntity.ok().build();
     }
 }
