@@ -1,23 +1,25 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '@/views/auth/LoginView.vue'
-// Use dynamic imports for components that might not be available yet
-const DashboardView = () => import('@/views/DashboardView.vue')
-const NotFoundView = () => import('@/views/NotFoundView.vue')
-import AuthService from '@/services/AuthService'
+import DashboardView from '../views/DashboardView.vue'
+import NotFoundView from '../views/NotFoundView.vue'
+import AuthService from '../services/AuthService'
 import RegisterView from '@/views/auth/RegisterView.vue'
+import LandingPage from '@/views/LandingPage.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      redirect: '/login'
+      name: '',
+      component: LandingPage,
+      meta: { guest: true }
     },
     {
       path: '/login',
       name: 'login',
       component: LoginView,
-      meta: { guest: true }
+      meta: { guest: true, hideHeader: true }  
     },
     {
       path: '/dashboard',
@@ -29,7 +31,7 @@ const router = createRouter({
       path: '/register',
       name: 'register',
       component: RegisterView,
-      meta: { guest: true }
+      meta: { guest: true, hideHeader: true }  
     },
     // Catch-all route for 404
     {
@@ -40,7 +42,7 @@ const router = createRouter({
   ]
 })
 
-// Navigation guard to check authentication
+// Navigation guard to check authentication and role-based access
 router.beforeEach((to, from, next) => {
   // Check if the user is authenticated
   const isAuthenticated = AuthService.isAuthenticated();
@@ -76,10 +78,10 @@ router.beforeEach((to, from, next) => {
 })
 
 router.beforeEach((to, from, next) => {
-  if (to.name === 'login') {
-    document.body.classList.add('login-page');
+  if (to.name === '' || to.path === '/' || to.path === '/login' || to.path === '/register') {
+    document.body.classList.add('landing-page');
   } else {
-    document.body.classList.remove('login-page');
+    document.body.classList.remove('landing-page');
   }
   next();
 });

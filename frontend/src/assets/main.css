@@ -10,6 +10,7 @@
   --text-color: #213547;
   --background-color: #ffffff;
   --primary-color: #01723e;
+  --primary-color-rgb: rgb(1, 114, 62);
   --secondary-color: #efb157;
   --accent-color: #2e7145;
   --border-color: #e5e7eb;
@@ -21,6 +22,7 @@
   --text-color: #e5e7eb;
   --background-color: #1e1e1e;
   --primary-color: #01864a;
+  --primary-color-rgb: rgb(1, 134, 74);
   --secondary-color: #d7983f;
   --accent-color: #3a8757;
   --border-color: #4b5563;
@@ -28,8 +30,7 @@
 
 /* Base styles */
 html, body {
-  font-family: 'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, 
-    Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-family: 'Rubik';
   font-size: 16px;
   line-height: 1.5;
   color: var(--text-color);
@@ -37,15 +38,14 @@ html, body {
   transition: color 0.3s, background-color 0.3s;
 }
 
-h1, h2, h3, h4, h5, h6 {
-  font-family: 'Poppins', sans-serif;
-  font-weight: 700;
-}
+
 
 /* App container */
 #app {
   width: 100%;
   min-height: 100vh;
+    padding: 1rem;
+
 }
 
 /* Remove padding specifically for landing page */
@@ -96,6 +96,10 @@ h4 { font-size: 1.25rem; }
 h5 { font-size: 1.125rem; }
 h6 { font-size: 1rem; }
 
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 700;
+}
 p {
   margin-bottom: 1rem;
 }
@@ -103,6 +107,8 @@ p {
 /* Responsive adjustments */
 @media (min-width: 768px) {
   #app {
+        padding: 2rem;
+
     }
   
   /* Override padding for landing page at larger screens too */
