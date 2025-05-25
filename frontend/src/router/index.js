@@ -5,7 +5,7 @@ import NotFoundView from '../views/NotFoundView.vue'
 import AuthService from '../services/AuthService'
 import RegisterView from '@/views/auth/RegisterView.vue'
 import LandingPage from '@/views/LandingPage.vue'
-
+import CreateDossierView from '@/views/agent_antenne/CreateDossierView.vue'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -19,7 +19,7 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: LoginView,
-      meta: { guest: true, hideHeader: true }  
+      meta: { guest: true, hideHeader: true }
     },
     {
       path: '/dashboard',
@@ -31,7 +31,18 @@ const router = createRouter({
       path: '/register',
       name: 'register',
       component: RegisterView,
-      meta: { guest: true, hideHeader: true }  
+      meta: { guest: true, hideHeader: true }
+    },
+    // agent antenne 
+    {
+      path: '/agent_antenne/dossiers/create',
+      name: 'create-dossier',
+      component: CreateDossierView,
+      meta: {
+        requiresAuth: true,
+        requiresRole: 'AGENT_ANTENNE',
+        title: 'Créer un dossier'
+      }
     },
     // Catch-all route for 404
     {
