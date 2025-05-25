@@ -31,6 +31,11 @@ public class SecurityConfiguration {
                 .requestMatchers("/api/auth/register").permitAll()
                 .requestMatchers("/api/auth/reset-password-request").permitAll()
                 .requestMatchers("/api/auth/reset-password-confirm").permitAll()
+                .requestMatchers("/api/agent_antenne/**").hasRole("AGENT_ANTENNE")
+                .requestMatchers("/api/agent_guc/**").hasRole("AGENT_GUC")
+                .requestMatchers("/api/agent_commission/**").hasRole("AGENT_COMMISSION")
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
                 // Any other request requires authentication
                 .anyRequest().authenticated()
             )
