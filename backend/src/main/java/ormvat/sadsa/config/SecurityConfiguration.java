@@ -24,24 +24,23 @@ public class SecurityConfiguration {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(AbstractHttpConfigurer::disable)
-            .authorizeHttpRequests(auth -> auth
-                // Allow authentication endpoints without authentication
-                .requestMatchers("/api/auth/login").permitAll()
-                .requestMatchers("/api/auth/register").permitAll()
-                .requestMatchers("/api/auth/reset-password-request").permitAll()
-                .requestMatchers("/api/auth/reset-password-confirm").permitAll()
-                .requestMatchers("/api/agent_antenne/**").hasRole("AGENT_ANTENNE")
-                .requestMatchers("/api/agent_guc/**").hasRole("AGENT_GUC")
-                .requestMatchers("/api/agent_commission/**").hasRole("AGENT_COMMISSION")
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .csrf(AbstractHttpConfigurer::disable)
+                .authorizeHttpRequests(auth -> auth
+                        // Allow authentication endpoints without authentication
+                        .requestMatchers("/api/auth/login").permitAll()
+                        .requestMatchers("/api/auth/register").permitAll()
+                        .requestMatchers("/api/auth/reset-password-request").permitAll()
+                        .requestMatchers("/api/auth/reset-password-confirm").permitAll()
+                        .requestMatchers("/api/agent_antenne/**").permitAll()
+                        .requestMatchers("/api/agent_guc/**").hasRole("AGENT_GUC")
+                        .requestMatchers("/api/agent_commission/**").hasRole("AGENT_COMMISSION")
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                // Any other request requires authentication
-                .anyRequest().authenticated()
-            )
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authenticationProvider(authenticationProvider)
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                        // Any other request requires authentication
+                        .anyRequest().authenticated())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authenticationProvider(authenticationProvider)
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }

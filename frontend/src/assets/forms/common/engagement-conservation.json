@@ -1,0 +1,22 @@
+{
+  "title": "Engagement de Conservation - Standard",
+  "description": "Engagement standard de conservation applicable à tous types d'investissements",
+  "fields": [
+    {
+      "name": "duree_conservation",
+      "label": "Durée de conservation (années)",
+      "type": "number",
+      "required": true,
+      "value": 5,
+      "min": 3,
+      "max": 10
+    },
+    {
+      "name": "engagement_maintien",
+      "label": "Engagement de maintien",
+      "type": "checkbox",
+      "required": true,
+      "checkboxLabel": "Je m'engage à maintenir l'investissement pendant la durée requise"
+    }
+  ]
+}

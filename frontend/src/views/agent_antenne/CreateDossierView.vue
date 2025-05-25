@@ -53,15 +53,7 @@
           </div>
         </div>
         
-        <div class="step-actions">
-          <Button 
-            label="Continuer" 
-            icon="pi pi-arrow-right" 
-            @click="nextStep"
-            :disabled="!selectedSousRubrique"
-            class="btn-primary"
-          />
-        </div>
+       
       </div>
     </div>
 
@@ -116,20 +108,62 @@
           </div>
 
           <div class="form-group">
-            <label for="commune">Commune</label>
-            <InputText 
-              id="commune" 
-              v-model="formData.agriculteur.commune" 
-              placeholder="Commune"
+            <label for="province" class="required">Province</label>
+            <Dropdown 
+              id="province" 
+              v-model="selectedProvince" 
+              :options="provinces"
+              option-label="designation"
+              option-value="id"
+              placeholder="Province"
+              @change="onProvinceChange"
+              :class="{ 'p-invalid': validationErrors.province }"
             />
+            <small class="p-error">{{ validationErrors.province }}</small>
           </div>
 
           <div class="form-group">
-            <label for="province">Province</label>
-            <InputText 
-              id="province" 
-              v-model="formData.agriculteur.province" 
-              placeholder="Province"
+            <label for="cercle" class="required">Cercle</label>
+            <Dropdown 
+              id="cercle" 
+              v-model="selectedCercle" 
+              :options="cercles"
+              option-label="designation"
+              option-value="id"
+              placeholder="Sélectionner un cercle"
+              :disabled="!selectedProvince"
+              @change="onCercleChange"
+              :class="{ 'p-invalid': validationErrors.cercle }"
+            />
+            <small class="p-error">{{ validationErrors.cercle }}</small>
+          </div>
+
+          <div class="form-group">
+            <label for="commune" class="required">Commune Rurale</label>
+            <Dropdown 
+              id="commune" 
+              v-model="formData.agriculteur.communeRuraleId" 
+              :options="communesRurales"
+              option-label="designation"
+              option-value="id"
+              placeholder="Sélectionner une commune rurale"
+              :disabled="!selectedCercle"
+              @change="onCommuneChange"
+              :class="{ 'p-invalid': validationErrors.communeRuraleId }"
+            />
+            <small class="p-error">{{ validationErrors.communeRuraleId }}</small>
+          </div>
+
+          <div class="form-group">
+            <label for="douar">Douar</label>
+            <Dropdown 
+              id="douar" 
+              v-model="formData.agriculteur.douarId" 
+              :options="douars"
+              option-label="designation"
+              option-value="id"
+              placeholder="Sélectionner un douar"
+              :disabled="!formData.agriculteur.communeRuraleId"
             />
           </div>
         </div>
@@ -139,39 +173,33 @@
         <h2><i class="pi pi-folder"></i> Informations du dossier</h2>
         <div class="form-grid">
           <div class="form-group">
-            <label for="saba" class="required">SABA</label>
+            <label for="saba" class="required">SABA (généré automatiquement)</label>
             <InputText 
               id="saba" 
               v-model="formData.dossier.saba" 
-              placeholder="000XXX/YYYY/ZZZ"
-              @blur="checkSabaUniqueness"
+              placeholder="000000/2025/001"
+              readonly
               :class="{ 'p-invalid': validationErrors.saba }"
             />
-            <small class="form-help">Format: 000XXX/YYYY/ZZZ</small>
+            <small class="form-help">Numéro généré automatiquement</small>
             <small class="p-error">{{ validationErrors.saba }}</small>
           </div>
 
           <div class="form-group">
-            <label for="reference">Référence</label>
-            <InputText 
-              id="reference" 
-              v-model="formData.dossier.reference" 
-              placeholder="Référence (optionnelle)"
-            />
-          </div>
-
-          <div class="form-group">
-            <label for="cda" class="required">CDA</label>
-            <Dropdown 
-              id="cda" 
-              v-model="formData.dossier.cdaId" 
-              :options="cdas"
-              option-label="description"
-              option-value="id"
-              placeholder="Sélectionner un CDA"
-              :class="{ 'p-invalid': validationErrors.cdaId }"
-            />
-            <small class="p-error">{{ validationErrors.cdaId }}</small>
+            <label>CDA (automatique)</label>
+            <div class="cda-info">
+              <div v-if="userCDA" class="user-cda-display">
+                <i class="pi pi-building"></i>
+                <div>
+                  <strong>{{ userCDA.description }}</strong>
+                  <small>{{ userCDA.antenneNom }}</small>
+                </div>
+              </div>
+              <div v-else class="loading-cda">
+                <i class="pi pi-spin pi-spinner"></i>
+                Chargement du CDA...
+              </div>
+            </div>
           </div>
 
           <div class="form-group">
@@ -250,7 +278,6 @@
             </div>
             
             <div v-if="expandedDocuments[index]" class="document-content">
-              <!-- Upload de fichier si requis -->
               <div v-if="document.uploadRequired" class="file-upload-section">
                 <h4>Document scanné</h4>
                 <FileUpload 
@@ -264,7 +291,6 @@
                 />
               </div>
 
-              <!-- Formulaire dynamique si requis -->
               <div v-if="document.formRequired" class="dynamic-form">
                 <h4>Informations à compléter</h4>
                 <DynamicForm 
@@ -306,7 +332,8 @@
               <div><strong>Nom complet:</strong> {{ dossierSummary.agriculteur.prenom }} {{ dossierSummary.agriculteur.nom }}</div>
               <div><strong>CIN:</strong> {{ dossierSummary.agriculteur.cin }}</div>
               <div><strong>Téléphone:</strong> {{ dossierSummary.agriculteur.telephone }}</div>
-              <div v-if="dossierSummary.agriculteur.commune"><strong>Commune:</strong> {{ dossierSummary.agriculteur.commune }}</div>
+              <div v-if="selectedCommuneName"><strong>Commune Rurale:</strong> {{ selectedCommuneName }}</div>
+              <div v-if="selectedDouarName"><strong>Douar:</strong> {{ selectedDouarName }}</div>
             </div>
           </div>
 
@@ -343,66 +370,78 @@
             @click="previousStep"
             class="p-button-outlined"
           />
-          <div class="action-group">
-            <Button 
-              label="Sauvegarder brouillon" 
-              icon="pi pi-save" 
-              @click="saveDraft"
-              class="p-button-secondary"
-              :loading="loading.saveDraft"
-            />
-            <Button 
-              label="Créer le dossier" 
-              icon="pi pi-check" 
-              @click="createDossier"
-              class="p-button-success"
-              :loading="loading.create"
-            />
-          </div>
+          <Button 
+            label="Créer le dossier" 
+            icon="pi pi-check" 
+            @click="createDossier"
+            class="p-button-success"
+            :loading="loading.create"
+          />
         </div>
       </div>
     </div>
 
-    <!-- Composant de récépissé -->
+    <!-- Auto-save indicator -->
+    <div v-if="autoSaving" class="auto-save-indicator">
+      <i class="pi pi-save"></i>
+      Sauvegarde automatique...
+    </div>
+
+    <!-- Printable Receipt Component (hidden, only for printing) -->
+    <PrintableReceipt 
+      v-if="recepisse" 
+      :receipt="recepisse" 
+      style="display: none;"
+      id="printable-receipt"
+    />
+
+    <!-- Composant de récépissé (modal for preview) -->
     <Dialog 
       v-model:visible="showRecepisse" 
       modal 
       header="Récépissé de dépôt"
-      :style="{ width: '500px' }"
+      :style="{ width: '600px' }"
     >
-      <div v-if="recepisse" class="recepisse-content">
+      <div v-if="recepisse" class="recepisse-preview">
         <div class="recepisse-header">
           <h3>RÉCÉPISSÉ N° {{ recepisse.numeroRecepisse }}</h3>
           <p>{{ formatDate(recepisse.dateDepot) }}</p>
         </div>
         
         <div class="recepisse-body">
-          <div class="recepisse-row">
-            <strong>Agriculteur:</strong> {{ recepisse.nomComplet }}
+          <div class="recepisse-section">
+            <h4>Informations du demandeur</h4>
+            <div class="recepisse-row">
+              <strong>Agriculteur:</strong> {{ recepisse.nomComplet }}
+            </div>
+            <div class="recepisse-row">
+              <strong>CIN:</strong> {{ recepisse.cin }}
+            </div>
+            <div class="recepisse-row">
+              <strong>Téléphone:</strong> {{ recepisse.telephone }}
+            </div>
           </div>
-          <div class="recepisse-row">
-            <strong>CIN:</strong> {{ recepisse.cin }}
-          </div>
-          <div class="recepisse-row">
-            <strong>Téléphone:</strong> {{ recepisse.telephone }}
-          </div>
-          <div class="recepisse-row">
-            <strong>Type de projet:</strong> {{ recepisse.typeProduit }}
-          </div>
-          <div class="recepisse-row">
-            <strong>SABA:</strong> {{ recepisse.saba }}
-          </div>
-          <div class="recepisse-row">
-            <strong>Montant demandé:</strong> {{ formatCurrency(recepisse.montantDemande) }}
-          </div>
-          <div class="recepisse-row">
-            <strong>CDA:</strong> {{ recepisse.cdaNom }}
+
+          <div class="recepisse-section">
+            <h4>Informations du dossier</h4>
+            <div class="recepisse-row">
+              <strong>Type de projet:</strong> {{ recepisse.typeProduit }}
+            </div>
+            <div class="recepisse-row">
+              <strong>SABA:</strong> {{ recepisse.saba }}
+            </div>
+            <div class="recepisse-row">
+              <strong>Montant demandé:</strong> {{ formatCurrency(recepisse.montantDemande) }}
+            </div>
+            <div class="recepisse-row">
+              <strong>CDA:</strong> {{ recepisse.cdaNom }}
+            </div>
           </div>
         </div>
       </div>
       
       <template #footer>
-        <Button label="Imprimer" icon="pi pi-print" @click="printRecepisse" />
+        <Button label="Imprimer" icon="pi pi-print" @click="printRecepisse" class="p-button-primary" />
         <Button label="Fermer" icon="pi pi-times" @click="showRecepisse = false" class="p-button-outlined" />
       </template>
     </Dialog>
@@ -415,6 +454,8 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import UserInfoHeader from '@/components/UserInfoHeader.vue';
+import DynamicForm from '@/components/DynamicForm.vue';
+import PrintableReceipt from '@/components/agent_antenne/PrintableReceipt.vue';
 import ApiService from '@/services/ApiService';
 
 // PrimeVue components
@@ -429,6 +470,10 @@ import Toast from 'primevue/toast';
 
 const toast = useToast();
 
+// Constants
+const STORAGE_KEY = 'dossier-creation-draft';
+const AUTO_SAVE_DELAY = 1000;
+
 // État des étapes
 const currentStep = ref(1);
 const steps = [
@@ -438,20 +483,19 @@ const steps = [
   { label: 'Finalisation' }
 ];
 
-// Données du formulaire
+// Données du formulaire avec auto-save
 const formData = ref({
   agriculteur: {
     cin: '',
     nom: '',
     prenom: '',
     telephone: '',
-    commune: '',
-    province: ''
+    communeRuraleId: null,
+    douarId: null
   },
   dossier: {
     saba: '',
     reference: '',
-    cdaId: null,
     sousRubriqueId: null,
     dateDepot: new Date(),
     montantDemande: null
@@ -459,19 +503,32 @@ const formData = ref({
   formulairesDynamiques: {}
 });
 
+// User's CDA (auto-loaded)
+const userCDA = ref(null);
+
 // États de l'interface
 const loading = ref({
   rubriques: false,
   cdas: false,
   create: false,
-  saveDraft: false,
-  validation: false
+  geographic: false
 });
+
+const autoSaving = ref(false);
+let autoSaveTimeout = null;
 
 // Données
 const rubriques = ref([]);
-const cdas = ref([]);
+const provinces = ref([]);
+const cercles = ref([]);
+const communesRurales = ref([]);
+const douars = ref([]);
+
+// Sélections
 const selectedSousRubrique = ref(null);
+const selectedProvince = ref(null);
+const selectedCercle = ref(null);
+
 const expandedDocuments = ref({});
 const validationErrors = ref({});
 const dossierSummary = ref(null);
@@ -484,22 +541,104 @@ const isBasicInfoValid = computed(() => {
          formData.value.agriculteur.nom && 
          formData.value.agriculteur.prenom && 
          formData.value.agriculteur.telephone &&
+         formData.value.agriculteur.communeRuraleId &&
          formData.value.dossier.saba &&
-         formData.value.dossier.cdaId &&
+         userCDA.value &&
          formData.value.dossier.montantDemande;
 });
 
+const selectedCommuneName = computed(() => {
+  return communesRurales.value.find(c => c.id === formData.value.agriculteur.communeRuraleId)?.designation;
+});
+
+const selectedDouarName = computed(() => {
+  return douars.value.find(d => d.id === formData.value.agriculteur.douarId)?.designation;
+});
+
+// Auto-save functionality
+const loadSavedData = () => {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    try {
+      const parsedData = JSON.parse(saved);
+      formData.value = { ...formData.value, ...parsedData.formData };
+      
+      // Restore selections
+      if (parsedData.selectedProvince) selectedProvince.value = parsedData.selectedProvince;
+      if (parsedData.selectedCercle) selectedCercle.value = parsedData.selectedCercle;
+      if (parsedData.selectedSousRubrique) selectedSousRubrique.value = parsedData.selectedSousRubrique;
+      if (parsedData.currentStep) currentStep.value = parsedData.currentStep;
+      
+      // Restore dependent dropdowns
+      if (parsedData.selectedProvince) onProvinceChange();
+      if (parsedData.selectedCercle) onCercleChange();
+      if (parsedData.formData?.agriculteur?.communeRuraleId) onCommuneChange();
+      
+    } catch (e) {
+      console.warn('Failed to load saved data:', e);
+    }
+  }
+};
+
+const autoSave = () => {
+  if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
+  
+  autoSaveTimeout = setTimeout(() => {
+    try {
+      autoSaving.value = true;
+      const dataToSave = {
+        formData: formData.value,
+        selectedProvince: selectedProvince.value,
+        selectedCercle: selectedCercle.value,
+        selectedSousRubrique: selectedSousRubrique.value,
+        currentStep: currentStep.value,
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+      
+      setTimeout(() => {
+        autoSaving.value = false;
+      }, 500);
+    } catch (e) {
+      console.warn('Failed to auto-save:', e);
+      autoSaving.value = false;
+    }
+  }, AUTO_SAVE_DELAY);
+};
+
+// Watch for changes to auto-save
+watch(formData, autoSave, { deep: true });
+watch([selectedProvince, selectedCercle, selectedSousRubrique, currentStep], autoSave);
+
 // Méthodes du cycle de vie
 onMounted(async () => {
+  loadSavedData();
   await loadInitialData();
+  await autoGenerateSaba();
 });
 
 // Méthodes
 async function loadInitialData() {
   await Promise.all([
     loadRubriques(),
-    loadCDAs()
+    loadUserCDA(),
+    loadProvinces()
   ]);
+}
+
+async function loadUserCDA() {
+  try {
+    userCDA.value = await ApiService.get('/agent_antenne/dossiers/user-cda');
+  } catch (error) {
+    console.error('Erreur lors du chargement du CDA utilisateur:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: 'Impossible de charger votre CDA',
+      life: 3000
+    });
+  }
 }
 
 async function loadRubriques() {
@@ -538,6 +677,83 @@ async function loadCDAs() {
   }
 }
 
+async function loadProvinces() {
+  try {
+    loading.value.geographic = true;
+    const response = await ApiService.get('/agent_antenne/dossiers/provinces');
+    provinces.value = response || [];
+    
+    // Auto-select Fquih Ben Salah if it's the only province
+    if (provinces.value.length === 1) {
+      selectedProvince.value = provinces.value[0].id;
+      onProvinceChange();
+    }
+  } catch (error) {
+    console.error('Erreur lors du chargement des provinces:', error);
+  } finally {
+    loading.value.geographic = false;
+  }
+}
+
+async function onProvinceChange() {
+  if (selectedProvince.value) {
+    try {
+      const response = await ApiService.get(`/agent_antenne/dossiers/cercles/${selectedProvince.value}`);
+      cercles.value = response || [];
+      
+      // Reset dependent selections
+      selectedCercle.value = null;
+      communesRurales.value = [];
+      douars.value = [];
+      formData.value.agriculteur.communeRuraleId = null;
+      formData.value.agriculteur.douarId = null;
+    } catch (error) {
+      console.error('Erreur lors du chargement des cercles:', error);
+    }
+  }
+}
+
+async function onCercleChange() {
+  if (selectedCercle.value) {
+    try {
+      const response = await ApiService.get(`/agent_antenne/dossiers/communes/${selectedCercle.value}`);
+      communesRurales.value = response || [];
+      
+      // Reset dependent selections
+      douars.value = [];
+      formData.value.agriculteur.communeRuraleId = null;
+      formData.value.agriculteur.douarId = null;
+    } catch (error) {
+      console.error('Erreur lors du chargement des communes:', error);
+    }
+  }
+}
+
+async function onCommuneChange() {
+  if (formData.value.agriculteur.communeRuraleId) {
+    try {
+      const response = await ApiService.get(`/agent_antenne/dossiers/douars/${formData.value.agriculteur.communeRuraleId}`);
+      douars.value = response || [];
+      
+      // Reset douar selection
+      formData.value.agriculteur.douarId = null;
+    } catch (error) {
+      console.error('Erreur lors du chargement des douars:', error);
+    }
+  }
+}
+
+async function autoGenerateSaba() {
+  if (!formData.value.dossier.saba) {
+    try {
+      const response = await ApiService.get('/agent_antenne/dossiers/generate-saba');
+      formData.value.dossier.saba = response.saba;
+    } catch (error) {
+      console.warn('Failed to auto-generate SABA:', error);
+    }
+  }
+}
+
 function selectSousRubrique(sousRubrique) {
   selectedSousRubrique.value = sousRubrique;
   formData.value.dossier.sousRubriqueId = sousRubrique.id;
@@ -545,6 +761,9 @@ function selectSousRubrique(sousRubrique) {
   // Réinitialiser les formulaires dynamiques
   formData.value.formulairesDynamiques = {};
   expandedDocuments.value = {};
+  
+  // Auto-advance to next step
+  nextStep();
 }
 
 function nextStep() {
@@ -610,14 +829,16 @@ function validateBasicInfo() {
     errors.telephone = 'Téléphone requis';
   }
   
-  if (!formData.value.dossier.saba) {
-    errors.saba = 'SABA requis';
-  } else if (!isValidSabaFormat(formData.value.dossier.saba)) {
-    errors.saba = 'Format SABA invalide (000XXX/YYYY/ZZZ)';
+  if (!formData.value.agriculteur.communeRuraleId) {
+    errors.communeRuraleId = 'Commune rurale requise';
   }
   
-  if (!formData.value.dossier.cdaId) {
-    errors.cdaId = 'CDA requis';
+  if (!formData.value.dossier.saba) {
+    errors.saba = 'SABA requis';
+  }
+  
+  if (!userCDA.value) {
+    errors.cda = 'CDA non chargé';
   }
   
   if (!formData.value.dossier.montantDemande) {
@@ -629,7 +850,6 @@ function validateBasicInfo() {
 }
 
 function validateDynamicForms() {
-  // TODO: Implémenter la validation des formulaires dynamiques
   return true;
 }
 
@@ -661,6 +881,9 @@ async function createDossier() {
       life: 5000
     });
     
+    // Clear saved data after successful creation
+    localStorage.removeItem(STORAGE_KEY);
+    
     // Afficher le récépissé
     recepisse.value = response.recepisse;
     showRecepisse.value = true;
@@ -680,32 +903,6 @@ async function createDossier() {
     });
   } finally {
     loading.value.create = false;
-  }
-}
-
-async function saveDraft() {
-  try {
-    loading.value.saveDraft = true;
-    
-    await ApiService.post('/agent_antenne/dossiers/save-draft', formData.value);
-    
-    toast.add({
-      severity: 'info',
-      summary: 'Sauvegardé',
-      detail: 'Brouillon sauvegardé avec succès',
-      life: 3000
-    });
-    
-  } catch (error) {
-    console.error('Erreur lors de la sauvegarde:', error);
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: 'Impossible de sauvegarder le brouillon',
-      life: 3000
-    });
-  } finally {
-    loading.value.saveDraft = false;
   }
 }
 
@@ -730,8 +927,8 @@ async function generateRecepisse() {
     typeProduit: selectedSousRubrique.value?.designation || '',
     saba: formData.value.dossier.saba,
     montantDemande: formData.value.dossier.montantDemande,
-    cdaNom: cdas.value.find(c => c.id === formData.value.dossier.cdaId)?.description || '',
-    antenne: 'BENI AMIR'
+    cdaNom: userCDA.value?.description || '',
+    antenne: userCDA.value?.antenneNom || ''
   };
   
   recepisse.value = tempRecepisse;
@@ -739,34 +936,29 @@ async function generateRecepisse() {
 }
 
 function printRecepisse() {
-  window.print();
+  // Focus on the printable component
+  const printElement = document.getElementById('printable-receipt');
+  if (printElement) {
+    printElement.style.display = 'block';
+    
+    // Trigger print
+    setTimeout(() => {
+      window.print();
+      
+      // Hide after print
+      setTimeout(() => {
+        printElement.style.display = 'none';
+      }, 100);
+    }, 100);
+  }
 }
 
 async function searchAgriculteur() {
   if (formData.value.agriculteur.cin.length >= 8) {
     try {
-      // TODO: Implémenter la recherche d'agriculteur
       console.log('Recherche agriculteur:', formData.value.agriculteur.cin);
     } catch (error) {
       console.error('Erreur lors de la recherche:', error);
-    }
-  }
-}
-
-async function checkSabaUniqueness() {
-  if (formData.value.dossier.saba && isValidSabaFormat(formData.value.dossier.saba)) {
-    try {
-      const response = await ApiService.get('/agent_antenne/dossiers/check-saba', {
-        saba: formData.value.dossier.saba
-      });
-      
-      if (!response.isUnique) {
-        validationErrors.value.saba = 'Ce numéro SABA est déjà utilisé';
-      } else {
-        delete validationErrors.value.saba;
-      }
-    } catch (error) {
-      console.error('Erreur lors de la vérification SABA:', error);
     }
   }
 }
@@ -790,7 +982,6 @@ function onFileUpload(event, index) {
 }
 
 function handleSearch(query) {
-  // TODO: Implémenter la recherche
   console.log('Recherche:', query);
 }
 
@@ -801,13 +992,12 @@ function resetForm() {
       nom: '',
       prenom: '',
       telephone: '',
-      commune: '',
-      province: ''
+      communeRuraleId: null,
+      douarId: null
     },
     dossier: {
       saba: '',
       reference: '',
-      cdaId: null,
       sousRubriqueId: null,
       dateDepot: new Date(),
       montantDemande: null
@@ -816,16 +1006,20 @@ function resetForm() {
   };
   
   selectedSousRubrique.value = null;
+  selectedProvince.value = null;
+  selectedCercle.value = null;
   currentStep.value = 1;
   validationErrors.value = {};
   expandedDocuments.value = {};
+  
+  // Clear saved data
+  localStorage.removeItem(STORAGE_KEY);
+  
+  // Regenerate SABA for new form
+  autoGenerateSaba();
 }
 
 // Fonctions utilitaires
-function isValidSabaFormat(saba) {
-  return /^\d{6}\/\d{4}\/\d{3}$/.test(saba);
-}
-
 function getProjectIcon(codeType) {
   const icons = {
     'acquisition-et-installation-des-serres': 'pi pi-home',
@@ -879,16 +1073,38 @@ function formatDate(date) {
   padding: 0;
 }
 
+/* Auto-save indicator */
+.auto-save-indicator {
+  position: fixed;
+  bottom: 1rem;
+  left: 1rem;
+  background: var(--primary-color);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 1000;
+  animation: fadeInOut 2s ease-in-out;
+}
+
+@keyframes fadeInOut {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
 /* Stepper */
 .stepper-container {
-  margin-bottom: 2rem;
+  margin-bottom: var(--component-spacing);
 }
 
 .stepper {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: white;
+  background: var(--background-color);
   padding: 1.5rem;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -946,6 +1162,7 @@ function formatDate(date) {
   font-weight: 500;
   color: #6b7280;
   font-size: 0.875rem;
+  margin-right:1rem;
 }
 
 .step.active .step-label {
@@ -964,7 +1181,7 @@ function formatDate(date) {
   background: #f8f9fa;
   border-radius: 12px;
   padding: 1.5rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
 }
 
 .rubrique-card h3 {
@@ -1021,6 +1238,53 @@ function formatDate(date) {
   font-size: 0.875rem;
   color: #6b7280;
   margin: 0;
+}
+
+/* CDA Display */
+.cda-info {
+  padding: 0.75rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.user-cda-display {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-cda-display i {
+  color: var(--primary-color);
+  font-size: 1.25rem;
+}
+
+.user-cda-display div {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-cda-display strong {
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.user-cda-display small {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.loading-cda {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.dark-mode .cda-info {
+  background: #374151;
+  border-color: #4b5563;
 }
 
 /* Form Styles */

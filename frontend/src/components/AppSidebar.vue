@@ -153,10 +153,10 @@ const menuItems = computed(() => {
     if (role === "AGENT_ANTENNE") {
         items.push(
             {
-                label: "Documents",
+                label: "Créer un Dossier",
                 icon: "pi pi-file",
-                command: () => router.push("/etudiant/documents"),
-                route: "/etudiant/documents",
+                command: () => router.push("/agent_antenne/dossiers/create"),
+                route: "/agent_antenne/dossiers/create",
             },
             {
                 label: "Rapport Final",

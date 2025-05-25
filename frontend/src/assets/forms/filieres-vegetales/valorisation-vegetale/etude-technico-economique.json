@@ -1,0 +1,110 @@
+{
+  "title": "Étude Technico-Économique - Unité de Valorisation",
+  "description": "Données économiques et techniques de l'unité de transformation",
+  "fields": [
+    {
+      "name": "type_unite",
+      "label": "Type d'unité de valorisation",
+      "type": "select",
+      "required": true,
+      "options": [
+        { "value": "conserverie", "label": "Conserverie" },
+        { "value": "sechage", "label": "Unité de séchage" },
+        { "value": "congelation", "label": "Unité de congélation" },
+        { "value": "transformation_laitiere", "label": "Transformation laitière" },
+        { "value": "huilerie", "label": "Huilerie (olives)" },
+        { "value": "conditionnement", "label": "Conditionnement et emballage" },
+        { "value": "autre", "label": "Autre type" }
+      ]
+    },
+    {
+      "name": "capacite_production",
+      "label": "Capacité de production (tonnes/an)",
+      "type": "number",
+      "required": true,
+      "min": 10,
+      "placeholder": "Ex: 500"
+    },
+    {
+      "name": "capacite_stockage",
+      "label": "Capacité de stockage (tonnes)",
+      "type": "number",
+      "min": 5,
+      "placeholder": "Ex: 100"
+    },
+    {
+      "name": "investissement_total",
+      "label": "Investissement total (DH)",
+      "type": "number",
+      "required": true,
+      "mode": "currency",
+      "currency": "MAD",
+      "locale": "fr-MA",
+      "placeholder": "Ex: 2000000"
+    },
+    {
+      "name": "cout_equipements",
+      "label": "Coût des équipements (DH)",
+      "type": "number",
+      "mode": "currency",
+      "currency": "MAD",
+      "locale": "fr-MA"
+    },
+    {
+      "name": "cout_genie_civil",
+      "label": "Coût génie civil (DH)",
+      "type": "number",
+      "mode": "currency",
+      "currency": "MAD",
+      "locale": "fr-MA"
+    },
+    {
+      "name": "chiffre_affaires_previsionnel",
+      "label": "Chiffre d'affaires prévisionnel (DH/an)",
+      "type": "number",
+      "required": true,
+      "mode": "currency",
+      "currency": "MAD",
+      "locale": "fr-MA"
+    },
+    {
+      "name": "emplois_crees",
+      "label": "Nombre d'emplois créés",
+      "type": "number",
+      "required": true,
+      "min": 1,
+      "placeholder": "Ex: 12"
+    },
+    {
+      "name": "emplois_permanents",
+      "label": "Emplois permanents",
+      "type": "number",
+      "min": 0
+    },
+    {
+      "name": "emplois_saisonniers",
+      "label": "Emplois saisonniers",
+      "type": "number",
+      "min": 0
+    },
+    {
+      "name": "matiere_premiere_locale",
+      "label": "Part de matière première locale (%)",
+      "type": "number",
+      "min": 0,
+      "max": 100,
+      "placeholder": "Ex: 80"
+    },
+    {
+      "name": "marche_cible",
+      "label": "Marché cible",
+      "type": "select",
+      "options": [
+        { "value": "local", "label": "Marché local/régional" },
+        { "value": "national", "label": "Marché national" },
+        { "value": "export", "label": "Export" },
+        { "value": "mixte", "label": "Marché mixte" }
+      ]
+    }
+  ]
+}

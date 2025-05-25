@@ -1,0 +1,51 @@
+{
+  "title": "Engagement de Conservation de l'Investissement",
+  "description": "Engagement légal de conservation et maintenance de l'investissement réalisé",
+  "fields": [
+    {
+      "name": "duree_conservation",
+      "label": "Durée de conservation (années)",
+      "type": "number",
+      "required": true,
+      "value": 5,
+      "min": 3,
+      "max": 10,
+      "help": "Durée minimale légale : 5 ans pour les aménagements hydro-agricoles"
+    },
+    {
+      "name": "engagement_maintien",
+      "label": "Engagement de maintien",
+      "type": "checkbox",
+      "required": true,
+      "checkboxLabel": "Je m'engage à maintenir l'investissement en bon état de fonctionnement pendant la durée requise",
+      "help": "Engagement obligatoire selon la réglementation FDA"
+    },
+    {
+      "name": "penalites_acceptees",
+      "label": "Acceptation des pénalités",
+      "type": "checkbox",
+      "required": true,
+      "checkboxLabel": "J'accepte les pénalités prévues en cas de non-respect de cet engagement",
+      "help": "Les pénalités peuvent inclure le remboursement total ou partiel de la subvention"
+    },
+    {
+      "name": "assurance_prevue",
+      "label": "Assurance de l'investissement",
+      "type": "radio",
+      "required": true,
+      "options": [
+        { "value": "oui", "label": "Oui, l'investissement sera assuré" },
+        { "value": "non", "label": "Non, pas d'assurance prévue" },
+        { "value": "en_cours", "label": "En cours de souscription" }
+      ]
+    },
+    {
+      "name": "responsable_maintenance",
+      "label": "Responsable de la maintenance",
+      "type": "text",
+      "required": true,
+      "placeholder": "Nom du responsable technique",
+      "help": "Personne responsable de la maintenance technique du système"
+    }
+  ]
+}

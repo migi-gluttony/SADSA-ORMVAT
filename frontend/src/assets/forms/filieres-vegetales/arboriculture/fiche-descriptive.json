@@ -1,0 +1,82 @@
+{
+  "title": "Fiche Descriptive de Plantation",
+  "description": "Détails techniques de la plantation arboricole",
+  "fields": [
+    {
+      "name": "superficie_plantation",
+      "label": "Superficie de plantation (ha)",
+      "type": "number",
+      "required": true,
+      "min": 0.1,
+      "step": 0.01,
+      "placeholder": "Ex: 2.5"
+    },
+    {
+      "name": "densite_plantation",
+      "label": "Densité de plantation (plants/ha)",
+      "type": "number",
+      "required": true,
+      "min": 50,
+      "max": 2000,
+      "placeholder": "Ex: 400",
+      "help": "Nombre d'arbres par hectare"
+    },
+    {
+      "name": "ecartement_lignes",
+      "label": "Écartement entre lignes (m)",
+      "type": "number",
+      "min": 2,
+      "max": 12,
+      "step": 0.5,
+      "placeholder": "Ex: 5"
+    },
+    {
+      "name": "ecartement_plants",
+      "label": "Écartement entre plants (m)",
+      "type": "number",
+      "min": 1,
+      "max": 8,
+      "step": 0.5,
+      "placeholder": "Ex: 4"
+    },
+    {
+      "name": "periode_plantation",
+      "label": "Période de plantation",
+      "type": "select",
+      "required": true,
+      "options": [
+        { "value": "automne", "label": "Automne (Oct-Déc)" },
+        { "value": "hiver", "label": "Hiver (Jan-Fév)" },
+        { "value": "printemps", "label": "Printemps (Mar-Mai)" }
+      ]
+    },
+    {
+      "name": "systeme_irrigation",
+      "label": "Système d'irrigation prévu",
+      "type": "select",
+      "required": true,
+      "options": [
+        { "value": "goutte_a_goutte", "label": "Goutte à goutte" },
+        { "value": "micro_aspersion", "label": "Micro-aspersion" },
+        { "value": "aspersion", "label": "Aspersion" },
+        { "value": "gravitaire", "label": "Irrigation gravitaire" },
+        { "value": "aucun", "label": "Aucun système d'irrigation" }
+      ]
+    },
+    {
+      "name": "preparation_sol",
+      "label": "Préparation du sol prévue",
+      "type": "textarea",
+      "rows": 3,
+      "placeholder": "Décrivez les travaux de préparation : labour, sous-solage, amendements...",
+      "help": "Détaillez les opérations de préparation du terrain"
+    },
+    {
+      "name": "fertilisation_fond",
+      "label": "Fertilisation de fond",
+      "type": "text",
+      "placeholder": "Ex: Fumier 30T/ha + Super 45 200kg/ha",
+      "help": "Fertilisation prévue avant plantation"
+    }
+  ]
+}

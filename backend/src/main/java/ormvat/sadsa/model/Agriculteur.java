@@ -29,6 +29,14 @@ public class Agriculteur {
     @Column(nullable = false, unique = true)
     private String cin;
 
+    @ManyToOne
+    @JoinColumn(name = "commune_rurale_id")
+    private CommuneRurale communeRurale;
+    
+    @ManyToOne
+    @JoinColumn(name = "douar_id")
+    private Douar douar;
+
     @Column(name = "date_notification")
     @Temporal(TemporalType.DATE)
     private Date dateNotification;

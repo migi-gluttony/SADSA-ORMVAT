@@ -1,0 +1,95 @@
+{
+  "title": "Demande d'Approbation Préalable - Serres Agricoles",
+  "description": "Informations techniques pour l'approbation préalable de l'installation de serres",
+  "fields": [
+    {
+      "name": "type_serre",
+      "label": "Type de serre",
+      "type": "select",
+      "required": true,
+      "options": [
+        { "value": "tunnel", "label": "Tunnel plastique" },
+        { "value": "multichapelle", "label": "Serre multichapelle" },
+        { "value": "verre", "label": "Serre en verre" },
+        { "value": "polycarbonate", "label": "Serre en polycarbonate" }
+      ],
+      "help": "Type de structure de serre à installer"
+    },
+    {
+      "name": "superficie_serre",
+      "label": "Superficie de la serre (m²)",
+      "type": "number",
+      "required": true,
+      "min": 100,
+      "max": 50000,
+      "placeholder": "Ex: 1000",
+      "help": "Superficie totale couverte par les serres"
+    },
+    {
+      "name": "hauteur_gouttiere",
+      "label": "Hauteur à la gouttière (m)",
+      "type": "number",
+      "required": true,
+      "min": 2.5,
+      "max": 8,
+      "step": 0.1,
+      "placeholder": "Ex: 4.5",
+      "help": "Hauteur sous gouttière pour optimiser le volume d'air"
+    },
+    {
+      "name": "materiau_couverture",
+      "label": "Matériau de couverture",
+      "type": "select",
+      "required": true,
+      "options": [
+        { "value": "pe_200", "label": "Polyéthylène 200 microns" },
+        { "value": "pe_150", "label": "Polyéthylène 150 microns" },
+        { "value": "polycarbonate", "label": "Polycarbonate alvéolaire" },
+        { "value": "verre", "label": "Verre horticole" }
+      ]
+    },
+    {
+      "name": "systeme_ventilation",
+      "label": "Système de ventilation",
+      "type": "checkbox",
+      "checkboxLabel": "Système de ventilation automatique prévu",
+      "help": "Ventilation latérale et zénithale recommandée"
+    },
+    {
+      "name": "systeme_chauffage",
+      "label": "Système de chauffage",
+      "type": "radio",
+      "options": [
+        { "value": "aucun", "label": "Aucun chauffage" },
+        { "value": "gaz", "label": "Chauffage au gaz" },
+        { "value": "electrique", "label": "Chauffage électrique" },
+        { "value": "biomasse", "label": "Chauffage biomasse" }
+      ]
+    },
+    {
+      "name": "equipements_prevus",
+      "label": "Équipements prévus",
+      "type": "textarea",
+      "rows": 4,
+      "placeholder": "Listez les équipements : irrigation, fertilisation, climatisation...",
+      "help": "Décrivez tous les équipements techniques qui seront installés"
+    },
+    {
+      "name": "production_prevue",
+      "label": "Production prévue",
+      "type": "text",
+      "required": true,
+      "placeholder": "Ex: Tomates, Concombres, Poivrons",
+      "help": "Types de cultures qui seront produites sous serre"
+    },
+    {
+      "name": "rendement_estime",
+      "label": "Rendement estimé (kg/m²/an)",
+      "type": "number",
+      "min": 1,
+      "max": 100,
+      "placeholder": "Ex: 45",
+      "help": "Rendement annuel estimé par mètre carré"
+    }
+  ]
+}

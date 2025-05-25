@@ -26,6 +26,10 @@ public class DossierCreationService {
     private final EtapeRepository etapeRepository;
     private final TraceRepository traceRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final ProvinceRepository provinceRepository;
+    private final CercleRepository cercleRepository;
+    private final CommuneRuraleRepository communeRuraleRepository;
+    private final DouarRepository douarRepository;
 
     /**
      * Récupère toutes les rubriques avec leurs sous-rubriques et documents requis
@@ -61,65 +65,71 @@ public class DossierCreationService {
     /**
      * Crée un nouveau dossier
      */
-    @Transactional
-    public CreateDossierResponse createDossier(CreateDossierRequest request, String userEmail) {
-        try {
-            log.info("Début création dossier pour l'utilisateur: {}", userEmail);
+   @Transactional
+public CreateDossierResponse createDossier(CreateDossierRequest request, String userEmail) {
+    try {
+        log.info("Début création dossier pour l'utilisateur: {}", userEmail);
 
-            // 1. Validation des données d'entrée
-            validateCreateDossierRequest(request);
-
-            // 2. Récupération ou création de l'agriculteur
-            Agriculteur agriculteur = getOrCreateAgriculteur(request.getAgriculteur());
-
-            // 3. Récupération des entités liées
-            CDA cda = cdaRepository.findById(request.getDossier().getCdaId())
-                    .orElseThrow(() -> new RuntimeException("CDA non trouvé"));
-
-            SousRubrique sousRubrique = sousRubriqueRepository.findById(request.getDossier().getSousRubriqueId())
-                    .orElseThrow(() -> new RuntimeException("Sous-rubrique non trouvée"));
-
-            Etape etapeInitiale = etapeRepository.findByDesignation("Phase Antenne");
-            if (etapeInitiale == null) {
-                throw new RuntimeException("Étape initiale non trouvée");
-            }
-
-            // 4. Création du dossier
-            Dossier dossier = new Dossier();
-            dossier.setSaba(request.getDossier().getSaba());
-            dossier.setReference(generateReference(cda, sousRubrique));
-            dossier.setAgriculteur(agriculteur);
-            dossier.setCda(cda);
-            dossier.setSousRubrique(sousRubrique);
-            dossier.setEtapeActuelle(etapeInitiale);
-
-            // 5. Sauvegarde du dossier
-            Dossier savedDossier = dossierRepository.save(dossier);
-
-            // 6. Création de la trace d'audit
-            createAuditTrace(savedDossier, userEmail, "CREATION_DOSSIER",
-                    "Création du dossier SABA: " + request.getDossier().getSaba());
-
-            // 7. Génération du récépissé
-            RecepisseDossierDTO recepisse = generateRecepisse(savedDossier, request);
-
-            log.info("Dossier créé avec succès - ID: {}, SABA: {}",
-                    savedDossier.getId(), savedDossier.getSaba());
-
-            return CreateDossierResponse.builder()
-                    .dossierId(savedDossier.getId())
-                    .numeroDossier(savedDossier.getReference())
-                    .statut(StatutDossier.SOUMIS.name())
-                    .message("Dossier créé avec succès")
-                    .recepisse(recepisse)
-                    .build();
-
-        } catch (Exception e) {
-            log.error("Erreur lors de la création du dossier", e);
-            throw new RuntimeException("Erreur lors de la création du dossier: " + e.getMessage());
+        // 1. Récupération de l'utilisateur et son CDA
+        Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+        
+        if (utilisateur.getCda() == null) {
+            throw new RuntimeException("L'utilisateur n'est associé à aucun CDA");
         }
-    }
 
+        CDA cda = utilisateur.getCda();
+
+        // 2. Validation des données d'entrée
+        validateCreateDossierRequest(request);
+
+        // 3. Récupération ou création de l'agriculteur
+        Agriculteur agriculteur = getOrCreateAgriculteur(request.getAgriculteur());
+
+        // 4. Récupération des entités liées
+        SousRubrique sousRubrique = sousRubriqueRepository.findById(request.getDossier().getSousRubriqueId())
+                .orElseThrow(() -> new RuntimeException("Sous-rubrique non trouvée"));
+
+        Etape etapeInitiale = etapeRepository.findByDesignation("Phase Antenne");
+        if (etapeInitiale == null) {
+            throw new RuntimeException("Étape initiale non trouvée");
+        }
+
+        // 5. Création du dossier
+        Dossier dossier = new Dossier();
+        dossier.setSaba(request.getDossier().getSaba());
+        dossier.setReference(generateReference(cda, sousRubrique));
+        dossier.setAgriculteur(agriculteur);
+        dossier.setCda(cda);
+        dossier.setSousRubrique(sousRubrique);
+        dossier.setEtapeActuelle(etapeInitiale);
+
+        // 6. Sauvegarde du dossier
+        Dossier savedDossier = dossierRepository.save(dossier);
+
+        // 7. Création de la trace d'audit
+        createAuditTrace(savedDossier, userEmail, "CREATION_DOSSIER",
+                "Création du dossier SABA: " + request.getDossier().getSaba());
+
+        // 8. Génération du récépissé
+        RecepisseDossierDTO recepisse = generateRecepisse(savedDossier, request);
+
+        log.info("Dossier créé avec succès - ID: {}, SABA: {}",
+                savedDossier.getId(), savedDossier.getSaba());
+
+        return CreateDossierResponse.builder()
+                .dossierId(savedDossier.getId())
+                .numeroDossier(savedDossier.getReference())
+                .statut(StatutDossier.SOUMIS.name())
+                .message("Dossier créé avec succès")
+                .recepisse(recepisse)
+                .build();
+
+    } catch (Exception e) {
+        log.error("Erreur lors de la création du dossier", e);
+        throw new RuntimeException("Erreur lors de la création du dossier: " + e.getMessage());
+    }
+}
     /**
      * Valide une demande de création de dossier
      */
@@ -149,10 +159,7 @@ public class DossierCreationService {
             suggestions.put("saba", "Format attendu: 000XXX/YYYY/ZZZ");
         }
 
-        if (request.getDossier().getCdaId() == null) {
-            missingFields.add("CDA");
-        }
-
+       
         if (request.getDossier().getSousRubriqueId() == null) {
             missingFields.add("Sous-rubrique");
         }
@@ -180,37 +187,43 @@ public class DossierCreationService {
     /**
      * Génère un résumé du dossier avant soumission
      */
-    public DossierSummaryDTO generateDossierSummary(CreateDossierRequest request) {
-        CDA cda = cdaRepository.findById(request.getDossier().getCdaId()).orElse(null);
-        SousRubrique sousRubrique = sousRubriqueRepository.findById(request.getDossier().getSousRubriqueId())
-                .orElse(null);
+    public DossierSummaryDTO generateDossierSummary(CreateDossierRequest request, String userEmail) {
+    // Get user's CDA instead of from request
+    Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+            .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+    CDA cda = utilisateur.getCda();
+    
+    SousRubrique sousRubrique = sousRubriqueRepository.findById(request.getDossier().getSousRubriqueId())
+            .orElse(null);
 
-        List<FormulaireRempliDTO> formulairesRemplis = new ArrayList<>();
-        if (request.getFormulairesDynamiques() != null) {
-            for (Map.Entry<String, Object> entry : request.getFormulairesDynamiques().entrySet()) {
-                FormulaireRempliDTO formulaire = FormulaireRempliDTO.builder()
-                        .nomFormulaire(entry.getKey())
-                        .donnees((Map<String, Object>) entry.getValue())
-                        .isComplete(isFormulaireComplete((Map<String, Object>) entry.getValue()))
-                        .build();
-                formulairesRemplis.add(formulaire);
-            }
+    List<FormulaireRempliDTO> formulairesRemplis = new ArrayList<>();
+    if (request.getFormulairesDynamiques() != null) {
+        for (Map.Entry<String, Object> entry : request.getFormulairesDynamiques().entrySet()) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> donnees = (Map<String, Object>) entry.getValue();
+            
+            FormulaireRempliDTO formulaire = FormulaireRempliDTO.builder()
+                    .nomFormulaire(entry.getKey())
+                    .donnees(donnees)
+                    .isComplete(isFormulaireComplete(donnees))
+                    .build();
+            formulairesRemplis.add(formulaire);
         }
-
-        return DossierSummaryDTO.builder()
-                .agriculteur(request.getAgriculteur())
-                .dossier(request.getDossier())
-                .rubriqueNom(sousRubrique != null && sousRubrique.getRubrique() != null
-                        ? sousRubrique.getRubrique().getDesignation()
-                        : "N/A")
-                .sousRubriqueNom(sousRubrique != null ? sousRubrique.getDesignation() : "N/A")
-                .cdaNom(cda != null ? cda.getDescription() : "N/A")
-                .formulairesRemplis(formulairesRemplis)
-                .nombreDocumentsUpload(0) // À implémenter avec la gestion des fichiers
-                .dateCreation(LocalDate.now())
-                .build();
     }
 
+    return DossierSummaryDTO.builder()
+            .agriculteur(request.getAgriculteur())
+            .dossier(request.getDossier())
+            .rubriqueNom(sousRubrique != null && sousRubrique.getRubrique() != null
+                    ? sousRubrique.getRubrique().getDesignation()
+                    : "N/A")
+            .sousRubriqueNom(sousRubrique != null ? sousRubrique.getDesignation() : "N/A")
+            .cdaNom(cda != null ? cda.getDescription() : "N/A")
+            .formulairesRemplis(formulairesRemplis)
+            .nombreDocumentsUpload(0)
+            .dateCreation(LocalDate.now())
+            .build();
+}
     // Méthodes privées utilitaires
 
     private void validateCreateDossierRequest(CreateDossierRequest request) {
@@ -235,24 +248,27 @@ public class DossierCreationService {
     }
 
     private Agriculteur getOrCreateAgriculteur(AgriculteurInfoDTO agriculteurInfo) {
-        Optional<Agriculteur> existingAgriculteur = agriculteurRepository.findByCin(agriculteurInfo.getCin());
+        Optional<Agriculteur> existing = agriculteurRepository.findByCin(agriculteurInfo.getCin());
 
-        if (existingAgriculteur.isPresent()) {
-            // Mise à jour des informations si nécessaire
-            Agriculteur agriculteur = existingAgriculteur.get();
-            agriculteur.setNom(agriculteurInfo.getNom());
-            agriculteur.setPrenom(agriculteurInfo.getPrenom());
-            agriculteur.setTelephone(agriculteurInfo.getTelephone());
-            return agriculteurRepository.save(agriculteur);
-        } else {
-            // Création d'un nouveau agriculteur
-            Agriculteur nouvelAgriculteur = new Agriculteur();
-            nouvelAgriculteur.setCin(agriculteurInfo.getCin());
-            nouvelAgriculteur.setNom(agriculteurInfo.getNom());
-            nouvelAgriculteur.setPrenom(agriculteurInfo.getPrenom());
-            nouvelAgriculteur.setTelephone(agriculteurInfo.getTelephone());
-            return agriculteurRepository.save(nouvelAgriculteur);
+        Agriculteur agriculteur = existing.orElse(new Agriculteur());
+        agriculteur.setNom(agriculteurInfo.getNom());
+        agriculteur.setPrenom(agriculteurInfo.getPrenom());
+        agriculteur.setCin(agriculteurInfo.getCin());
+        agriculteur.setTelephone(agriculteurInfo.getTelephone());
+
+        if (agriculteurInfo.getCommuneRuraleId() != null) {
+            CommuneRurale commune = communeRuraleRepository.findById(agriculteurInfo.getCommuneRuraleId())
+                    .orElse(null);
+            agriculteur.setCommuneRurale(commune);
         }
+
+        if (agriculteurInfo.getDouarId() != null) {
+            Douar douar = douarRepository.findById(agriculteurInfo.getDouarId())
+                    .orElse(null);
+            agriculteur.setDouar(douar);
+        }
+
+        return agriculteurRepository.save(agriculteur);
     }
 
     private String generateReference(CDA cda, SousRubrique sousRubrique) {
@@ -433,5 +449,78 @@ public class DossierCreationService {
                 .replaceAll("[^a-z0-9]", "-")
                 .replaceAll("-+", "-")
                 .replaceAll("^-|-$", "");
+    }
+
+    // Auto-generate SABA
+    public String generateSabaNumber() {
+        long count = dossierRepository.count() + 1;
+        int year = LocalDate.now().getYear();
+        int month = LocalDate.now().getMonthValue();
+
+        String sequence = String.format("%04d%02d", count, month);
+        String yearStr = String.valueOf(year);
+        String finalSeq = String.format("%03d", (count % 1000) + 1);
+
+        return String.format("%s/%s/%s", sequence, yearStr, finalSeq);
+    }
+
+    // Get geographic data
+    public List<GeographicDTO> getProvinces() {
+        return provinceRepository.findAll().stream()
+                .map(p -> GeographicDTO.builder()
+                        .id(p.getId())
+                        .designation(p.getDesignation())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    public List<GeographicDTO> getCerclesByProvince(Long provinceId) {
+        return cercleRepository.findByProvinceId(provinceId).stream()
+                .map(c -> GeographicDTO.builder()
+                        .id(c.getId())
+                        .designation(c.getDesignation())
+                        .parentId(c.getProvince().getId())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    public List<GeographicDTO> getCommunesByCircle(Long cercleId) {
+        return communeRuraleRepository.findByCercleId(cercleId).stream()
+                .map(c -> GeographicDTO.builder()
+                        .id(c.getId())
+                        .designation(c.getDesignation())
+                        .parentId(c.getCercle().getId())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    public List<GeographicDTO> getDouarsByCommune(Long communeId) {
+        return douarRepository.findByCommuneRuraleId(communeId).stream()
+                .map(d -> GeographicDTO.builder()
+                        .id(d.getId())
+                        .designation(d.getDesignation())
+                        .parentId(d.getCommuneRurale().getId())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get user's CDA information
+     */
+    public CDAInfoDTO getUserCDA(String userEmail) {
+        Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+        if (utilisateur.getCda() == null) {
+            throw new RuntimeException("L'utilisateur n'est associé à aucun CDA");
+        }
+
+        CDA cda = utilisateur.getCda();
+        return CDAInfoDTO.builder()
+                .id(cda.getId())
+                .description(cda.getDescription())
+                .antenneNom(cda.getAntenne() != null ? cda.getAntenne().getDesignation() : "N/A")
+                .antenneId(cda.getAntenne() != null ? cda.getAntenne().getId() : null)
+                .build();
     }
 }

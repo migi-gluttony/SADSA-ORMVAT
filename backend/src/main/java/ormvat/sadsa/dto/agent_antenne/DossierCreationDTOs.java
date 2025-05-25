@@ -29,18 +29,18 @@ public class DossierCreationDTOs {
         private String ipAddress;
     }
 
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class AgriculteurInfoDTO {
-        private String cin;
-        private String nom;
-        private String prenom;
-        private String telephone;
-        private String commune;
-        private String province;
-    }
+   @Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public static class AgriculteurInfoDTO {
+    private String cin;
+    private String nom;
+    private String prenom;
+    private String telephone;
+    private Long communeRuraleId;
+    private Long douarId;
+}
 
     @Data
     @Builder
@@ -49,7 +49,6 @@ public class DossierCreationDTOs {
     public static class DossierInfoDTO {
         private String saba;
         private String reference;
-        private Long cdaId;
         private Long sousRubriqueId;
         private LocalDate dateDepot;
         private Double montantDemande;
@@ -170,7 +169,15 @@ public class DossierCreationDTOs {
         private int nombreDocumentsUpload;
         private LocalDate dateCreation;
     }
-
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public static class GeographicDTO {
+    private Long id;
+    private String designation;
+    private Long parentId;
+}
     @Data
     @Builder
     @AllArgsConstructor
