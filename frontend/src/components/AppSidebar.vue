@@ -153,103 +153,103 @@ const menuItems = computed(() => {
     if (role === "AGENT_ANTENNE") {
         items.push(
             {
+                label: "Mes Dossiers",
+                icon: "pi pi-folder-open",
+                command: () => router.push("/agent_antenne/dossiers"),
+                route: "/agent_antenne/dossiers",
+            },
+            {
                 label: "Créer un Dossier",
-                icon: "pi pi-file",
+                icon: "pi pi-file-plus",
                 command: () => router.push("/agent_antenne/dossiers/create"),
                 route: "/agent_antenne/dossiers/create",
             },
             {
-                label: "Rapport Final",
-                icon: "pi pi-file-pdf",
-                command: () => router.push("/etudiant/rapport"),
-                route: "/etudiant/rapport",
+                label: "Statistiques",
+                icon: "pi pi-chart-bar",
+                command: () => router.push("/agent_antenne/statistics"),
+                route: "/agent_antenne/statistics",
             }
         );
     } else if (role === "AGENT_GUC") {
         items.push(
             {
-                label: "Révision des documents",
-                icon: "pi pi-check-square",
-                command: () => router.push("/encadrant/document-evaluation"),
-                route: "/encadrant/document-evaluation",
+                label: "Dossiers GUC",
+                icon: "pi pi-inbox",
+                command: () => router.push("/agent_guc/dossiers"),
+                route: "/agent_guc/dossiers",
             },
             {
-                label: "Évaluation des Binômes",
-                icon: "pi pi-check-circle",
-                command: () => router.push("/encadrant/grading"),
-                route: "/encadrant/grading",
+                label: "Transmission",
+                icon: "pi pi-send",
+                command: () => router.push("/agent_guc/transmission"),
+                route: "/agent_guc/transmission",
+            },
+            {
+                label: "Rapports",
+                icon: "pi pi-file-pdf",
+                command: () => router.push("/agent_guc/reports"),
+                route: "/agent_guc/reports",
             }
         );
     } else if (role === "AGENT_COMMISSION") {
         items.push(
             {
-                label: "Gestion des Comptes",
-                icon: "pi pi-user",
-                command: () => router.push("/management/comptes"),
-                route: "/management/comptes",
+                label: "Évaluation Technique",
+                icon: "pi pi-check-square",
+                command: () => router.push("/agent_commission/evaluation"),
+                route: "/agent_commission/evaluation",
             },
             {
-                label: "Gestion des Binômes",
-                icon: "pi pi-users",
-                command: () => router.push("/management/binomes"),
-                route: "/management/binomes",
+                label: "Visites de Terrain",
+                icon: "pi pi-map-marker",
+                command: () => router.push("/agent_commission/visites"),
+                route: "/agent_commission/visites",
             },
             {
-                label: "Gestion des Sujets",
-                icon: "pi pi-file-o",
-                command: () => router.push("/management/sujets"),
-                route: "/management/sujets",
+                label: "Approbations",
+                icon: "pi pi-verified",
+                command: () => router.push("/agent_commission/approbations"),
+                route: "/agent_commission/approbations",
             },
             {
-                label: "Suggestions de Sujets",
-                icon: "pi pi-inbox",
-                command: () => router.push("/management/sujet-suggestions"),
-                route: "/management/sujet-suggestions",
-            },
-            {
-                label: "Gestion des Soutenances",
-                icon: "pi pi-calendar",
-                command: () => router.push("/management/soutenances"),
-                route: "/management/soutenances",
-            },
-            {
-                label: "Gestion des Notes",
-                icon: "pi pi-chart-line",
-                command: () => router.push("/management/notes-management"),
-                route: "/management/notes-management",
-            },
-            {
-                label: "Archive",
-                icon: "pi pi-building-columns",
-                command: () => router.push("/management/archive"),
-                route: "/management/archive",
-            },
-            {
-                label: "Paramètres",
-                icon: "pi pi-cog",
-                command: () => router.push("/management/settings"),
-                route: "/management/settings",
+                label: "Constats de Réalisation",
+                icon: "pi pi-eye",
+                command: () => router.push("/agent_commission/constats"),
+                route: "/agent_commission/constats",
             }
         );
     } else if (role === "ADMIN") {
         items.push(
             {
-                label: "Mes Soutenances",
-                icon: "pi pi-calendar-plus",
-                command: () => router.push("/jury/soutenances"),
-                route: "/jury/soutenances",
+                label: "Gestion Utilisateurs",
+                icon: "pi pi-users",
+                command: () => router.push("/admin/users"),
+                route: "/admin/users",
             },
             {
-                label: "Évaluation Soutenances",
-                icon: "pi pi-microphone",
-                command: () => router.push("/jury/grading"),
-                route: "/jury/grading",
+                label: "Gestion des CDAs",
+                icon: "pi pi-building",
+                command: () => router.push("/admin/cdas"),
+                route: "/admin/cdas",
             },
             {
-                label: "Évaluation Rapports",
-                icon: "pi pi-file-pdf",
-                command: () => router.push("/jury/report-evaluation"),
-                route: "/jury/report-evaluation",
+                label: "Configuration Système",
+                icon: "pi pi-cog",
+                command: () => router.push("/admin/config"),
+                route: "/admin/config",
+            },
+            {
+                label: "Rapports Globaux",
+                icon: "pi pi-chart-line",
+                command: () => router.push("/admin/reports"),
+                route: "/admin/reports",
+            },
+            {
+                label: "Sauvegarde",
+                icon: "pi pi-download",
+                command: () => router.push("/admin/backup"),
+                route: "/admin/backup",
             }
         );
     }
@@ -415,12 +415,12 @@ const menuItems = computed(() => {
 
 .menu-item.active {
     color: var(--primary-color);
-    background-color: rgba(67, 97, 238, 0.1);
+    background-color: rgba(1, 114, 62, 0.1);
     font-weight: 500;
 }
 
 .dark-mode .menu-item.active {
-    background-color: rgba(67, 97, 238, 0.15);
+    background-color: rgba(1, 134, 74, 0.15);
 }
 
 .menu-item.active::before {

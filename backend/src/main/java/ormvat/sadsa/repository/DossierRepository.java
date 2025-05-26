@@ -1,5 +1,8 @@
 package ormvat.sadsa.repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import ormvat.sadsa.model.Dossier;
@@ -31,4 +34,5 @@ public interface DossierRepository extends JpaRepository<Dossier, Long> {
     @Query("SELECT d FROM Dossier d JOIN Historique h ON d.id = h.dossier.id " +
            "WHERE h.dateReception <= :dateLimite AND h.dateEnvoi IS NULL")
     List<Dossier> findDossiersEnRetard(Date dateLimite);
+    Page<Dossier> findAll(Specification<Dossier> spec, Pageable pageable);
 }

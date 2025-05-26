@@ -6,6 +6,9 @@ import AuthService from '../services/AuthService'
 import RegisterView from '@/views/auth/RegisterView.vue'
 import LandingPage from '@/views/LandingPage.vue'
 import CreateDossierView from '@/views/agent_antenne/CreateDossierView.vue'
+import DossierListView from '@/views/agent_antenne/DossierListView.vue'
+import DossierDetailView from '@/views/agent_antenne/DossierDetailView.vue'
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -33,17 +36,85 @@ const router = createRouter({
       component: RegisterView,
       meta: { guest: true, hideHeader: true }
     },
-    // agent antenne 
+    
+    // Agent Antenne Routes
     {
-      path: '/agent_antenne/dossiers/create',
-      name: 'create-dossier',
-      component: CreateDossierView,
-      meta: {
-        requiresAuth: true,
-        requiresRole: 'AGENT_ANTENNE',
-        title: 'Créer un dossier'
-      }
+      path: '/agent_antenne',
+      meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE' },
+      children: [
+        {
+          path: 'dossiers',
+          name: 'dossiers-list',
+          component: DossierListView,
+          meta: { title: 'Mes Dossiers' }
+        },
+        {
+          path: 'dossiers/create',
+          name: 'create-dossier',
+          component: CreateDossierView,
+          meta: { title: 'Créer un Dossier' }
+        },
+        {
+          path: 'dossiers/:dossierId',
+          name: 'dossier-detail',
+          component: DossierDetailView,
+          meta: { title: 'Détails du Dossier' },
+          props: true
+        },
+        {
+          path: 'dossiers/:dossierId/forms',
+          name: 'dossier-forms',
+          component: DossierDetailView,
+          meta: { title: 'Formulaires du Dossier' },
+          props: true
+        }
+      ]
     },
+
+    // Agent GUC Routes (placeholder for future implementation)
+    {
+      path: '/agent_guc',
+      meta: { requiresAuth: true, requiresRole: 'AGENT_GUC' },
+      children: [
+        {
+          path: 'dossiers',
+          component: () => import('@/views/agent_guc/DossierGUCView.vue'),
+          meta: { title: 'Dossiers GUC' }
+        }
+      ]
+    },
+
+    // Agent Commission Routes (placeholder for future implementation)
+    {
+      path: '/agent_commission',
+      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION' },
+      children: [
+        {
+          path: 'dossiers',
+          component: () => import('@/views/agent_commission/DossierCommissionView.vue'),
+          meta: { title: 'Commission Technique' }
+        }
+      ]
+    },
+
+    // Admin Routes (placeholder for future implementation)
+    {
+      path: '/admin',
+      meta: { requiresAuth: true, requiresRole: 'ADMIN' },
+      children: [
+        {
+          path: 'dashboard',
+          component: () => import('@/views/admin/AdminDashboardView.vue'),
+          meta: { title: 'Administration' }
+        },
+        {
+          path: 'users',
+          component: () => import('@/views/admin/UserManagementView.vue'),
+          meta: { title: 'Gestion des Utilisateurs' }
+        }
+      ]
+    },
+
     // Catch-all route for 404
     {
       path: '/:pathMatch(.*)*',
@@ -79,8 +150,24 @@ router.beforeEach((to, from, next) => {
   }
   // Handle routes for guests only
   else if (to.matched.some(record => record.meta.guest) && isAuthenticated) {
-    // Redirect authenticated users to dashboard
-    next({ name: 'dashboard' });
+    // Redirect authenticated users to their appropriate dashboard
+    const userRole = currentUser?.role;
+    switch (userRole) {
+      case 'AGENT_ANTENNE':
+        next({ path: '/agent_antenne/dossiers' });
+        break;
+      case 'AGENT_GUC':
+        next({ path: '/agent_guc/dossiers' });
+        break;
+      case 'AGENT_COMMISSION':
+        next({ path: '/agent_commission/dossiers' });
+        break;
+      case 'ADMIN':
+        next({ path: '/admin/dashboard' });
+        break;
+      default:
+        next({ name: 'dashboard' });
+    }
   }
   // Allow access to public routes
   else {
@@ -88,6 +175,17 @@ router.beforeEach((to, from, next) => {
   }
 })
 
+// Set page title based on route meta
+router.afterEach((to) => {
+  const title = to.meta.title;
+  if (title) {
+    document.title = `${title} - SADSA ORMVAT`;
+  } else {
+    document.title = 'SADSA ORMVAT';
+  }
+});
+
+// Add landing page class management
 router.beforeEach((to, from, next) => {
   if (to.name === '' || to.path === '/' || to.path === '/login' || to.path === '/register') {
     document.body.classList.add('landing-page');
