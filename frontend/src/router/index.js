@@ -70,51 +70,6 @@ const router = createRouter({
         }
       ]
     },
-
-    // Agent GUC Routes (placeholder for future implementation)
-    {
-      path: '/agent_guc',
-      meta: { requiresAuth: true, requiresRole: 'AGENT_GUC' },
-      children: [
-        {
-          path: 'dossiers',
-          component: () => import('@/views/agent_guc/DossierGUCView.vue'),
-          meta: { title: 'Dossiers GUC' }
-        }
-      ]
-    },
-
-    // Agent Commission Routes (placeholder for future implementation)
-    {
-      path: '/agent_commission',
-      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION' },
-      children: [
-        {
-          path: 'dossiers',
-          component: () => import('@/views/agent_commission/DossierCommissionView.vue'),
-          meta: { title: 'Commission Technique' }
-        }
-      ]
-    },
-
-    // Admin Routes (placeholder for future implementation)
-    {
-      path: '/admin',
-      meta: { requiresAuth: true, requiresRole: 'ADMIN' },
-      children: [
-        {
-          path: 'dashboard',
-          component: () => import('@/views/admin/AdminDashboardView.vue'),
-          meta: { title: 'Administration' }
-        },
-        {
-          path: 'users',
-          component: () => import('@/views/admin/UserManagementView.vue'),
-          meta: { title: 'Gestion des Utilisateurs' }
-        }
-      ]
-    },
-
     // Catch-all route for 404
     {
       path: '/:pathMatch(.*)*',
