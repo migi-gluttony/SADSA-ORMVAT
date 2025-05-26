@@ -392,15 +392,16 @@ public class DossierManagementService {
                 .build();
     }
 
-    private FormConfigurationDTO mapToFormConfiguration(Map<String, Object> config, Long dossierId) {
+   private FormConfigurationDTO mapToFormConfiguration(Map<String, Object> config, Long dossierId) {
+        String formId = (String) config.get("formId");
         String title = (String) config.get("title");
-        String formId = title.replaceAll("[^a-zA-Z0-9]", "_").toLowerCase();
+        Long documentId = ((Number) config.get("documentId")).longValue();
         
         // Check if form is completed
-        boolean isCompleted = pieceJointeRepository.findByDossierId(dossierId)
+        boolean isCompleted = pieceJointeRepository.findByDossierIdAndDocumentRequisId(dossierId, documentId)
                 .stream()
                 .anyMatch(pj -> pj.getDonneesFormulaireJson() != null && 
-                               pj.getDonneesFormulaireJson().contains("\"formId\":\"" + formId + "\""));
+                               !pj.getDonneesFormulaireJson().trim().isEmpty());
 
         return FormConfigurationDTO.builder()
                 .formId(formId)
@@ -408,6 +409,7 @@ public class DossierManagementService {
                 .description((String) config.get("description"))
                 .formConfig(config)
                 .isCompleted(isCompleted)
+                .requiredDocuments(List.of((String) config.get("documentName")))
                 .build();
     }
 
