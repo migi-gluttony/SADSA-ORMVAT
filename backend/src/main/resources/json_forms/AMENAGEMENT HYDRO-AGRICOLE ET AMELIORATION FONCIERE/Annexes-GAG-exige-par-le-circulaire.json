@@ -1,0 +1,385 @@
+[
+  {
+    type prior_approval_request_irrigation,
+    source_document_page 1,
+    sections [
+      {
+        id applicant_information,
+        fields [
+          {id applicant_type, type radio, options [{value natural_person}, {value legal_entity_representative}], source [3]},
+          {id gender, type radio, options [{value mr}, {value mrs_ms}], source [3]},
+          {id full_name, type text, source [3]},
+          {id id_document_type, type text, source [3]},
+          {id id_document_number, type text, source [3]},
+          {id id_document_expiry_date, type date, source [3]},
+          {id legal_entity_type, type radio, options [{value company}, {value association}, {value cooperative}], source [3]},
+          {id legal_entity_name, type text, source [3]},
+          {id commercial_register_number, type text, source [3]},
+          {id cooperative_number, type text, source [3]},
+          {id city_legal_entity, type text, source [3]},
+          {id correspondence_address, type textarea, source [3]},
+          {id phone, type tel, source [3]},
+          {id email, type email, source [3]}
+        ]
+      },
+      {
+        id project_type_system,
+        fields [
+          {id project_scheme, type radio, options [
+            {value general_scheme},
+            {value individual_project},
+            {value collective_project_irrigation_circles},
+            {value other_collective_project}
+          ], source [3]},
+          {id irrigation_system, type radio, options [
+            {value localized_irrigation},
+            {value supplementary_irrigation}
+          ], source [3]},
+          {id aggregation_system, type checkbox, options [{value yes}], source [3]},
+          {id aggregation_certificate_number, type text, depends_on {field aggregation_system, value yes}, source [3]}
+        ]
+      },
+      {
+        id land_parcel_details,
+        fields [
+          {id parcel_area_hectare, type number, source [3]},
+          {id parcel_area_are, type number, source [3]},
+          {id parcel_area_centiare, type number, source [3]}
+        ]
+      },
+      {
+        id previous_financial_aid,
+        fields [
+          {id received_aid_same_investment, type radio, options [{value yes}, {value no}], source [3]},
+          {id previous_aid_date, type date, depends_on {field received_aid_same_investment, value yes}, source [3]}
+        ]
+      },
+      {
+        id total_farmed_owned_land,
+        fields [
+          {id total_land_category, type radio, options [
+            {value less_than_5ha},
+            {value 5_to_20ha},
+            {value more_than_20ha}
+          ], source [3]}
+        ]
+      },
+      {
+        id declaration_signature,
+        fields [
+          {id declaration_accuracy, type static_text, source [4]},
+          {id place_of_issue, type text, source [5]},
+          {id date_of_issue, type date, source [5]},
+          {id applicant_signature_stamp, type signature_area, source [5]}
+        ]
+      },
+      {
+        id receipt_deposit_prior_approval,
+        fields [
+            {id file_number, type text, source [5]},
+            {id deposit_date, type date, source [5]},
+            {id includes_all_documents, type static_text, source [5]},
+            {id single_window_officer_signature_stamp, type signature_area, source [6]}
+        ]
+      }
+    ]
+  },
+  {
+    type agricultural_holding_identification_card,
+    source_document_page 2,
+    sections [
+      {
+        id submitted_by,
+        fields [
+          {id submitter_name, type text, source [7]}
+        ]
+      },
+      {
+        id farm_location,
+        fields [
+          {id farm_full_address, type textarea, source [7]},
+          {id province_prefecture, type text, source [8]},
+          {id circle, type text, source [8]},
+          {id rural_commune, type text, source [8]},
+          {id douar, type text, source [8]}
+        ]
+      },
+      {
+        id farm_geographical_coordinates,
+        fields [
+          {id point_1_x, type text, source [10]},
+          {id point_1_y, type text, source [10]},
+          {id point_2_x, type text, source [10]},
+          {id point_2_y, type text, source [10]},
+          {id point_3_x, type text, source [10]},
+          {id point_3_y, type text, source [10]},
+          {id point_4_x, type text, source [10]},
+          {id point_4_y, type text, source [10]}
+        ]
+      },
+      {
+        id farm_legal_status,
+        fields [
+            {id property_status, type checkbox_group, options [
+                {value private_property, source [11]},
+                {value collective_lands, source [11]},
+                {value habous_lands, source [11]},
+                {value state_lands_agricultural_reform, source [11]},
+                {value guich_lands, source [11]},
+                {value private_state_property_in_land_consolidation_areas_pending_titling, source [11]},
+                {value other_legal_situations, source [11]}
+            ], source [11]},
+            {id land_registration_status, type checkbox_group, options [
+                 {value registered, source [11]},
+                 {value in_process_of_registration, source [11]},
+                 {value unregistered, source [11]}
+            ], source [11]},
+            {id exploitation_mode, type radio, options [
+                {value direct_owner_rights_holders},
+                {value indirect_lease}
+            ], source [11]}
+        ]
+      },
+      {
+        id property_references,
+        fields [
+            {id holding_name_farm_name, type text, source [12]},
+            {id land_title_number, type text, source [12]},
+            {id land_registry_details, type text, source [12]},
+            {id lease_contract_reference_registration_number, type text, source [12]},
+            {id other_systems_reference, type text, source [12]}
+        ]
+      },
+      {
+        id total_holding_area,
+        fields [
+          {id total_area_ha, type number, source [13]},
+          {id planted_area_ha, type number, source [13]},
+          {id unplanted_area_ha, type number, source [13]}
+        ]
+      },
+      {
+        id crops_in_holding,
+        subsections [
+          {
+            id rainfed_crops,
+            type table,
+            columns [
+              {id rainfed_crop_type, type text},
+              {id rainfed_crop_area_ha, type number}
+            ],
+            rows [
+                {id rainfed_crop_1, source [15]},
+                {id rainfed_crop_2, source [15]},
+                {id rainfed_crop_3, source [15]},
+                {id rainfed_crop_4, source [15]}
+            ], source [14, 15]
+          },
+          {
+            id irrigated_crops,
+            type table,
+            columns [
+              {id irrigated_crop_type, type text},
+              {id irrigated_crop_area_ha, type number},
+              {id irrigation_technique_surface, type checkbox},
+              {id irrigation_technique_sprinkler, type checkbox},
+              {id irrigation_technique_localized, type checkbox}
+            ],
+            rows [
+                {id irrigated_crop_1, source [15]},
+                {id irrigated_crop_2, source [15]},
+                {id irrigated_crop_3, source [15]},
+                {id irrigated_crop_4, source [15]}
+            ], source [14, 15]
+          }
+        ]
+      },
+      {
+        id livestock_numbers,
+        fields [
+          {id cattle_count, type number, source [16]},
+          {id sheep_count, type number, source [16]},
+          {id goat_count, type number, source [16]},
+          {id camel_count, type number, source [16]},
+          {id beehives_count, type number, source [16]},
+          {id poultry_count, type number, source [16]}
+        ]
+      },
+      {
+        id livestock_buildings,
+        fields [
+          {id modern_livestock_buildings_area, type number, source [16]},
+          {id modern_livestock_buildings_count, type number, source [16]},
+          {id traditional_livestock_buildings_area, type number, source [16]},
+          {id traditional_livestock_buildings_count, type number, source [16]}
+        ]
+      },
+      {
+          id signature_section_holding_card,
+          fields [
+              {id applicant_signature_stamp_holding_card, type signature_area, source [16]},
+              {id prior_approval_request_file_number, type text, source [16]},
+              {id single_window_stamp_holding_card, type stamp_area, source [17]}
+          ]
+      }
+    ]
+  },
+  {
+    type financial_aid_application_documents_list,
+    source_document_page 3,
+    documents [
+      {id aid_request_commitment_form, source [18, 19]},
+      {id original_detailed_invoices, source [19]},
+      {id proof_of_payment_invoices, source [19]},
+      {id work_cost_memos_small_farmers, source [20]},
+      {id bank_account_certificate, source [21]}
+    ]
+  },
+  {
+    type financial_aid_application_and_commitment,
+    source_document_page 4,
+    sections [
+      {
+        id applicant_information_aid,
+        fields [
+          {id applicant_type, type radio, options [{value natural_person}, {value legal_entity_representative}], source [25]},
+          {id gender, type radio, options [{value mr}, {value mrs_ms}], source [25]},
+          {id full_name, type text, source [25]},
+          {id id_document_type, type text, source [25]},
+          {id id_document_number, type text, source [25]},
+          {id id_document_expiry_date, type date, source [25]},
+          {id legal_entity_type, type radio, options [{value company}, {value association}, {value cooperative}], source [25]},
+          {id legal_entity_name, type text, source [25]},
+          {id commercial_register_number, type text, source [25]},
+          {id cooperative_number, type text, source [25]},
+          {id city_legal_entity, type text, source [25]},
+          {id correspondence_address, type textarea, source [25]},
+          {id phone, type tel, source [25]},
+          {id email, type email, source [25]}
+        ]
+      },
+      {
+        id prior_approval_investment_details,
+        fields [
+          {id prior_approval_file_number, type text, source [25]},
+          {id prior_approval_date, type date, source [25]},
+          {id investment_area_hectares, type number, source [25]},
+          {id number_of_deposited_invoices, type number, source [25]},
+          {id invoiced_investment_amount_dhs, type number, source [25]}
+        ]
+      },
+      {
+        id declaration_commitment_aid,
+        fields [
+          {id declaration_accuracy_aid, type static_text, source [25, 26]},
+          {id commitment_maintain_investment, type static_text, source [27]},
+          {id commitment_maintain_collective_facilities, type static_text, source [27]},
+          {id commitment_transfer_obligations_on_sale, type static_text, source [28]},
+          {id commitment_allow_access_monitoring, type static_text, source [29]},
+          {id commitment_repay_aid_if_breach, type static_text, source [30]},
+          {id commitment_joint_application_solidarity, type static_text, source [31]},
+          {id place_of_issue_aid, type text, source [32]},
+          {id date_of_issue_aid, type date, source [33]},
+          {id applicant_signature_stamp_aid, type signature_area, source [32]}
+        ]
+      },
+      {
+        id receipt_deposit_financial_aid,
+        fields [
+            {id file_number_aid_receipt, type text, source [32]},
+            {id deposit_date_aid_receipt, type date, source [32]},
+            {id includes_all_documents_aid_receipt, type static_text, source [32]},
+            {id single_window_officer_signature_stamp_aid_receipt, type signature_area, source [33]}
+        ]
+      }
+    ]
+  },
+  {
+    type individual_commitment_collective_irrigation,
+    source_document_page 5,
+    sections [
+      {
+        id applicant_information_collective,
+        fields [
+          {id applicant_type_collective, type radio, options [{value natural_person}, {value legal_entity_representative}], source [36]},
+          {id gender_collective, type radio, options [{value mr}, {value mrs_ms}], source [36]},
+          {id full_name_collective, type text, source [36]},
+          {id id_document_type_collective, type text, source [36]},
+          {id id_document_number_collective, type text, source [36]},
+          {id id_document_expiry_date_collective, type date, source [36]},
+          {id legal_entity_type_collective, type radio, options [{value company}, {value association}, {value cooperative}], source [36]},
+          {id legal_entity_name_collective, type text, source [36]},
+          {id commercial_register_number_collective, type text, source [36]},
+          {id cooperative_number_collective, type text, source [36]},
+          {id city_legal_entity_collective, type text, source [36]},
+          {id correspondence_address_collective, type textarea, source [36]},
+          {id phone_collective, type tel, source [36]},
+          {id email_collective, type email, source [36]}
+        ]
+      },
+      {
+        id land_investment_details_collective,
+        fields [
+            {id land_operator_investment_holder, type text, source [36]},
+            {id land_area_hectares, type number, source [36]},
+            {id collective_irrigation_project_request_subject, type text, source [36]}
+        ]
+      },
+      {
+        id declaration_commitment_collective,
+        fields [
+          {id declaration_accuracy_collective, type static_text, source [37]},
+          {id commitment_authorize_representative, type static_text, source [38]},
+          {id commitment_maintain_investment_collective, type static_text, source [38]},
+          {id commitment_transfer_obligations_on_sale_collective, type static_text, source [39]},
+          {id commitment_allow_access_monitoring_collective, type static_text, source [40]},
+          {id commitment_repay_aid_if_breach_collective, type static_text, source [41]},
+          {id place_of_issue_collective, type text, source [42]},
+          {id date_of_issue_collective, type date, source [42]},
+          {id applicant_certified_signature_stamp_collective, type signature_area, source [42]}
+        ]
+      }
+    ]
+  },
+  {
+    type supplier_commitment_norm_compliance,
+    source_document_page 6,
+    sections [
+      {
+        id supplier_information,
+        fields [
+          {id supplier_undersigned_name, type text, source [43]},
+          {id supplier_acting_on_behalf_of_name, type text, source [43]},
+          {id supplier_address, type textarea, source [43]}
+        ]
+      },
+      {
+        id commitment_statement,
+        fields [
+            {id attestation_norm_knowledge, type static_text, source [43]}
+        ]
+      },
+      {
+        id beneficiary_installation_details,
+        fields [
+          {id beneficiary_name, type text, source [43]},
+          {id installation_location_douar, type text, source [43]},
+          {id installation_location_commune_rurale, type text, source [43]},
+          {id installation_location_cercle, type text, source [43]},
+          {id installation_location_province, type text, source [43]},
+          {id installation_location_irrigation_perimeter, type text, source [43]},
+          {id total_holding_area_supplier, type number, unit Ha, source [43]},
+          {id net_equipped_area_subsidy_request_supplier, type number, unit Ha, source [44]}
+        ]
+      },
+      {
+        id signature_supplier,
+        fields [
+          {id place_of_issue_supplier, type text, source [44]},
+          {id date_of_issue_supplier, type date, source [44]},
+          {id supplier_signature_stamp, type signature_area, source [44]}
+        ]
+      }
+    ]
+  }
+]

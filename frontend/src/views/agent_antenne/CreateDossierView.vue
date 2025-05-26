@@ -33,6 +33,7 @@
             class="rubrique-card"
           >
             <h3>{{ rubrique.designation }}</h3>
+            <p v-if="rubrique.description" class="rubrique-description">{{ rubrique.description }}</p>
             <div class="sous-rubriques">
               <div 
                 v-for="sousRubrique in rubrique.sousRubriques"
@@ -42,18 +43,22 @@
                 @click="selectSousRubrique(sousRubrique)"
               >
                 <div class="project-icon">
-                  <i :class="getProjectIcon(sousRubrique.codeType)"></i>
+                  <i class="pi pi-folder"></i>
                 </div>
                 <div class="project-info">
                   <h4>{{ sousRubrique.designation }}</h4>
-                  <p>{{ getProjectDescription(sousRubrique.codeType) }}</p>
+                  <p>{{ sousRubrique.description || 'Description du projet' }}</p>
+                  <div v-if="sousRubrique.documentsRequis?.length > 0" class="documents-list">
+                    <small><strong>Documents requis:</strong></small>
+                    <ul>
+                      <li v-for="doc in sousRubrique.documentsRequis" :key="doc">{{ doc }}</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-        
-       
       </div>
     </div>
 
@@ -262,76 +267,18 @@
       </div>
     </div>
 
-    <!-- Étape 3: Formulaires spécifiques -->
+    <!-- Étape 3: Aperçu et finalisation -->
     <div v-if="currentStep === 3" class="step-content">
-      <div class="component-card">
-        <h2><i class="pi pi-file-edit"></i> Formulaires spécifiques</h2>
-        <div v-if="selectedSousRubrique?.documentsRequis" class="dynamic-forms">
-          <div 
-            v-for="(document, index) in selectedSousRubrique.documentsRequis"
-            :key="index"
-            class="document-section"
-          >
-            <div class="document-header" @click="toggleDocument(index)">
-              <h3>{{ document.nom }}</h3>
-              <i class="pi" :class="expandedDocuments[index] ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
-            </div>
-            
-            <div v-if="expandedDocuments[index]" class="document-content">
-              <div v-if="document.uploadRequired" class="file-upload-section">
-                <h4>Document scanné</h4>
-                <FileUpload 
-                  mode="basic" 
-                  name="document"
-                  :url="`/api/upload/${index}`"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  :max-file-size="10000000"
-                  @upload="onFileUpload($event, index)"
-                  choose-label="Sélectionner le fichier"
-                />
-              </div>
-
-              <div v-if="document.formRequired" class="dynamic-form">
-                <h4>Informations à compléter</h4>
-                <DynamicForm 
-                  :config-path="document.formConfigPath"
-                  :model-value="formData.formulairesDynamiques[document.nom] || {}"
-                  @update:model-value="updateDynamicForm(document.nom, $event)"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="step-actions">
-          <Button 
-            label="Retour" 
-            icon="pi pi-arrow-left" 
-            @click="previousStep"
-            class="p-button-outlined"
-          />
-          <Button 
-            label="Continuer" 
-            icon="pi pi-arrow-right" 
-            @click="nextStep"
-            class="btn-primary"
-          />
-        </div>
-      </div>
-    </div>
-
-    <!-- Étape 4: Aperçu et finalisation -->
-    <div v-if="currentStep === 4" class="step-content">
       <div class="component-card">
         <h2><i class="pi pi-eye"></i> Aperçu du dossier</h2>
         
-        <div v-if="dossierSummary" class="summary-sections">
+        <div class="summary-sections">
           <div class="summary-section">
             <h3>Informations agriculteur</h3>
             <div class="info-grid">
-              <div><strong>Nom complet:</strong> {{ dossierSummary.agriculteur.prenom }} {{ dossierSummary.agriculteur.nom }}</div>
-              <div><strong>CIN:</strong> {{ dossierSummary.agriculteur.cin }}</div>
-              <div><strong>Téléphone:</strong> {{ dossierSummary.agriculteur.telephone }}</div>
+              <div><strong>Nom complet:</strong> {{ formData.agriculteur.prenom }} {{ formData.agriculteur.nom }}</div>
+              <div><strong>CIN:</strong> {{ formData.agriculteur.cin }}</div>
+              <div><strong>Téléphone:</strong> {{ formData.agriculteur.telephone }}</div>
               <div v-if="selectedCommuneName"><strong>Commune Rurale:</strong> {{ selectedCommuneName }}</div>
               <div v-if="selectedDouarName"><strong>Douar:</strong> {{ selectedDouarName }}</div>
             </div>
@@ -340,24 +287,23 @@
           <div class="summary-section">
             <h3>Informations projet</h3>
             <div class="info-grid">
-              <div><strong>Type:</strong> {{ dossierSummary.sousRubriqueNom }}</div>
-              <div><strong>SABA:</strong> {{ dossierSummary.dossier.saba }}</div>
-              <div><strong>Montant:</strong> {{ formatCurrency(dossierSummary.dossier.montantDemande) }}</div>
-              <div><strong>CDA:</strong> {{ dossierSummary.cdaNom }}</div>
+              <div><strong>Type:</strong> {{ selectedSousRubrique?.designation }}</div>
+              <div><strong>SABA:</strong> {{ formData.dossier.saba }}</div>
+              <div><strong>Montant:</strong> {{ formatCurrency(formData.dossier.montantDemande) }}</div>
+              <div><strong>CDA:</strong> {{ userCDA?.description }}</div>
             </div>
           </div>
 
-          <div class="summary-section" v-if="dossierSummary.formulairesRemplis?.length > 0">
-            <h3>Formulaires complétés</h3>
-            <div class="forms-summary">
+          <div class="summary-section" v-if="selectedSousRubrique?.documentsRequis?.length > 0">
+            <h3>Documents requis</h3>
+            <div class="documents-summary">
               <div 
-                v-for="formulaire in dossierSummary.formulairesRemplis"
-                :key="formulaire.nomFormulaire"
-                class="form-summary"
-                :class="{ complete: formulaire.isComplete, incomplete: !formulaire.isComplete }"
+                v-for="document in selectedSousRubrique.documentsRequis"
+                :key="document"
+                class="document-item"
               >
-                <i class="pi" :class="formulaire.isComplete ? 'pi-check-circle' : 'pi-exclamation-triangle'"></i>
-                <span>{{ formulaire.nomFormulaire }}</span>
+                <i class="pi pi-file"></i>
+                <span>{{ document }}</span>
               </div>
             </div>
           </div>
@@ -403,11 +349,6 @@
       :style="{ width: '600px' }"
     >
       <div v-if="recepisse" class="recepisse-preview">
-        <div class="recepisse-header">
-          <h3>RÉCÉPISSÉ N° {{ recepisse.numeroRecepisse }}</h3>
-          <p>{{ formatDate(recepisse.dateDepot) }}</p>
-        </div>
-        
         <div class="recepisse-body">
           <div class="recepisse-section">
             <h4>Informations du demandeur</h4>
@@ -454,7 +395,6 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import UserInfoHeader from '@/components/UserInfoHeader.vue';
-import DynamicForm from '@/components/DynamicForm.vue';
 import PrintableReceipt from '@/components/agent_antenne/PrintableReceipt.vue';
 import ApiService from '@/services/ApiService';
 
@@ -464,7 +404,6 @@ import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
 import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
-import FileUpload from 'primevue/fileupload';
 import Dialog from 'primevue/dialog';
 import Toast from 'primevue/toast';
 
@@ -479,7 +418,6 @@ const currentStep = ref(1);
 const steps = [
   { label: 'Type de projet' },
   { label: 'Informations de base' },
-  { label: 'Formulaires spécifiques' },
   { label: 'Finalisation' }
 ];
 
@@ -499,8 +437,7 @@ const formData = ref({
     sousRubriqueId: null,
     dateDepot: new Date(),
     montantDemande: null
-  },
-  formulairesDynamiques: {}
+  }
 });
 
 // User's CDA (auto-loaded)
@@ -509,7 +446,6 @@ const userCDA = ref(null);
 // États de l'interface
 const loading = ref({
   rubriques: false,
-  cdas: false,
   create: false,
   geographic: false
 });
@@ -529,9 +465,7 @@ const selectedSousRubrique = ref(null);
 const selectedProvince = ref(null);
 const selectedCercle = ref(null);
 
-const expandedDocuments = ref({});
 const validationErrors = ref({});
-const dossierSummary = ref(null);
 const showRecepisse = ref(false);
 const recepisse = ref(null);
 
@@ -614,84 +548,40 @@ watch([selectedProvince, selectedCercle, selectedSousRubrique, currentStep], aut
 // Méthodes du cycle de vie
 onMounted(async () => {
   loadSavedData();
-  await loadInitialData();
-  await autoGenerateSaba();
+  await loadInitializationData();
 });
 
 // Méthodes
-async function loadInitialData() {
-  await Promise.all([
-    loadRubriques(),
-    loadUserCDA(),
-    loadProvinces()
-  ]);
-}
-
-async function loadUserCDA() {
-  try {
-    userCDA.value = await ApiService.get('/agent_antenne/dossiers/user-cda');
-  } catch (error) {
-    console.error('Erreur lors du chargement du CDA utilisateur:', error);
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: 'Impossible de charger votre CDA',
-      life: 3000
-    });
-  }
-}
-
-async function loadRubriques() {
+async function loadInitializationData() {
   try {
     loading.value.rubriques = true;
-    const response = await ApiService.get('/agent_antenne/dossiers/rubriques');
-    rubriques.value = response.rubriques || [];
-  } catch (error) {
-    console.error('Erreur lors du chargement des rubriques:', error);
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: 'Impossible de charger les types de projets',
-      life: 3000
-    });
-  } finally {
-    loading.value.rubriques = false;
-  }
-}
-
-async function loadCDAs() {
-  try {
-    loading.value.cdas = true;
-    const response = await ApiService.get('/agent_antenne/dossiers/cdas');
-    cdas.value = response || [];
-  } catch (error) {
-    console.error('Erreur lors du chargement des CDAs:', error);
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: 'Impossible de charger les CDAs',
-      life: 3000
-    });
-  } finally {
-    loading.value.cdas = false;
-  }
-}
-
-async function loadProvinces() {
-  try {
-    loading.value.geographic = true;
-    const response = await ApiService.get('/agent_antenne/dossiers/provinces');
-    provinces.value = response || [];
+    const response = await ApiService.get('/agent_antenne/dossiers/initialization-data');
     
-    // Auto-select Fquih Ben Salah if it's the only province
+    // Set all data from single endpoint
+    userCDA.value = response.userCDA;
+    rubriques.value = response.rubriques || [];
+    provinces.value = response.provinces || [];
+    
+    // Set generated SABA if not already set
+    if (!formData.value.dossier.saba) {
+      formData.value.dossier.saba = response.generatedSaba;
+    }
+    
+    // Auto-select province if only one available
     if (provinces.value.length === 1) {
       selectedProvince.value = provinces.value[0].id;
       onProvinceChange();
     }
   } catch (error) {
-    console.error('Erreur lors du chargement des provinces:', error);
+    console.error('Erreur lors du chargement des données:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: 'Impossible de charger les données nécessaires',
+      life: 3000
+    });
   } finally {
-    loading.value.geographic = false;
+    loading.value.rubriques = false;
   }
 }
 
@@ -743,24 +633,9 @@ async function onCommuneChange() {
   }
 }
 
-async function autoGenerateSaba() {
-  if (!formData.value.dossier.saba) {
-    try {
-      const response = await ApiService.get('/agent_antenne/dossiers/generate-saba');
-      formData.value.dossier.saba = response.saba;
-    } catch (error) {
-      console.warn('Failed to auto-generate SABA:', error);
-    }
-  }
-}
-
 function selectSousRubrique(sousRubrique) {
   selectedSousRubrique.value = sousRubrique;
   formData.value.dossier.sousRubriqueId = sousRubrique.id;
-  
-  // Réinitialiser les formulaires dynamiques
-  formData.value.formulairesDynamiques = {};
-  expandedDocuments.value = {};
   
   // Auto-advance to next step
   nextStep();
@@ -768,9 +643,6 @@ function selectSousRubrique(sousRubrique) {
 
 function nextStep() {
   if (validateCurrentStep()) {
-    if (currentStep.value === 3) {
-      generatePreview();
-    }
     currentStep.value++;
   }
 }
@@ -799,9 +671,6 @@ function validateCurrentStep() {
       
     case 2:
       return validateBasicInfo();
-      
-    case 3:
-      return validateDynamicForms();
       
     default:
       return true;
@@ -847,25 +716,6 @@ function validateBasicInfo() {
   
   validationErrors.value = errors;
   return Object.keys(errors).length === 0;
-}
-
-function validateDynamicForms() {
-  return true;
-}
-
-async function generatePreview() {
-  try {
-    const response = await ApiService.post('/agent_antenne/dossiers/preview', formData.value);
-    dossierSummary.value = response;
-  } catch (error) {
-    console.error('Erreur lors de la génération de l\'aperçu:', error);
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: 'Impossible de générer l\'aperçu',
-      life: 3000
-    });
-  }
 }
 
 async function createDossier() {
@@ -963,24 +813,6 @@ async function searchAgriculteur() {
   }
 }
 
-function toggleDocument(index) {
-  expandedDocuments.value[index] = !expandedDocuments.value[index];
-}
-
-function updateDynamicForm(documentName, data) {
-  formData.value.formulairesDynamiques[documentName] = data;
-}
-
-function onFileUpload(event, index) {
-  console.log('Fichier uploadé:', event, index);
-  toast.add({
-    severity: 'success',
-    summary: 'Fichier uploadé',
-    detail: 'Document ajouté avec succès',
-    life: 3000
-  });
-}
-
 function handleSearch(query) {
   console.log('Recherche:', query);
 }
@@ -1001,8 +833,7 @@ function resetForm() {
       sousRubriqueId: null,
       dateDepot: new Date(),
       montantDemande: null
-    },
-    formulairesDynamiques: {}
+    }
   };
   
   selectedSousRubrique.value = null;
@@ -1010,46 +841,12 @@ function resetForm() {
   selectedCercle.value = null;
   currentStep.value = 1;
   validationErrors.value = {};
-  expandedDocuments.value = {};
   
   // Clear saved data
   localStorage.removeItem(STORAGE_KEY);
   
-  // Regenerate SABA for new form
-  autoGenerateSaba();
-}
-
-// Fonctions utilitaires
-function getProjectIcon(codeType) {
-  const icons = {
-    'acquisition-et-installation-des-serres': 'pi pi-home',
-    'arboriculture-fruitiere': 'pi pi-apple',
-    'equipement-des-exploitations-en-materiel-agricole': 'pi pi-cog',
-    'filets-de-protection': 'pi pi-shield',
-    'unites-de-valorisation': 'pi pi-building',
-    'acquisition-du-materiel-d-elevage': 'pi pi-heart',
-    'centres-de-collecte-de-lait': 'pi pi-database',
-    'amenagement-hydro-agricole': 'pi pi-tint',
-    'amelioration-fonciere': 'pi pi-map'
-  };
-  
-  return icons[codeType] || 'pi pi-file';
-}
-
-function getProjectDescription(codeType) {
-  const descriptions = {
-    'acquisition-et-installation-des-serres': 'Installation de serres pour la production agricole',
-    'arboriculture-fruitiere': 'Plantation et développement d\'arbres fruitiers',
-    'equipement-des-exploitations-en-materiel-agricole': 'Acquisition de matériel et équipements',
-    'filets-de-protection': 'Protection des cultures contre les intempéries',
-    'unites-de-valorisation': 'Transformation et valorisation des produits',
-    'acquisition-du-materiel-d-elevage': 'Matériel et équipements d\'élevage',
-    'centres-de-collecte-de-lait': 'Infrastructure de collecte de lait',
-    'amenagement-hydro-agricole': 'Aménagement des systèmes d\'irrigation',
-    'amelioration-fonciere': 'Amélioration de la qualité des terres'
-  };
-  
-  return descriptions[codeType] || 'Description du projet';
+  // Reload initialization data to get new SABA
+  loadInitializationData();
 }
 
 function formatCurrency(amount) {
@@ -1162,7 +959,7 @@ function formatDate(date) {
   font-weight: 500;
   color: #6b7280;
   font-size: 0.875rem;
-  margin-right:1rem;
+  margin-right: 1rem;
 }
 
 .step.active .step-label {
@@ -1188,9 +985,16 @@ function formatDate(date) {
   color: var(--primary-color);
   font-size: 1.25rem;
   font-weight: 700;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   padding-bottom: 0.5rem;
   border-bottom: 2px solid var(--primary-color);
+}
+
+.rubrique-description {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin-bottom: 1rem;
+  font-style: italic;
 }
 
 .sous-rubriques {
@@ -1207,7 +1011,7 @@ function formatDate(date) {
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 1rem;
 }
 
@@ -1225,8 +1029,10 @@ function formatDate(date) {
   font-size: 2rem;
   color: var(--primary-color);
   min-width: 2rem;
+  margin-top: 0.25rem;
 }
 
+/* Project Info with Document List */
 .project-info h4 {
   font-size: 1rem;
   font-weight: 600;
@@ -1237,7 +1043,28 @@ function formatDate(date) {
 .project-info p {
   font-size: 0.875rem;
   color: #6b7280;
-  margin: 0;
+  margin: 0 0 0.5rem 0;
+}
+
+.documents-list {
+  margin-top: 0.5rem;
+}
+
+.documents-list small {
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+.documents-list ul {
+  margin: 0.25rem 0 0 0;
+  padding-left: 1rem;
+  list-style-type: disc;
+}
+
+.documents-list li {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin: 0.125rem 0;
 }
 
 /* CDA Display */
@@ -1333,46 +1160,6 @@ function formatDate(date) {
   margin-bottom: 0.5rem;
 }
 
-/* Dynamic Forms */
-.document-section {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  margin-bottom: 1rem;
-  overflow: hidden;
-}
-
-.document-header {
-  background: #f8f9fa;
-  padding: 1rem;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.document-header h3 {
-  margin: 0;
-  font-size: 1rem;
-  color: #374151;
-}
-
-.document-content {
-  padding: 1.5rem;
-}
-
-.file-upload-section {
-  margin-bottom: 1.5rem;
-}
-
-.file-upload-section h4,
-.dynamic-form h4 {
-  color: var(--primary-color);
-  font-size: 0.875rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
-}
-
 /* Summary */
 .summary-sections {
   display: flex;
@@ -1407,25 +1194,22 @@ function formatDate(date) {
   color: #374151;
 }
 
-.forms-summary {
+.documents-summary {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.form-summary {
+.document-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
+  color: #374151;
 }
 
-.form-summary.complete {
-  color: #10b981;
-}
-
-.form-summary.incomplete {
-  color: #f59e0b;
+.document-item i {
+  color: var(--primary-color);
 }
 
 /* Actions */
@@ -1516,16 +1300,10 @@ function formatDate(date) {
 .dark-mode .stepper,
 .dark-mode .component-card,
 .dark-mode .project-type,
-.dark-mode .document-section,
 .dark-mode .summary-section,
 .dark-mode .rubrique-card {
   background-color: #1f2937;
   border-color: #374151;
-}
-
-.dark-mode .document-header,
-.dark-mode .summary-section {
-  background-color: #111827;
 }
 
 .dark-mode .step-number {

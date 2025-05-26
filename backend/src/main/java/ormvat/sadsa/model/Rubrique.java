@@ -21,6 +21,9 @@ public class Rubrique {
     @Column(nullable = false)
     private String designation;
 
+    @Column(length = 500)
+    private String description;
+
     @OneToMany(mappedBy = "rubrique")
     private List<SousRubrique> sousRubriques;
 }

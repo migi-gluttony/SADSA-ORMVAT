@@ -1,0 +1,299 @@
+[
+  {
+    "type": "engagement_conservation_investissement",
+    "source_document_page": 1,
+    "sections": [
+      {
+        "id": "informations_demandeur",
+        "fields": [
+          {
+            "id": "type_demandeur",
+            "type": "radio",
+            "options": [
+              {"value": "personne_physique"},
+              {"value": "representant_entite_juridique"}
+            ],
+            "label": "Type de demandeur"
+          },
+          {
+            "id": "genre",
+            "type": "radio",
+            "options": [
+              {"value": "monsieur"},
+              {"value": "madame_mademoiselle"}
+            ],
+            "label": "Genre"
+          },
+          {
+            "id": "nom_complet",
+            "type": "text",
+            "label": "Nom complet"
+          },
+          {
+            "id": "type_document_identite",
+            "type": "text",
+            "label": "Type de document d'identité"
+          },
+          {
+            "id": "numero_document_identite",
+            "type": "text",
+            "label": "Numéro du document d'identité"
+          },
+          {
+            "id": "date_expiration_document_identite",
+            "type": "date",
+            "label": "Date d'expiration du document d'identité"
+          },
+          {
+            "id": "type_entite_juridique",
+            "type": "radio",
+            "options": [
+              {"value": "societe"},
+              {"value": "association"},
+              {"value": "cooperative"}
+            ],
+            "label": "Type d'entité juridique",
+            "depends_on": {
+              "field": "type_demandeur",
+              "value": "representant_entite_juridique"
+            }
+          },
+          {
+            "id": "raison_sociale",
+            "type": "text",
+            "label": "Raison sociale",
+            "depends_on": {
+              "field": "type_demandeur",
+              "value": "representant_entite_juridique"
+            }
+          },
+          {
+            "id": "numero_registre_commerce",
+            "type": "text",
+            "label": "Numéro de registre de commerce",
+            "depends_on": {
+              "field": "type_demandeur",
+              "value": "representant_entite_juridique"
+            }
+          },
+          {
+            "id": "numero_cooperative",
+            "type": "text",
+            "label": "Numéro de coopérative",
+            "depends_on": {
+              "field": "type_entite_juridique",
+              "value": "cooperative"
+            }
+          },
+          {
+            "id": "ville_entite_juridique",
+            "type": "text",
+            "label": "Ville de l'entité juridique",
+            "depends_on": {
+              "field": "type_demandeur",
+              "value": "representant_entite_juridique"
+            }
+          },
+          {
+            "id": "adresse_correspondance",
+            "type": "textarea",
+            "label": "Adresse de correspondance"
+          },
+          {
+            "id": "telephone",
+            "type": "tel",
+            "label": "Numéro de téléphone"
+          },
+          {
+            "id": "email",
+            "type": "email",
+            "label": "Adresse e-mail"
+          }
+        ]
+      },
+      {
+        "id": "details_investissement",
+        "fields": [
+          {
+            "id": "numero_dossier_approbation_préalable",
+            "type": "text",
+            "label": "Numéro de dossier d'approbation préalable"
+          },
+          {
+            "id": "date_approbation_préalable",
+            "type": "date",
+            "label": "Date d'approbation préalable"
+          },
+          {
+            "id": "superficie_investissement",
+            "type": "number",
+            "label": "Superficie de l'investissement",
+            "unit": "Ha"
+          },
+          {
+            "id": "type_projet",
+            "type": "radio",
+            "options": [
+              {"value": "projet_individuel"},
+              {"value": "projet_collectif_cercles_irrigation"},
+              {"value": "autre_projet_collectif"}
+            ],
+            "label": "Type de projet"
+          },
+          {
+            "id": "systeme_irrigation",
+            "type": "radio",
+            "options": [
+              {"value": "irrigation_localisee"},
+              {"value": "irrigation_complementaire"}
+            ],
+            "label": "Système d'irrigation"
+          },
+          {
+            "id": "montant_investissement_facture",
+            "type": "number",
+            "label": "Montant de l'investissement facturé",
+            "unit": "DHS"
+          }
+        ]
+      },
+      {
+        "id": "details_terre",
+        "fields": [
+          {
+            "id": "nom_operateur_ou_detenteur_investissement",
+            "type": "text",
+            "label": "Nom de l'opérateur ou détenteur de l'investissement"
+          },
+          {
+            "id": "superficie_terre",
+            "type": "number",
+            "label": "Superficie de la terre",
+            "unit": "Ha"
+          },
+          {
+            "id": "statut_propriete",
+            "type": "checkbox_group",
+            "options": [
+              {"value": "propriete_privee"},
+              {"value": "terres_collectives"},
+              {"value": "terres_habous"},
+              {"value": "terres_etat_reforme_agraire"},
+              {"value": "terres_guich"},
+              {"value": "propriete_etat_privee_zones_consolidation_attente_titre"},
+              {"value": "autres_situations_juridiques"}
+            ],
+            "label": "Statut de la propriété"
+          },
+          {
+            "id": "statut_enregistrement_terre",
+            "type": "checkbox_group",
+            "options": [
+              {"value": "enregistre"},
+              {"value": "en_cours_enregistrement"},
+              {"value": "non_enregistre"}
+            ],
+            "label": "Statut d'enregistrement de la terre"
+          },
+          {
+            "id": "numero_titre_foncier",
+            "type": "text",
+            "label": "Numéro du titre foncier"
+          },
+          {
+            "id": "details_registre_foncier",
+            "type": "text",
+            "label": "Détails du registre foncier"
+          }
+        ]
+      },
+      {
+        "id": "declarations_engagement",
+        "fields": [
+          {
+            "id": "declaration_exactitude",
+            "type": "static_text",
+            "label": "Déclaration d'exactitude",
+            "value": "Je certifie que les informations fournies sont exactes et complètes."
+          },
+          {
+            "id": "engagement_maintenir_investissement",
+            "type": "static_text",
+            "label": "Engagement à maintenir l'investissement",
+            "value": "Je m'engage à maintenir l'investissement pendant la période requise conformément à la réglementation."
+          },
+          {
+            "id": "engagement_transfert_obligations_vente",
+            "type": "static_text",
+            "label": "Engagement à transférer les obligations en cas de vente",
+            "value": "Je m'engage à transférer les obligations d'investissement à l'acheteur en cas de vente."
+          },
+          {
+            "id": "engagement_autoriser_acces_controle",
+            "type": "static_text",
+            "label": "Engagement à autoriser l'accès pour contrôle",
+            "value": "Je m'engage à autoriser l'accès au site de l'investissement pour le suivi et l'inspection."
+          },
+          {
+            "id": "engagement_rembourser_aide_en_cas_violation",
+            "type": "static_text",
+            "label": "Engagement à rembourser l'aide en cas de violation",
+            "value": "Je m'engage à rembourser toute aide financière reçue en cas de violation des termes de l'engagement."
+          },
+          {
+            "id": "engagement_solidarite_demande_conjointe",
+            "type": "static_text",
+            "label": "Engagement de solidarité pour demande conjointe",
+            "value": "En cas de demande conjointe, je m'engage à la solidarité avec les autres demandeurs."
+          }
+        ]
+      },
+      {
+        "id": "signature_et_soumission",
+        "fields": [
+          {
+            "id": "lieu_emission",
+            "type": "text",
+            "label": "Lieu d'émission"
+          },
+          {
+            "id": "date_emission",
+            "type": "date",
+            "label": "Date d'émission"
+          },
+          {
+            "id": "signature_cachet_demandeur",
+            "type": "signature_area",
+            "label": "Signature et cachet du demandeur"
+          }
+        ]
+      },
+      {
+        "id": "recepisse_depot",
+        "fields": [
+          {
+            "id": "numero_dossier",
+            "type": "text",
+            "label": "Numéro de dossier"
+          },
+          {
+            "id": "date_depot",
+            "type": "date",
+            "label": "Date de dépôt"
+          },
+          {
+            "id": "inclus_tous_documents",
+            "type": "static_text",
+            "label": "Inclus tous les documents",
+            "value": "La demande inclut tous les documents requis conformément à la réglementation."
+          },
+          {
+            "id": "signature_cachet_responsable_guichet",
+            "type": "signature_area",
+            "label": "Signature et cachet du responsable du guichet unique"
+          }
+        ]
+      }
+    ]
+  }
+]

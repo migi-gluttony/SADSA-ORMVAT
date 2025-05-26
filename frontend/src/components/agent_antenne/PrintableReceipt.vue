@@ -23,9 +23,7 @@
       
       <!-- Document Title -->
       <div class="document-title">
-        <h1>RÉCÉPISSÉ DE DÉPÔT DE DEMANDE DE SUBVENTION</h1>
-        <h2>Système Automatisé de Demande de Subventions Agricoles (SADSA)</h2>
-        <h3>N° {{ receipt.numeroRecepisse }}</h3>
+        <h1>Système Automatisé de Demande de Subventions Agricoles (SADSA)</h1>
       </div>
       
       <!-- Receipt Content -->

@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Entity
 @Table(name = "sous_rubrique")
 @Data
@@ -19,7 +21,13 @@ public class SousRubrique {
     @Column(nullable = false)
     private String designation;
 
+    @Column(length = 500)
+    private String description;
+
     @ManyToOne
     @JoinColumn(name = "id_rubrique")
     private Rubrique rubrique;
+
+    @OneToMany(mappedBy = "sousRubrique")
+    private List<DocumentRequis> documentsRequis;
 }
