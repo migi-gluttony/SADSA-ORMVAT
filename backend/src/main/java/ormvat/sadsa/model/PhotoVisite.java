@@ -5,22 +5,21 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.Date;
 
 @Entity
-@Table(name = "photo_documentation")
+@Table(name = "photo_visite")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class PhotoDocumentation {
+public class PhotoVisite {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_photo")
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "id_visite")
-    private VisiteTerrain visite;
+    @Column(name = "nom_fichier")
+    private String nomFichier;
 
     @Column(name = "chemin_fichier")
     private String cheminFichier;
@@ -28,10 +27,13 @@ public class PhotoDocumentation {
     @Column
     private String description;
 
-    @Column(name = "date_prise")
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date datePrise;
-
     @Column(name = "coordonnees_gps")
     private String coordonneesGPS;
+
+    @Column(name = "date_prise")
+    private LocalDateTime datePrise;
+
+    @ManyToOne
+    @JoinColumn(name = "visite_terrain_id")
+    private VisiteTerrain visiteTerrain;
 }

@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.util.Date;
 
 @Entity
@@ -15,17 +16,16 @@ import java.util.Date;
 public class JoursFerie {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_joursferie")
     private Long id;
 
-    @Column(name = "jours_ferie")
-    private String joursFerie;
+    @Column(nullable = false)
+    private LocalDate date;
 
     @Column
-    @Temporal(TemporalType.DATE)
-    private Date date;
+    private String libelle;
 
     @Column
-    private Integer nbr;
+    private Boolean fixe = false;
 }
+
 

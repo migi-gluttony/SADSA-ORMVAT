@@ -13,22 +13,21 @@ import lombok.NoArgsConstructor;
 public class DocumentRequis {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_document_requis")
     private Long id;
-
-    @ManyToOne
-    @JoinColumn(name = "id_sous_rubrique")
-    private SousRubrique sousRubrique;
 
     @Column(name = "nom_document", nullable = false)
     private String nomDocument;
 
-    @Column(name = "description")
+    @Column
     private String description;
 
-    @Column(name = "obligatoire")
+    @Column
     private Boolean obligatoire = true;
 
-    @Column(name = "config_formulaire_json", columnDefinition = "TEXT")
-    private String configFormulaireJson;
+    @Column(name = "location_formulaire")
+    private String locationFormulaire;
+
+    @ManyToOne
+    @JoinColumn(name = "sous_rubrique_id")
+    private SousRubrique sousRubrique;
 }

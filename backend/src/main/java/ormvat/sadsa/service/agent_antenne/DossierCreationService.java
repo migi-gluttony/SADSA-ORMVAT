@@ -9,6 +9,7 @@ import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -19,13 +20,12 @@ public class DossierCreationService {
 
     private final DossierRepository dossierRepository;
     private final AgriculteurRepository agriculteurRepository;
-    private final CDARepository cdaRepository;
     private final RubriqueRepository rubriqueRepository;
     private final SousRubriqueRepository sousRubriqueRepository;
     private final EtapeRepository etapeRepository;
-    private final TraceRepository traceRepository;
-    private final HistoriqueRepository historiqueRepository;
-    private final EmplacementRepository emplacementRepository;
+    private final AuditTrailRepository auditTrailRepository;
+    private final WorkflowInstanceRepository workflowInstanceRepository;
+    private final HistoriqueWorkflowRepository historiqueWorkflowRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final ProvinceRepository provinceRepository;
     private final CercleRepository cercleRepository;
@@ -122,7 +122,7 @@ public class DossierCreationService {
     }
 
     /**
-     * Create a new dossier with all necessary audit trail
+     * Create a new dossier with workflow tracking
      */
     @Transactional
     public CreateDossierResponse createDossier(CreateDossierRequest request, String userEmail) {
@@ -145,42 +145,54 @@ public class DossierCreationService {
             SousRubrique sousRubrique = sousRubriqueRepository.findById(request.getDossier().getSousRubriqueId())
                     .orElseThrow(() -> new RuntimeException("Sous-rubrique non trouvée"));
 
-            // Get initial etape (Phase Antenne)
-            Emplacement phaseAntenne = emplacementRepository.findByDesignation("Phase Antenne");
-            if (phaseAntenne == null) {
-                throw new RuntimeException("Emplacement 'Phase Antenne' non trouvé");
-            }
-
-            Etape etapeInitiale = etapeRepository.findByDesignation("Phase Antenne");
-            if (etapeInitiale == null) {
-                throw new RuntimeException("Étape initiale non trouvée");
-            }
+            // Get initial etape (AP Phase Antenne)
+            Etape etapeInitiale = getOrCreateEtape(Etape.EtapeType.AP_PHASE_ANTENNE, "Phase Antenne");
 
             // Create dossier
             Dossier dossier = new Dossier();
             dossier.setSaba(request.getDossier().getSaba());
             dossier.setReference(generateReference(cda, sousRubrique));
+            dossier.setNumeroDossier(generateNumeroDossier());
             dossier.setAgriculteur(agriculteur);
             dossier.setCda(cda);
             dossier.setSousRubrique(sousRubrique);
-            dossier.setEtapeActuelle(etapeInitiale);
+            dossier.setUtilisateurCreateur(utilisateur);
+            dossier.setStatus(Dossier.DossierStatus.DRAFT);
+            dossier.setDateCreation(LocalDateTime.now());
 
             Dossier savedDossier = dossierRepository.save(dossier);
 
-            // Create historique entry
-            Historique historique = new Historique();
-            historique.setDossier(savedDossier);
-            historique.setEmplacement(phaseAntenne);
-            historique.setDateReception(new Date());
-            historiqueRepository.save(historique);
+            // Create workflow instance
+            WorkflowInstance workflowInstance = new WorkflowInstance();
+            workflowInstance.setDossier(savedDossier);
+            workflowInstance.setEtapeActuelle(Etape.EtapeType.AP_PHASE_ANTENNE);
+            workflowInstance.setEmplacementActuel(WorkflowInstance.EmplacementType.ANTENNE);
+            workflowInstance.setDateEntree(LocalDateTime.now());
+            workflowInstance.setDateLimite(calculateDateLimite(etapeInitiale));
+            workflowInstance.setEtape(etapeInitiale);
+            workflowInstance.setJoursRestants(etapeInitiale.getDureeJours());
+            workflowInstanceRepository.save(workflowInstance);
 
-            // Create trace entry
-            Trace trace = new Trace();
-            trace.setDossier(savedDossier);
-            trace.setUtilisateur(utilisateur);
-            trace.setAction("CREATION_DOSSIER");
-            trace.setDateAction(new Date());
-            traceRepository.save(trace);
+            // Create workflow history entry
+            HistoriqueWorkflow historique = new HistoriqueWorkflow();
+            historique.setDossier(savedDossier);
+            historique.setEtapeType(Etape.EtapeType.AP_PHASE_ANTENNE);
+            historique.setEmplacementType(WorkflowInstance.EmplacementType.ANTENNE);
+            historique.setDateEntree(LocalDateTime.now());
+            historique.setUtilisateur(utilisateur);
+            historique.setCommentaire("Création du dossier");
+            historique.setEtape(etapeInitiale);
+            historiqueWorkflowRepository.save(historique);
+
+            // Create audit trail entry
+            AuditTrail auditTrail = new AuditTrail();
+            auditTrail.setAction("CREATION_DOSSIER");
+            auditTrail.setEntite("Dossier");
+            auditTrail.setEntiteId(savedDossier.getId());
+            auditTrail.setDateAction(LocalDateTime.now());
+            auditTrail.setUtilisateur(utilisateur);
+            auditTrail.setDescription("Création d'un nouveau dossier avec SABA: " + savedDossier.getSaba());
+            auditTrailRepository.save(auditTrail);
 
             // Generate recepisse
             RecepisseDossierDTO recepisse = generateRecepisse(savedDossier, request);
@@ -189,7 +201,7 @@ public class DossierCreationService {
 
             return CreateDossierResponse.builder()
                     .dossierId(savedDossier.getId())
-                    .numeroDossier(savedDossier.getReference())
+                    .numeroDossier(savedDossier.getNumeroDossier())
                     .statut("CREE")
                     .message("Dossier créé avec succès")
                     .recepisse(recepisse)
@@ -250,6 +262,30 @@ public class DossierCreationService {
         return agriculteurRepository.save(agriculteur);
     }
 
+    private Etape getOrCreateEtape(Etape.EtapeType etapeType, String designation) {
+        // Try to find existing etape by designation first
+        Etape existingEtape = etapeRepository.findByDesignation(designation);
+        if (existingEtape != null) {
+            return existingEtape;
+        }
+
+        // Create new etape if not found
+        Etape etape = new Etape();
+        etape.setType(etapeType);
+        etape.setDesignation(designation);
+        etape.setDureeJours(3); // Default 3 days for Phase Antenne
+        etape.setOrdre(1);
+        etape.setPhase("APPROBATION");
+        
+        return etapeRepository.save(etape);
+    }
+
+    private LocalDateTime calculateDateLimite(Etape etape) {
+        LocalDateTime now = LocalDateTime.now();
+        int dureeJours = etape.getDureeJours() != null ? etape.getDureeJours() : 3;
+        return now.plusDays(dureeJours);
+    }
+
     private String generateReference(CDA cda, SousRubrique sousRubrique) {
         String annee = String.valueOf(LocalDate.now().getYear());
         String cdaCode = String.format("%03d", cda.getId());
@@ -258,6 +294,12 @@ public class DossierCreationService {
         String seqCode = String.format("%06d", sequence);
 
         return String.format("DOS-%s-%s-%s-%s", annee, cdaCode, sousRubriqueCode, seqCode);
+    }
+
+    private String generateNumeroDossier() {
+        long count = dossierRepository.count() + 1;
+        int year = LocalDate.now().getYear();
+        return String.format("%d-%06d", year, count);
     }
 
     private String generateSabaNumber() {

@@ -5,7 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Date;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "piece_jointe")
@@ -15,32 +15,43 @@ import java.util.Date;
 public class PieceJointe {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_piece_jointe")
     private Long id;
 
+    @Column(name = "nom_fichier")
+    private String nomFichier;
+
+    @Column(name = "chemin_fichier")
+    private String cheminFichier;
+
+    @Column(name = "type_document")
+    private String typeDocument;
+
+    @Enumerated(EnumType.STRING)
+    @Column
+    private DocumentStatus status;
+
+    @Column(name = "chemin_donnees_formulaire")
+    private String cheminDonneesFormulaire;
+
+    @Column(name = "date_upload")
+    private LocalDateTime dateUpload;
+
     @ManyToOne
-    @JoinColumn(name = "id_dossier")
+    @JoinColumn(name = "dossier_id")
     private Dossier dossier;
 
     @ManyToOne
-    @JoinColumn(name = "id_document_requis")
+    @JoinColumn(name = "document_requis_id")
     private DocumentRequis documentRequis;
 
-    @Column(name = "chemin_document_original")
-    private String cheminDocumentOriginal;
+    @ManyToOne
+    @JoinColumn(name = "utilisateur_id")
+    private Utilisateur utilisateur;
 
-    @Column(name = "donnees_formulaire_json", columnDefinition = "TEXT")
-    private String donneesFormulaireJson;
-
-    @Column(name = "date_upload")
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date dateUpload;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "statut")
-    private StatutPieceJointe statut = StatutPieceJointe.PENDING;
-
-    public enum StatutPieceJointe {
-        PENDING, COMPLETE, REJECTED
+    public enum DocumentStatus {
+        PENDING,
+        COMPLETE,
+        REJECTED,
+        MISSING
     }
 }

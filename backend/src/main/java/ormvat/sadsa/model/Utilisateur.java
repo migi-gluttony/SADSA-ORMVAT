@@ -6,6 +6,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
@@ -16,10 +17,15 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class Utilisateur implements UserDetails {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(nullable = false, unique = true)
+    private String email;
+
+    @Column(name = "mot_de_passe", nullable = false)
+    private String motDePasse;
 
     @Column(nullable = false)
     private String nom;
@@ -27,29 +33,36 @@ public class Utilisateur implements UserDetails {
     @Column(nullable = false)
     private String prenom;
 
-    @Column(nullable = false, unique = true)
-    private String email;
-
-    @Column(unique = true)
-    private String telephone;
-
-    @Column(name = "mot_de_passe", nullable = false)
-    private String motDePasse;
-
     @Column
-    private String statut; // actif, inactif
+    private String telephone;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Role role;
+    private UserRole role;
+
+    @Column
+    private String statut;
+
+    @Column(name = "date_creation")
+    private LocalDateTime dateCreation;
+
+    @Column(name = "derniere_connexion")
+    private LocalDateTime derniereConnexion;
+
+    @Column
+    private Boolean actif = true;
 
     @ManyToOne
-    @JoinColumn(name = "id_cda")
+    @JoinColumn(name = "cda_id")
     private CDA cda;
 
-    // SADSA specific roles
-    public enum Role {
-        ADMIN, AGENT_ANTENNE, AGENT_GUC, AGENT_COMMISSION
+    // Update Role enum
+    public enum UserRole {
+        ADMIN,
+        AGENT_ANTENNE,
+        AGENT_GUC,
+        AGENT_COMMISSION,
+        COMMISSION_AHA_AF
     }
 
     @Override

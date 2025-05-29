@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 
@@ -16,31 +17,34 @@ import java.util.List;
 public class VisiteTerrain {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_visite")
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "id_dossier")
-    private Dossier dossier;
-
     @Column(name = "date_visite")
-    @Temporal(TemporalType.DATE)
-    private Date dateVisite;
+    private LocalDate dateVisite;
 
     @Column(name = "date_constat")
-    @Temporal(TemporalType.DATE)
-    private Date dateConstat;
+    private LocalDate dateConstat;
 
-    @Column(length = 1000)
+    @Column(columnDefinition = "TEXT")
     private String observations;
+
+    @Column(columnDefinition = "TEXT")
+    private String recommandations;
 
     @Column
     private Boolean approuve;
 
+    @Column(name = "coordonnees_gps")
+    private String coordonneesGPS;
+
     @ManyToOne
-    @JoinColumn(name = "id_utilisateur_commission")
+    @JoinColumn(name = "dossier_id")
+    private Dossier dossier;
+
+    @ManyToOne
+    @JoinColumn(name = "utilisateur_commission_id")
     private Utilisateur utilisateurCommission;
 
-    @OneToMany(mappedBy = "visite", cascade = CascadeType.ALL)
-    private List<PhotoDocumentation> photos;
+    @OneToMany(mappedBy = "visiteTerrain", cascade = CascadeType.ALL)
+    private List<PhotoVisite> photos;
 }
