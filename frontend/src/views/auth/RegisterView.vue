@@ -210,7 +210,6 @@ const telephone = ref('');
 const password = ref('');
 const confirmPassword = ref('');
 const role = ref('');
-const acceptTerms = ref(false);
 const loading = ref(false);
 const errorMessage = ref('');
 const successMessage = ref('');
@@ -309,16 +308,6 @@ const handleRegister = async () => {
     return;
   }
 
-  if (!acceptTerms.value) {
-    toast.add({
-      severity: 'warn',
-      summary: 'Conditions requises',
-      detail: 'Vous devez accepter les conditions d\'utilisation',
-      life: 4000
-    });
-    return;
-  }
-
   try {
     loading.value = true;
     errorMessage.value = '';
@@ -355,7 +344,6 @@ const handleRegister = async () => {
     password.value = '';
     confirmPassword.value = '';
     role.value = '';
-    acceptTerms.value = false;
     
     // Redirect to login after 3 seconds
     setTimeout(() => {
