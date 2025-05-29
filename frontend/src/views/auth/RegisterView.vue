@@ -118,29 +118,27 @@
             <small id="role-error" class="p-error form-error">{{ validationErrors.role }}</small>
           </div>
 
-          <!-- CDA Selection - Only show for AGENT_ANTENNE -->
+          <!-- Antenne Selection - Only show for AGENT_ANTENNE -->
           <div v-if="role === 'AGENT_ANTENNE'" class="form-group">
-            <label for="cda" class="form-label">
+            <label for="antenne" class="form-label">
               <i class="pi pi-building"></i>
-              Centre de Développement Agricole (CDA)
+              Antenne ORMVAT
             </label>
             <Dropdown 
-              id="cda" 
-              v-model="cdaId" 
-              :options="cdaOptions"
+              id="antenne" 
+              v-model="antenneId" 
+              :options="antenneOptions"
               optionLabel="label"
               optionValue="value"
-              placeholder="Sélectionnez votre CDA"
+              placeholder="Sélectionnez votre antenne"
               class="form-input dropdown-input"
-              :class="{ 'p-invalid': validationErrors.cdaId }"
-              aria-describedby="cda-error"
-              :loading="loadingCDAs"
-              :disabled="loadingCDAs"
+              :class="{ 'p-invalid': validationErrors.antenneId }"
+              aria-describedby="antenne-error"
             />
-            <small id="cda-error" class="p-error form-error">{{ validationErrors.cdaId }}</small>
+            <small id="antenne-error" class="p-error form-error">{{ validationErrors.antenneId }}</small>
             <small class="form-help">
               <i class="pi pi-info-circle"></i>
-              Le CDA auquel vous êtes rattaché pour la gestion des dossiers
+              L'antenne à laquelle vous êtes rattaché
             </small>
           </div>
 
@@ -181,6 +179,8 @@
             />
             <small id="confirm-password-error" class="p-error form-error">{{ validationErrors.confirmPassword }}</small>
           </div>
+
+
 
           <Button 
             type="submit" 
@@ -243,11 +243,9 @@ const telephone = ref('');
 const password = ref('');
 const confirmPassword = ref('');
 const role = ref('');
-const cdaId = ref(null);
+const antenneId = ref(null);
 const loading = ref(false);
-const loadingCDAs = ref(false);
 const errorMessage = ref('');
-const successMessage = ref('');
 
 const validationErrors = ref({
   nom: '',
@@ -257,17 +255,24 @@ const validationErrors = ref({
   password: '',
   confirmPassword: '',
   role: '',
-  cdaId: ''
+  antenneId: ''
 });
 
 const roleOptions = ref([
   { label: 'Agent d\'Antenne (CDA)', value: 'AGENT_ANTENNE' },
   { label: 'Agent Guichet Unique Central', value: 'AGENT_GUC' },
   { label: 'Agent de Commission Technique', value: 'AGENT_COMMISSION' },
+  { label: 'Commission AHA-AF', value: 'COMMISSION_AHA_AF' },
   { label: 'Administrateur', value: 'ADMIN' }
 ]);
 
-const cdaOptions = ref([]);
+const antenneOptions = ref([
+  { label: 'Antenne Bni Amir - CDA Bni Amir', value: 1 },
+  { label: 'Antenne Souk Sebt - CDA Souk Sebt', value: 2 },
+  { label: 'Antenne Ouldad M\'Bark - CDA Ouldad M\'Bark', value: 3 },
+  { label: 'Antenne Dar Ouled Zidouh - CDA Dar Ouled Zidouh', value: 4 },
+  { label: 'Antenne Afourer - CDA Afourer', value: 5 }
+]);
 
 onMounted(() => {
   if (AuthService.isAuthenticated()) {
@@ -275,43 +280,10 @@ onMounted(() => {
   }
 });
 
-const loadCDAs = async () => {
-  try {
-    loadingCDAs.value = true;
-    // Use the public endpoint to get CDAs for registration
-    const response = await ApiService.get('/auth/cdas');
-    cdaOptions.value = response.map(cda => ({
-      label: `${cda.description} - ${cda.antenneNom || 'N/A'}`,
-      value: cda.id
-    }));
-  } catch (error) {
-    console.error('Error loading CDAs:', error);
-    toast.add({
-      severity: 'warn',
-      summary: 'Attention',
-      detail: 'Impossible de charger la liste des CDAs',
-      life: 3000
-    });
-    // Fallback - show generic CDA options
-    cdaOptions.value = [
-      { label: 'CDA Fquih Ben Salah', value: 1 },
-      { label: 'CDA Khouribga', value: 2 },
-      { label: 'CDA Béni Mellal', value: 3 }
-    ];
-  } finally {
-    loadingCDAs.value = false;
-  }
-};
-
 const onRoleChange = () => {
-  // Reset CDA selection when role changes
-  cdaId.value = null;
-  validationErrors.value.cdaId = '';
-  
-  // Load CDAs only for AGENT_ANTENNE
-  if (role.value === 'AGENT_ANTENNE') {
-    loadCDAs();
-  }
+  // Reset antenne selection when role changes
+  antenneId.value = null;
+  validationErrors.value.antenneId = '';
 };
 
 const validateForm = () => {
@@ -392,7 +364,6 @@ const handleRegister = async () => {
     return;
   }
 
-
   try {
     loading.value = true;
     errorMessage.value = '';
@@ -406,7 +377,7 @@ const handleRegister = async () => {
       telephone: telephone.value || null,
       motDePasse: password.value,
       role: role.value,
-      cdaId: role.value === 'AGENT_ANTENNE' ? cdaId.value : null
+      antenneId: role.value === 'AGENT_ANTENNE' ? antenneId.value : null
     };
 
     // Call the AuthService register method
@@ -430,7 +401,7 @@ const handleRegister = async () => {
     password.value = '';
     confirmPassword.value = '';
     role.value = '';
-    cdaId.value = null;
+    antenneId.value = null;
     
     // Redirect to login after 3 seconds
     setTimeout(() => {
@@ -674,6 +645,28 @@ const handleRegister = async () => {
   margin-bottom: 1.5rem;
 }
 
+.terms-acceptance {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.terms-label {
+  color: var(--text-color-secondary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.terms-link {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.terms-link:hover {
+  text-decoration: underline;
+}
 
 .submit-button {
   width: 100%;
@@ -864,7 +857,10 @@ const handleRegister = async () => {
   .auth-header h2 {
     font-size: 1.6rem;
   }
-
+  
+  .terms-acceptance {
+    align-items: flex-start;
+  }
 }
 
 /* Animations */

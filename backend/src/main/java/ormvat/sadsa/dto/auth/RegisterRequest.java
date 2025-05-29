@@ -12,5 +12,5 @@ public class RegisterRequest {
     private String telephone;
     private String motDePasse;
     private UserRole role;
-    private Long cdaId; // Optional: CDA assignment for users
+    private Long antenneId; // Optional: CDA assignment for users
 }

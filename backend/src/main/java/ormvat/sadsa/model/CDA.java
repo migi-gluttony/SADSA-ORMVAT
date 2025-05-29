@@ -1,5 +1,7 @@
 package ormvat.sadsa.model;
 
+import java.util.List;
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -19,7 +21,6 @@ public class CDA {
     @Column
     private String description;
 
-    @ManyToOne
-    @JoinColumn(name = "id_antenne")
-    private Antenne antenne;
+    @OneToMany(mappedBy = "cda")
+    private List<Antenne> antennes;
 }

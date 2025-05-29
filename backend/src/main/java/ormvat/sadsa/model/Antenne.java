@@ -24,6 +24,10 @@ public class Antenne {
     @Column
     private String abreviation;
 
+    @ManyToOne
+    @JoinColumn(name = "id_cda")
+    private CDA cda;
+
     @OneToMany(mappedBy = "antenne")
-    private List<CDA> cdas;
+    private List<Utilisateur> utilisateurs;
 }

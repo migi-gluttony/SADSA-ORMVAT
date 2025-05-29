@@ -6,5 +6,4 @@ import ormvat.sadsa.model.CDA;
 import java.util.List;
 
 public interface CDARepository extends JpaRepository<CDA, Long> {
-    List<CDA> findByAntenneId(Long antenneId);
 }

@@ -7,16 +7,19 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 import ormvat.sadsa.dto.auth.*;
+import ormvat.sadsa.model.Antenne;
 import ormvat.sadsa.model.CDA;
 import ormvat.sadsa.model.Utilisateur;
 import ormvat.sadsa.repository.CDARepository;
 import ormvat.sadsa.repository.UtilisateurRepository;
+import ormvat.sadsa.repository.AntenneRepository;
 
 @Service
 @RequiredArgsConstructor
 public class AuthenticationService {
     private final UtilisateurRepository utilisateurRepository;
     private final CDARepository cdaRepository;
+    private final AntenneRepository antenneRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
@@ -40,12 +43,11 @@ public class AuthenticationService {
                 .role(request.getRole())
                 .statut("actif");
 
-        // Assign CDA if provided
-        if (request.getCdaId() != null) {
-            CDA cda = cdaRepository.findById(request.getCdaId())
-                    .orElseThrow(() -> new RuntimeException("CDA non trouvé"));
-            userBuilder.cda(cda);
-        }
+        if (request.getAntenneId() != null) {
+        Antenne antenne = antenneRepository.findById(request.getAntenneId())
+                .orElseThrow(() -> new RuntimeException("Antenne non trouvée"));
+        userBuilder.antenne(antenne);
+    }
 
         Utilisateur utilisateur = userBuilder.build();
         utilisateurRepository.save(utilisateur);

@@ -14,7 +14,7 @@ public class DossierCreationDTOs {
     @AllArgsConstructor
     @NoArgsConstructor
     public static class InitializationDataResponse {
-        private CDAInfoDTO userCDA;
+        private AntenneInfoDTO userAntenne;
         private List<SimplifiedRubriqueDTO> rubriques;
         private List<GeographicDTO> provinces;
         private String generatedSaba;
@@ -107,15 +107,13 @@ public class DossierCreationDTOs {
     }
 
     @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class CDAInfoDTO {
-        private Long id;
-        private String description;
-        private String antenneNom;
-        private Long antenneId;
-    }
+@Builder
+public static class AntenneInfoDTO {
+    private Long id;
+    private String designation;
+    private String cdaNom; // CDA name through relationship
+    private Long cdaId;
+}
 
     @Data
     @Builder

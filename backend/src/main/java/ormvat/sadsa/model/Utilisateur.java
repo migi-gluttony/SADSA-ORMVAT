@@ -53,8 +53,8 @@ public class Utilisateur implements UserDetails {
     private Boolean actif = true;
 
     @ManyToOne
-    @JoinColumn(name = "cda_id")
-    private CDA cda;
+    @JoinColumn(name = "antenne_id")
+    private Antenne antenne;
 
     // Update Role enum
     public enum UserRole {

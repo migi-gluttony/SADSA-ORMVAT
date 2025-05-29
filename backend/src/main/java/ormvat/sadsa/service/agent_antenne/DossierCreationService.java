@@ -38,13 +38,18 @@ public class DossierCreationService {
      */
     public InitializationDataResponse getInitializationData(String userEmail) {
         try {
-            // Get user and their CDA
+            // Get user and their Antenne
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
             
-            CDA userCDA = utilisateur.getCda();
+            Antenne userAntenne = utilisateur.getAntenne();
+            if (userAntenne == null) {
+                throw new RuntimeException("L'utilisateur n'est associé à aucune antenne");
+            }
+
+            CDA userCDA = userAntenne.getCda();
             if (userCDA == null) {
-                throw new RuntimeException("L'utilisateur n'est associé à aucun CDA");
+                throw new RuntimeException("L'antenne n'est associée à aucun CDA");
             }
 
             // Get all rubriques with sous-rubriques and documents
@@ -65,11 +70,11 @@ public class DossierCreationService {
             String sabaNumber = generateSabaNumber();
 
             return InitializationDataResponse.builder()
-                    .userCDA(CDAInfoDTO.builder()
-                            .id(userCDA.getId())
-                            .description(userCDA.getDescription())
-                            .antenneNom(userCDA.getAntenne() != null ? userCDA.getAntenne().getDesignation() : "N/A")
-                            .antenneId(userCDA.getAntenne() != null ? userCDA.getAntenne().getId() : null)
+                    .userAntenne(AntenneInfoDTO.builder()
+                            .id(userAntenne.getId())
+                            .designation(userAntenne.getDesignation())
+                            .cdaNom(userCDA.getDescription())
+                            .cdaId(userCDA.getId())
                             .build())
                     .rubriques(rubriqueDTOs)
                     .provinces(provinces)
@@ -129,13 +134,18 @@ public class DossierCreationService {
         try {
             log.info("Début création dossier pour l'utilisateur: {}", userEmail);
 
-            // Get user and CDA
+            // Get user and Antenne/CDA
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
             
-            CDA cda = utilisateur.getCda();
+            Antenne antenne = utilisateur.getAntenne();
+            if (antenne == null) {
+                throw new RuntimeException("L'utilisateur n'est associé à aucune antenne");
+            }
+            
+            CDA cda = antenne.getCda();
             if (cda == null) {
-                throw new RuntimeException("L'utilisateur n'est associé à aucun CDA");
+                throw new RuntimeException("L'antenne n'est associée à aucun CDA");
             }
 
             // Validate and get or create agriculteur
@@ -145,8 +155,8 @@ public class DossierCreationService {
             SousRubrique sousRubrique = sousRubriqueRepository.findById(request.getDossier().getSousRubriqueId())
                     .orElseThrow(() -> new RuntimeException("Sous-rubrique non trouvée"));
 
-            // Get initial etape (AP Phase Antenne)
-            Etape etapeInitiale = getOrCreateEtape(Etape.EtapeType.AP_PHASE_ANTENNE, "Phase Antenne");
+            // Get initial etape (Phase Antenne)
+            Etape etapeInitiale = getOrCreateEtape("Phase Antenne");
 
             // Create dossier
             Dossier dossier = new Dossier();
@@ -165,7 +175,7 @@ public class DossierCreationService {
             // Create workflow instance
             WorkflowInstance workflowInstance = new WorkflowInstance();
             workflowInstance.setDossier(savedDossier);
-            workflowInstance.setEtapeActuelle(Etape.EtapeType.AP_PHASE_ANTENNE);
+            workflowInstance.setEtapeDesignation("Phase Antenne");
             workflowInstance.setEmplacementActuel(WorkflowInstance.EmplacementType.ANTENNE);
             workflowInstance.setDateEntree(LocalDateTime.now());
             workflowInstance.setDateLimite(calculateDateLimite(etapeInitiale));
@@ -176,7 +186,7 @@ public class DossierCreationService {
             // Create workflow history entry
             HistoriqueWorkflow historique = new HistoriqueWorkflow();
             historique.setDossier(savedDossier);
-            historique.setEtapeType(Etape.EtapeType.AP_PHASE_ANTENNE);
+            historique.setEtapeDesignation("Phase Antenne");
             historique.setEmplacementType(WorkflowInstance.EmplacementType.ANTENNE);
             historique.setDateEntree(LocalDateTime.now());
             historique.setUtilisateur(utilisateur);
@@ -262,7 +272,7 @@ public class DossierCreationService {
         return agriculteurRepository.save(agriculteur);
     }
 
-    private Etape getOrCreateEtape(Etape.EtapeType etapeType, String designation) {
+    private Etape getOrCreateEtape(String designation) {
         // Try to find existing etape by designation first
         Etape existingEtape = etapeRepository.findByDesignation(designation);
         if (existingEtape != null) {
@@ -271,7 +281,6 @@ public class DossierCreationService {
 
         // Create new etape if not found
         Etape etape = new Etape();
-        etape.setType(etapeType);
         etape.setDesignation(designation);
         etape.setDureeJours(3); // Default 3 days for Phase Antenne
         etape.setOrdre(1);
@@ -328,7 +337,8 @@ public class DossierCreationService {
                 .saba(dossier.getSaba())
                 .montantDemande(request.getDossier().getMontantDemande())
                 .cdaNom(dossier.getCda().getDescription())
-                .antenne(dossier.getCda().getAntenne() != null ? dossier.getCda().getAntenne().getDesignation() : "N/A")
+                .antenne(dossier.getCda().getAntennes() != null && !dossier.getCda().getAntennes().isEmpty() 
+                    ? dossier.getCda().getAntennes().get(0).getDesignation() : "N/A")
                 .build();
     }
 }
