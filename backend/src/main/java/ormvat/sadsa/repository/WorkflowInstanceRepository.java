@@ -8,7 +8,8 @@ import java.util.List;
 @Repository
 public interface WorkflowInstanceRepository extends JpaRepository<WorkflowInstance, Long> {
     List<WorkflowInstance> findByDossierId(Long dossierId);
-    List<WorkflowInstance> findByEtapeActuelle(Etape.EtapeType etapeType);
+        List<WorkflowInstance> findByEtapeDesignation(String etapeDesignation);
+
     List<WorkflowInstance> findByEmplacementActuel(WorkflowInstance.EmplacementType emplacementType);
     List<WorkflowInstance> findByEnRetardTrue();
 }

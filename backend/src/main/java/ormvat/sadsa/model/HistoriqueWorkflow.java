@@ -23,9 +23,8 @@ public class HistoriqueWorkflow {
     @JoinColumn(name = "id_dossier")
     private Dossier dossier;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "etape_type")
-    private Etape.EtapeType etapeType;
+    @Column(name = "etape_designation")
+    private String etapeDesignation;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "emplacement_type")

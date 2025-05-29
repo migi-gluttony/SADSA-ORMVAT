@@ -16,7 +16,6 @@ import java.util.List;
 @RequestMapping("/api/agent_antenne/dossiers")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*")
 public class DossierCreationController {
 
     private final DossierCreationService dossierService;

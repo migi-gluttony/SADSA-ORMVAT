@@ -22,9 +22,8 @@ public class WorkflowInstance {
     @JoinColumn(name = "id_dossier")
     private Dossier dossier;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "etape_actuelle")
-    private Etape.EtapeType etapeActuelle;
+@Column(name = "etape_designation")
+    private String etapeDesignation;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "emplacement_actuel")

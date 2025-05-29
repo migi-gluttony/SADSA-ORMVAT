@@ -16,10 +16,6 @@ public class Etape {
     @Column(name = "id_etape")
     private Long id;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private EtapeType type;
-
     @Column(nullable = false)
     private String designation;
 
@@ -31,15 +27,4 @@ public class Etape {
 
     @Column
     private String phase;
-
-    public enum EtapeType {
-        AP_PHASE_ANTENNE,
-        AP_PHASE_GUC,
-        AP_PHASE_AHA_AF,
-        AP_PHASE_GUC_FINAL,
-        RP_PHASE_ANTENNE_1,
-        RP_PHASE_ANTENNE_2,
-        RP_PHASE_SERVICE_TECHNIQUE,
-        RP_PHASE_GUC_FINAL
-    }
 }

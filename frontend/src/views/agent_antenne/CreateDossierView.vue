@@ -445,7 +445,7 @@ const userCDA = ref(null);
 
 // États de l'interface
 const loading = ref({
-  rubriques: false,
+  initialization: false,
   create: false,
   geographic: false
 });
@@ -478,7 +478,8 @@ const isBasicInfoValid = computed(() => {
          formData.value.agriculteur.communeRuraleId &&
          formData.value.dossier.saba &&
          userCDA.value &&
-         formData.value.dossier.montantDemande;
+         formData.value.dossier.montantDemande &&
+         selectedSousRubrique.value;
 });
 
 const selectedCommuneName = computed(() => {
@@ -504,9 +505,9 @@ const loadSavedData = () => {
       if (parsedData.currentStep) currentStep.value = parsedData.currentStep;
       
       // Restore dependent dropdowns
-      if (parsedData.selectedProvince) onProvinceChange();
-      if (parsedData.selectedCercle) onCercleChange();
-      if (parsedData.formData?.agriculteur?.communeRuraleId) onCommuneChange();
+      if (parsedData.selectedProvince) loadCercles(parsedData.selectedProvince);
+      if (parsedData.selectedCercle) loadCommunes(parsedData.selectedCercle);
+      if (parsedData.formData?.agriculteur?.communeRuraleId) loadDouars(parsedData.formData.agriculteur.communeRuraleId);
       
     } catch (e) {
       console.warn('Failed to load saved data:', e);
@@ -551,10 +552,10 @@ onMounted(async () => {
   await loadInitializationData();
 });
 
-// Méthodes
+// API Methods
 async function loadInitializationData() {
   try {
-    loading.value.rubriques = true;
+    loading.value.initialization = true;
     const response = await ApiService.get('/agent_antenne/dossiers/initialization-data');
     
     // Set all data from single endpoint
@@ -570,7 +571,7 @@ async function loadInitializationData() {
     // Auto-select province if only one available
     if (provinces.value.length === 1) {
       selectedProvince.value = provinces.value[0].id;
-      onProvinceChange();
+      await loadCercles(selectedProvince.value);
     }
   } catch (error) {
     console.error('Erreur lors du chargement des données:', error);
@@ -581,55 +582,101 @@ async function loadInitializationData() {
       life: 3000
     });
   } finally {
-    loading.value.rubriques = false;
+    loading.value.initialization = false;
   }
 }
 
+async function loadCercles(provinceId) {
+  if (!provinceId) return;
+  
+  try {
+    loading.value.geographic = true;
+    const response = await ApiService.get(`/agent_antenne/dossiers/cercles/${provinceId}`);
+    cercles.value = response || [];
+    
+    // Reset dependent selections
+    selectedCercle.value = null;
+    communesRurales.value = [];
+    douars.value = [];
+    formData.value.agriculteur.communeRuraleId = null;
+    formData.value.agriculteur.douarId = null;
+  } catch (error) {
+    console.error('Erreur lors du chargement des cercles:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: 'Erreur lors du chargement des cercles',
+      life: 3000
+    });
+  } finally {
+    loading.value.geographic = false;
+  }
+}
+
+async function loadCommunes(cercleId) {
+  if (!cercleId) return;
+  
+  try {
+    loading.value.geographic = true;
+    const response = await ApiService.get(`/agent_antenne/dossiers/communes/${cercleId}`);
+    communesRurales.value = response || [];
+    
+    // Reset dependent selections
+    douars.value = [];
+    formData.value.agriculteur.communeRuraleId = null;
+    formData.value.agriculteur.douarId = null;
+  } catch (error) {
+    console.error('Erreur lors du chargement des communes:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: 'Erreur lors du chargement des communes',
+      life: 3000
+    });
+  } finally {
+    loading.value.geographic = false;
+  }
+}
+
+async function loadDouars(communeId) {
+  if (!communeId) return;
+  
+  try {
+    loading.value.geographic = true;
+    const response = await ApiService.get(`/agent_antenne/dossiers/douars/${communeId}`);
+    douars.value = response || [];
+    
+    // Reset douar selection
+    formData.value.agriculteur.douarId = null;
+  } catch (error) {
+    console.error('Erreur lors du chargement des douars:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: 'Erreur lors du chargement des douars',
+      life: 3000
+    });
+  } finally {
+    loading.value.geographic = false;
+  }
+}
+
+// Event handlers
 async function onProvinceChange() {
   if (selectedProvince.value) {
-    try {
-      const response = await ApiService.get(`/agent_antenne/dossiers/cercles/${selectedProvince.value}`);
-      cercles.value = response || [];
-      
-      // Reset dependent selections
-      selectedCercle.value = null;
-      communesRurales.value = [];
-      douars.value = [];
-      formData.value.agriculteur.communeRuraleId = null;
-      formData.value.agriculteur.douarId = null;
-    } catch (error) {
-      console.error('Erreur lors du chargement des cercles:', error);
-    }
+    await loadCercles(selectedProvince.value);
   }
 }
 
 async function onCercleChange() {
   if (selectedCercle.value) {
-    try {
-      const response = await ApiService.get(`/agent_antenne/dossiers/communes/${selectedCercle.value}`);
-      communesRurales.value = response || [];
-      
-      // Reset dependent selections
-      douars.value = [];
-      formData.value.agriculteur.communeRuraleId = null;
-      formData.value.agriculteur.douarId = null;
-    } catch (error) {
-      console.error('Erreur lors du chargement des communes:', error);
-    }
+    await loadCommunes(selectedCercle.value);
   }
 }
 
 async function onCommuneChange() {
   if (formData.value.agriculteur.communeRuraleId) {
-    try {
-      const response = await ApiService.get(`/agent_antenne/dossiers/douars/${formData.value.agriculteur.communeRuraleId}`);
-      douars.value = response || [];
-      
-      // Reset douar selection
-      formData.value.agriculteur.douarId = null;
-    } catch (error) {
-      console.error('Erreur lors du chargement des douars:', error);
-    }
+    await loadDouars(formData.value.agriculteur.communeRuraleId);
   }
 }
 
@@ -722,7 +769,26 @@ async function createDossier() {
   try {
     loading.value.create = true;
     
-    const response = await ApiService.post('/agent_antenne/dossiers/create', formData.value);
+    // Prepare request data according to backend DTO
+    const requestData = {
+      agriculteur: {
+        cin: formData.value.agriculteur.cin,
+        nom: formData.value.agriculteur.nom,
+        prenom: formData.value.agriculteur.prenom,
+        telephone: formData.value.agriculteur.telephone,
+        communeRuraleId: formData.value.agriculteur.communeRuraleId,
+        douarId: formData.value.agriculteur.douarId
+      },
+      dossier: {
+        saba: formData.value.dossier.saba,
+        reference: formData.value.dossier.reference,
+        sousRubriqueId: formData.value.dossier.sousRubriqueId,
+        dateDepot: new Date().toISOString().split('T')[0], // LocalDate format
+        montantDemande: formData.value.dossier.montantDemande
+      }
+    };
+    
+    const response = await ApiService.post('/agent_antenne/dossiers/create', requestData);
     
     toast.add({
       severity: 'success',
@@ -807,6 +873,7 @@ async function searchAgriculteur() {
   if (formData.value.agriculteur.cin.length >= 8) {
     try {
       console.log('Recherche agriculteur:', formData.value.agriculteur.cin);
+      // TODO: Implement agriculteur search when backend endpoint is available
     } catch (error) {
       console.error('Erreur lors de la recherche:', error);
     }
@@ -817,7 +884,7 @@ function handleSearch(query) {
   console.log('Recherche:', query);
 }
 
-function resetForm() {
+async function resetForm() {
   formData.value = {
     agriculteur: {
       cin: '',
@@ -831,7 +898,7 @@ function resetForm() {
       saba: '',
       reference: '',
       sousRubriqueId: null,
-      dateDepot: new Date(),
+      dateDepot: null,
       montantDemande: null
     }
   };
@@ -846,9 +913,10 @@ function resetForm() {
   localStorage.removeItem(STORAGE_KEY);
   
   // Reload initialization data to get new SABA
-  loadInitializationData();
+  await loadInitializationData();
 }
 
+// Utility functions
 function formatCurrency(amount) {
   if (!amount) return '0 DH';
   return new Intl.NumberFormat('fr-MA', {

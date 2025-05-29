@@ -14,7 +14,6 @@
         <div class="auth-illustration">
           <img src="@/assets/illustrations/Security On-amico.svg" alt="Équipe agricole" />
         </div>
-        
       </div>
     </div>
     
@@ -114,8 +113,35 @@
               class="form-input dropdown-input"
               :class="{ 'p-invalid': validationErrors.role }"
               aria-describedby="role-error"
+              @change="onRoleChange"
             />
             <small id="role-error" class="p-error form-error">{{ validationErrors.role }}</small>
+          </div>
+
+          <!-- CDA Selection - Only show for AGENT_ANTENNE -->
+          <div v-if="role === 'AGENT_ANTENNE'" class="form-group">
+            <label for="cda" class="form-label">
+              <i class="pi pi-building"></i>
+              Centre de Développement Agricole (CDA)
+            </label>
+            <Dropdown 
+              id="cda" 
+              v-model="cdaId" 
+              :options="cdaOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Sélectionnez votre CDA"
+              class="form-input dropdown-input"
+              :class="{ 'p-invalid': validationErrors.cdaId }"
+              aria-describedby="cda-error"
+              :loading="loadingCDAs"
+              :disabled="loadingCDAs"
+            />
+            <small id="cda-error" class="p-error form-error">{{ validationErrors.cdaId }}</small>
+            <small class="form-help">
+              <i class="pi pi-info-circle"></i>
+              Le CDA auquel vous êtes rattaché pour la gestion des dossiers
+            </small>
           </div>
 
           <div class="form-group">
@@ -180,6 +206,12 @@
           <p>Déjà inscrit ?</p>
           <router-link to="/login" class="login-link">Se connecter à SADSA</router-link>
           
+          <div class="admin-contact">
+            <small>
+              <i class="pi pi-info-circle"></i>
+              Votre compte sera activé par un administrateur après validation
+            </small>
+          </div>
         </div>
       </div>
     </div>
@@ -193,6 +225,7 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import AuthService from '@/services/AuthService';
+import ApiService from '@/services/ApiService';
 import Checkbox from 'primevue/checkbox';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
@@ -210,7 +243,9 @@ const telephone = ref('');
 const password = ref('');
 const confirmPassword = ref('');
 const role = ref('');
+const cdaId = ref(null);
 const loading = ref(false);
+const loadingCDAs = ref(false);
 const errorMessage = ref('');
 const successMessage = ref('');
 
@@ -221,21 +256,63 @@ const validationErrors = ref({
   telephone: '',
   password: '',
   confirmPassword: '',
-  role: ''
+  role: '',
+  cdaId: ''
 });
 
 const roleOptions = ref([
-  { label: 'Administrateur', value: 'ADMIN' },
   { label: 'Agent d\'Antenne (CDA)', value: 'AGENT_ANTENNE' },
   { label: 'Agent Guichet Unique Central', value: 'AGENT_GUC' },
-  { label: 'Agent de Commission Technique', value: 'AGENT_COMMISSION' }
+  { label: 'Agent de Commission Technique', value: 'AGENT_COMMISSION' },
+  { label: 'Administrateur', value: 'ADMIN' }
 ]);
+
+const cdaOptions = ref([]);
 
 onMounted(() => {
   if (AuthService.isAuthenticated()) {
     router.push('/dashboard');
   }
 });
+
+const loadCDAs = async () => {
+  try {
+    loadingCDAs.value = true;
+    // Use the public endpoint to get CDAs for registration
+    const response = await ApiService.get('/auth/cdas');
+    cdaOptions.value = response.map(cda => ({
+      label: `${cda.description} - ${cda.antenneNom || 'N/A'}`,
+      value: cda.id
+    }));
+  } catch (error) {
+    console.error('Error loading CDAs:', error);
+    toast.add({
+      severity: 'warn',
+      summary: 'Attention',
+      detail: 'Impossible de charger la liste des CDAs',
+      life: 3000
+    });
+    // Fallback - show generic CDA options
+    cdaOptions.value = [
+      { label: 'CDA Fquih Ben Salah', value: 1 },
+      { label: 'CDA Khouribga', value: 2 },
+      { label: 'CDA Béni Mellal', value: 3 }
+    ];
+  } finally {
+    loadingCDAs.value = false;
+  }
+};
+
+const onRoleChange = () => {
+  // Reset CDA selection when role changes
+  cdaId.value = null;
+  validationErrors.value.cdaId = '';
+  
+  // Load CDAs only for AGENT_ANTENNE
+  if (role.value === 'AGENT_ANTENNE') {
+    loadCDAs();
+  }
+};
 
 const validateForm = () => {
   let isValid = true;
@@ -246,7 +323,8 @@ const validateForm = () => {
     telephone: '',
     password: '',
     confirmPassword: '',
-    role: ''
+    role: '',
+    cdaId: ''
   };
 
   // Nom validation
@@ -300,6 +378,12 @@ const validateForm = () => {
     isValid = false;
   }
 
+  // CDA validation for AGENT_ANTENNE
+  if (role.value === 'AGENT_ANTENNE' && !cdaId.value) {
+    validationErrors.value.cdaId = 'Le CDA est requis pour les agents d\'antenne';
+    isValid = false;
+  }
+
   return isValid;
 };
 
@@ -307,6 +391,7 @@ const handleRegister = async () => {
   if (!validateForm()) {
     return;
   }
+
 
   try {
     loading.value = true;
@@ -321,6 +406,7 @@ const handleRegister = async () => {
       telephone: telephone.value || null,
       motDePasse: password.value,
       role: role.value,
+      cdaId: role.value === 'AGENT_ANTENNE' ? cdaId.value : null
     };
 
     // Call the AuthService register method
@@ -344,6 +430,7 @@ const handleRegister = async () => {
     password.value = '';
     confirmPassword.value = '';
     role.value = '';
+    cdaId.value = null;
     
     // Redirect to login after 3 seconds
     setTimeout(() => {
@@ -463,22 +550,6 @@ const handleRegister = async () => {
   filter: drop-shadow(0 10px 25px rgba(0,0,0,0.2));
 }
 
-.auth-quote {
-  margin-top: 2rem;
-}
-
-.auth-quote blockquote {
-  font-style: italic;
-  font-size: 1.1rem;
-  opacity: 0.9;
-  margin: 0;
-  padding: 1rem;
-  border-left: 3px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 0 8px 8px 0;
-  line-height: 1.5;
-}
-
 .auth-right {
   flex: 1.2;
   display: flex;
@@ -585,32 +656,24 @@ const handleRegister = async () => {
   font-size: 0.8rem;
 }
 
+.form-help {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-color-secondary);
+  opacity: 0.8;
+}
+
+.form-help i {
+  color: var(--primary-color);
+}
+
 .form-options {
   margin-bottom: 1.5rem;
 }
 
-.terms-acceptance {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-
-.terms-label {
-  color: var(--text-color-secondary);
-  font-size: 0.9rem;
-  cursor: pointer;
-  line-height: 1.4;
-}
-
-.terms-link {
-  color: var(--primary-color);
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.terms-link:hover {
-  text-decoration: underline;
-}
 
 .submit-button {
   width: 100%;
@@ -801,10 +864,7 @@ const handleRegister = async () => {
   .auth-header h2 {
     font-size: 1.6rem;
   }
-  
-  .terms-acceptance {
-    align-items: flex-start;
-  }
+
 }
 
 /* Animations */
