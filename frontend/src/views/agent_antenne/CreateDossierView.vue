@@ -191,20 +191,18 @@
           </div>
 
           <div class="form-group">
-            <label>CDA (automatique)</label>
-            <div class="cda-info">
-              <div v-if="userCDA" class="user-cda-display">
-                <i class="pi pi-building"></i>
-                <div>
-                  <strong>{{ userCDA.description }}</strong>
-                  <small>{{ userCDA.antenneNom }}</small>
-                </div>
-              </div>
-              <div v-else class="loading-cda">
-                <i class="pi pi-spin pi-spinner"></i>
-                Chargement du CDA...
-              </div>
-            </div>
+            <label for="antenne" class="required">Antenne</label>
+            <Dropdown 
+              id="antenne" 
+              v-model="formData.dossier.antenneId" 
+              :options="antennes"
+              option-label="designation"
+              option-value="id"
+              placeholder="Sélectionner une antenne"
+              :class="{ 'p-invalid': validationErrors.antenneId }"
+            />
+            <small class="form-help">Votre antenne par défaut: {{ userAntenne?.designation }}</small>
+            <small class="p-error">{{ validationErrors.antenneId }}</small>
           </div>
 
           <div class="form-group">
@@ -290,7 +288,7 @@
               <div><strong>Type:</strong> {{ selectedSousRubrique?.designation }}</div>
               <div><strong>SABA:</strong> {{ formData.dossier.saba }}</div>
               <div><strong>Montant:</strong> {{ formatCurrency(formData.dossier.montantDemande) }}</div>
-              <div><strong>CDA:</strong> {{ userCDA?.description }}</div>
+              <div><strong>Antenne:</strong> {{ getSelectedAntenneName() }}</div>
             </div>
           </div>
 
@@ -375,7 +373,7 @@
               <strong>Montant demandé:</strong> {{ formatCurrency(recepisse.montantDemande) }}
             </div>
             <div class="recepisse-row">
-              <strong>CDA:</strong> {{ recepisse.cdaNom }}
+              <strong>Antenne:</strong> {{ recepisse.antenneName }}
             </div>
           </div>
         </div>
@@ -435,13 +433,15 @@ const formData = ref({
     saba: '',
     reference: '',
     sousRubriqueId: null,
+    antenneId: null,
     dateDepot: new Date(),
     montantDemande: null
   }
 });
 
-// User's CDA (auto-loaded)
-const userCDA = ref(null);
+// User's Antenne (auto-loaded)
+const userAntenne = ref(null);
+const antennes = ref([]);
 
 // États de l'interface
 const loading = ref({
@@ -477,7 +477,7 @@ const isBasicInfoValid = computed(() => {
          formData.value.agriculteur.telephone &&
          formData.value.agriculteur.communeRuraleId &&
          formData.value.dossier.saba &&
-         userCDA.value &&
+         formData.value.dossier.antenneId &&
          formData.value.dossier.montantDemande &&
          selectedSousRubrique.value;
 });
@@ -559,13 +559,19 @@ async function loadInitializationData() {
     const response = await ApiService.get('/agent_antenne/dossiers/initialization-data');
     
     // Set all data from single endpoint
-    userCDA.value = response.userCDA;
+    userAntenne.value = response.userAntenne;
+    antennes.value = response.antennes || [];
     rubriques.value = response.rubriques || [];
     provinces.value = response.provinces || [];
     
     // Set generated SABA if not already set
     if (!formData.value.dossier.saba) {
       formData.value.dossier.saba = response.generatedSaba;
+    }
+    
+    // Auto-select user's antenne
+    if (userAntenne.value) {
+      formData.value.dossier.antenneId = userAntenne.value.id;
     }
     
     // Auto-select province if only one available
@@ -753,8 +759,8 @@ function validateBasicInfo() {
     errors.saba = 'SABA requis';
   }
   
-  if (!userCDA.value) {
-    errors.cda = 'CDA non chargé';
+  if (!formData.value.dossier.antenneId) {
+    errors.antenneId = 'Antenne requise';
   }
   
   if (!formData.value.dossier.montantDemande) {
@@ -783,7 +789,8 @@ async function createDossier() {
         saba: formData.value.dossier.saba,
         reference: formData.value.dossier.reference,
         sousRubriqueId: formData.value.dossier.sousRubriqueId,
-        dateDepot: new Date().toISOString().split('T')[0], // LocalDate format
+        antenneId: formData.value.dossier.antenneId,
+        dateDepot: new Date().toISOString().split('T')[0],
         montantDemande: formData.value.dossier.montantDemande
       }
     };
@@ -843,8 +850,8 @@ async function generateRecepisse() {
     typeProduit: selectedSousRubrique.value?.designation || '',
     saba: formData.value.dossier.saba,
     montantDemande: formData.value.dossier.montantDemande,
-    cdaNom: userCDA.value?.description || '',
-    antenne: userCDA.value?.antenneNom || ''
+    antenneName: getSelectedAntenneName(),
+    cdaName: getSelectedAntenneName()
   };
   
   recepisse.value = tempRecepisse;
@@ -898,6 +905,7 @@ async function resetForm() {
       saba: '',
       reference: '',
       sousRubriqueId: null,
+      antenneId: null,
       dateDepot: null,
       montantDemande: null
     }
@@ -914,6 +922,14 @@ async function resetForm() {
   
   // Reload initialization data to get new SABA
   await loadInitializationData();
+}
+
+function getSelectedAntenneName() {
+  if (formData.value.dossier.antenneId) {
+    const selectedAntenne = antennes.value.find(a => a.id === formData.value.dossier.antenneId);
+    return selectedAntenne?.designation || 'N/A';
+  }
+  return userAntenne.value?.designation || 'N/A';
 }
 
 // Utility functions
@@ -1133,53 +1149,6 @@ function formatDate(date) {
   font-size: 0.75rem;
   color: #6b7280;
   margin: 0.125rem 0;
-}
-
-/* CDA Display */
-.cda-info {
-  padding: 0.75rem;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  background: #f8f9fa;
-}
-
-.user-cda-display {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.user-cda-display i {
-  color: var(--primary-color);
-  font-size: 1.25rem;
-}
-
-.user-cda-display div {
-  display: flex;
-  flex-direction: column;
-}
-
-.user-cda-display strong {
-  color: var(--text-color);
-  font-weight: 600;
-}
-
-.user-cda-display small {
-  color: #6b7280;
-  font-size: 0.8rem;
-}
-
-.loading-cda {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #6b7280;
-  font-size: 0.875rem;
-}
-
-.dark-mode .cda-info {
-  background: #374151;
-  border-color: #4b5563;
 }
 
 /* Form Styles */

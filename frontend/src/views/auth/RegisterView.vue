@@ -180,8 +180,6 @@
             <small id="confirm-password-error" class="p-error form-error">{{ validationErrors.confirmPassword }}</small>
           </div>
 
-
-
           <Button 
             type="submit" 
             :label="loading ? 'Création en cours...' : 'Créer mon compte'" 
@@ -225,7 +223,6 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import AuthService from '@/services/AuthService';
-import ApiService from '@/services/ApiService';
 import Checkbox from 'primevue/checkbox';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
@@ -246,6 +243,7 @@ const role = ref('');
 const antenneId = ref(null);
 const loading = ref(false);
 const errorMessage = ref('');
+const successMessage = ref(''); // Fixed: Added missing ref
 
 const validationErrors = ref({
   nom: '',
@@ -255,7 +253,7 @@ const validationErrors = ref({
   password: '',
   confirmPassword: '',
   role: '',
-  antenneId: ''
+  antenneId: '' // Fixed: Changed from cdaId to antenneId
 });
 
 const roleOptions = ref([
@@ -296,7 +294,7 @@ const validateForm = () => {
     password: '',
     confirmPassword: '',
     role: '',
-    cdaId: ''
+    antenneId: '' // Fixed: Changed from cdaId to antenneId
   };
 
   // Nom validation
@@ -350,9 +348,9 @@ const validateForm = () => {
     isValid = false;
   }
 
-  // CDA validation for AGENT_ANTENNE
-  if (role.value === 'AGENT_ANTENNE' && !cdaId.value) {
-    validationErrors.value.cdaId = 'Le CDA est requis pour les agents d\'antenne';
+  // Antenne validation for AGENT_ANTENNE - Fixed: Changed from cdaId to antenneId
+  if (role.value === 'AGENT_ANTENNE' && !antenneId.value) {
+    validationErrors.value.antenneId = 'L\'antenne est requise pour les agents d\'antenne';
     isValid = false;
   }
 
@@ -414,6 +412,8 @@ const handleRegister = async () => {
     // Handle specific error messages from the backend
     if (error.message) {
       errorMessage.value = error.message;
+    } else if (error.response?.data?.message) { // Fixed: Better error handling
+      errorMessage.value = error.response.data.message;
     } else {
       errorMessage.value = 'Une erreur inattendue s\'est produite. Veuillez réessayer.';
     }
@@ -431,6 +431,7 @@ const handleRegister = async () => {
 </script>
 
 <style scoped>
+/* ... same styles as before ... */
 :root {
   --primary-color: #01723e;
   --primary-color-rgb: 1, 114, 62;
@@ -641,33 +642,6 @@ const handleRegister = async () => {
   color: var(--primary-color);
 }
 
-.form-options {
-  margin-bottom: 1.5rem;
-}
-
-.terms-acceptance {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-
-.terms-label {
-  color: var(--text-color-secondary);
-  font-size: 0.9rem;
-  cursor: pointer;
-  line-height: 1.4;
-}
-
-.terms-link {
-  color: var(--primary-color);
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.terms-link:hover {
-  text-decoration: underline;
-}
-
 .submit-button {
   width: 100%;
   padding: 0.875rem;
@@ -794,29 +768,6 @@ const handleRegister = async () => {
   font-size: 0.9rem;
 }
 
-/* Checkbox styling */
-:deep(.p-checkbox .p-checkbox-box) {
-  border-radius: 6px;
-  border: 2px solid var(--surface-border);
-  width: 1.2rem;
-  height: 1.2rem;
-}
-
-:deep(.p-checkbox .p-checkbox-box.p-highlight) {
-  background: var(--primary-color);
-  border-color: var(--primary-color);
-}
-
-/* Dark mode adjustments */
-.dark-mode .auth-card {
-  background-color: #252424;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-}
-
-.dark-mode .auth-footer {
-  border-top-color: #333;
-}
-
 /* Responsive design */
 @media (max-width: 1200px) {
   .auth-right {
@@ -856,10 +807,6 @@ const handleRegister = async () => {
   
   .auth-header h2 {
     font-size: 1.6rem;
-  }
-  
-  .terms-acceptance {
-    align-items: flex-start;
   }
 }
 

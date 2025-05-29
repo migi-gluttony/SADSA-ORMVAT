@@ -13,11 +13,29 @@ const AuthService = {
   async register(userData) {
     try {
       const response = await ApiService.post('/auth/register', userData);
+      
+      // Store token if registration includes immediate login
+      if (response.token) {
+        const userInfo = this.parseToken(response.token);
+        localStorage.setItem('token', response.token);
+        if (userInfo) {
+          localStorage.setItem('user', JSON.stringify(userInfo));
+        }
+      }
+      
       window.dispatchEvent(new CustomEvent('auth-state-changed'));
       return response;
     } catch (error) {
       console.error('Registration error:', error);
-      throw error;
+      
+      // Improve error handling
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      } else if (error.message) {
+        throw new Error(error.message);
+      } else {
+        throw new Error('Erreur lors de la création du compte');
+      }
     }
   },
 
@@ -95,23 +113,23 @@ const AuthService = {
   async login(email, motDePasse, rememberMe = false) {
     try {
       // Match the field names expected by the backend (LoginRequest.java)
-      const data = await ApiService.post('/auth/login', {
+      const response = await ApiService.post('/auth/login', {
         email,
         motDePasse
       });
 
       // Store token in localStorage/sessionStorage based on remember me option
-      if (data.token) {
+      if (response.token) {
         // Parse token to extract user info
-        const userInfo = this.parseToken(data.token);
+        const userInfo = this.parseToken(response.token);
 
         if (rememberMe) {
-          localStorage.setItem('token', data.token);
+          localStorage.setItem('token', response.token);
           if (userInfo) {
             localStorage.setItem('user', JSON.stringify(userInfo));
           }
         } else {
-          sessionStorage.setItem('token', data.token);
+          sessionStorage.setItem('token', response.token);
           if (userInfo) {
             sessionStorage.setItem('user', JSON.stringify(userInfo));
           }
@@ -121,10 +139,22 @@ const AuthService = {
       // Dispatch event when authentication state changes
       window.dispatchEvent(new CustomEvent('auth-state-changed'));
 
-      return data;
+      return response;
     } catch (error) {
       console.error('Login error:', error);
-      throw error;
+      
+      // Improve error handling
+      if (error.response?.status === 401) {
+        throw new Error('Email ou mot de passe incorrect');
+      } else if (error.response?.status === 403) {
+        throw new Error('Votre compte n\'est pas encore activé');
+      } else if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      } else if (error.message) {
+        throw new Error(error.message);
+      } else {
+        throw new Error('Erreur de connexion. Veuillez réessayer.');
+      }
     }
   },
 
@@ -155,7 +185,15 @@ const AuthService = {
       });
     } catch (error) {
       console.error('Password change error:', error);
-      throw error;
+      
+      // Improve error handling
+      if (error.response?.status === 400) {
+        throw new Error('Mot de passe actuel incorrect');
+      } else if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      } else {
+        throw new Error('Erreur lors du changement de mot de passe');
+      }
     }
   },
 
@@ -164,7 +202,8 @@ const AuthService = {
    * @returns {boolean} - True if authenticated
    */
   isAuthenticated() {
-    return localStorage.getItem('token') !== null || sessionStorage.getItem('token') !== null;
+    const token = this.getToken();
+    return token !== null && !this.isTokenExpired();
   },
 
   /**

@@ -9,7 +9,6 @@ import ormvat.sadsa.service.auth.AuthenticationService;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 public class AuthController {
 

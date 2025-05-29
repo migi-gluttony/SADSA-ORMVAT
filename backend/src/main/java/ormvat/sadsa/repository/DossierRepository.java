@@ -14,7 +14,7 @@ import java.util.Optional;
 
 public interface DossierRepository extends JpaRepository<Dossier, Long> {
     List<Dossier> findByAgriculteurId(Long agriculteurId);
-    List<Dossier> findByCdaId(Long cdaId);
+    List<Dossier> findByAntenneId(Long antenneId); // Changed from cdaId to antenneId
     Optional<Dossier> findByReference(String reference);
     Optional<Dossier> findBySaba(String saba);
 }

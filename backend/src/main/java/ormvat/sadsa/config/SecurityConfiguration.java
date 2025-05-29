@@ -26,11 +26,9 @@ public class SecurityConfiguration {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
+                
                         // Allow authentication endpoints without authentication
-                        .requestMatchers("/api/auth/login").permitAll()
-                        .requestMatchers("/api/auth/register").permitAll()
-                        .requestMatchers("/api/auth/reset-password-request").permitAll()
-                        .requestMatchers("/api/auth/reset-password-confirm").permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/agent_antenne/**").permitAll()
                         .requestMatchers("/api/agent_guc/**").hasRole("AGENT_GUC")
                         .requestMatchers("/api/agent_commission/**").hasRole("AGENT_COMMISSION")

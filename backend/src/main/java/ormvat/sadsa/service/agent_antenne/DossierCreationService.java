@@ -27,6 +27,7 @@ public class DossierCreationService {
     private final WorkflowInstanceRepository workflowInstanceRepository;
     private final HistoriqueWorkflowRepository historiqueWorkflowRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final AntenneRepository antenneRepository;
     private final ProvinceRepository provinceRepository;
     private final CercleRepository cercleRepository;
     private final CommuneRuraleRepository communeRuraleRepository;
@@ -47,11 +48,6 @@ public class DossierCreationService {
                 throw new RuntimeException("L'utilisateur n'est associé à aucune antenne");
             }
 
-            CDA userCDA = userAntenne.getCda();
-            if (userCDA == null) {
-                throw new RuntimeException("L'antenne n'est associée à aucun CDA");
-            }
-
             // Get all rubriques with sous-rubriques and documents
             List<Rubrique> rubriques = rubriqueRepository.findAll();
             List<SimplifiedRubriqueDTO> rubriqueDTOs = rubriques.stream()
@@ -66,6 +62,16 @@ public class DossierCreationService {
                             .build())
                     .collect(Collectors.toList());
 
+            // Get all antennes for selection
+            List<AntenneInfoDTO> antennes = antenneRepository.findAll().stream()
+                    .map(a -> AntenneInfoDTO.builder()
+                            .id(a.getId())
+                            .designation(a.getDesignation())
+                            .cdaNom(a.getCda() != null ? a.getCda().getDescription() : "N/A")
+                            .cdaId(a.getCda() != null ? a.getCda().getId() : null)
+                            .build())
+                    .collect(Collectors.toList());
+
             // Generate SABA number
             String sabaNumber = generateSabaNumber();
 
@@ -73,11 +79,12 @@ public class DossierCreationService {
                     .userAntenne(AntenneInfoDTO.builder()
                             .id(userAntenne.getId())
                             .designation(userAntenne.getDesignation())
-                            .cdaNom(userCDA.getDescription())
-                            .cdaId(userCDA.getId())
+                            .cdaNom(userAntenne.getCda() != null ? userAntenne.getCda().getDescription() : "N/A")
+                            .cdaId(userAntenne.getCda() != null ? userAntenne.getCda().getId() : null)
                             .build())
                     .rubriques(rubriqueDTOs)
                     .provinces(provinces)
+                    .antennes(antennes)
                     .generatedSaba(sabaNumber)
                     .build();
 
@@ -88,45 +95,6 @@ public class DossierCreationService {
     }
 
     /**
-     * Get cercles by province
-     */
-    public List<GeographicDTO> getCerclesByProvince(Long provinceId) {
-        return cercleRepository.findByProvinceId(provinceId).stream()
-                .map(c -> GeographicDTO.builder()
-                        .id(c.getId())
-                        .designation(c.getDesignation())
-                        .parentId(c.getProvince().getId())
-                        .build())
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Get communes by cercle
-     */
-    public List<GeographicDTO> getCommunesByCircle(Long cercleId) {
-        return communeRuraleRepository.findByCercleId(cercleId).stream()
-                .map(c -> GeographicDTO.builder()
-                        .id(c.getId())
-                        .designation(c.getDesignation())
-                        .parentId(c.getCercle().getId())
-                        .build())
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Get douars by commune
-     */
-    public List<GeographicDTO> getDouarsByCommune(Long communeId) {
-        return douarRepository.findByCommuneRuraleId(communeId).stream()
-                .map(d -> GeographicDTO.builder()
-                        .id(d.getId())
-                        .designation(d.getDesignation())
-                        .parentId(d.getCommuneRurale().getId())
-                        .build())
-                .collect(Collectors.toList());
-    }
-
-    /**
      * Create a new dossier with workflow tracking
      */
     @Transactional
@@ -134,19 +102,13 @@ public class DossierCreationService {
         try {
             log.info("Début création dossier pour l'utilisateur: {}", userEmail);
 
-            // Get user and Antenne/CDA
+            // Get user
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
             
-            Antenne antenne = utilisateur.getAntenne();
-            if (antenne == null) {
-                throw new RuntimeException("L'utilisateur n'est associé à aucune antenne");
-            }
-            
-            CDA cda = antenne.getCda();
-            if (cda == null) {
-                throw new RuntimeException("L'antenne n'est associée à aucun CDA");
-            }
+            // Get selected antenne
+            Antenne antenne = antenneRepository.findById(request.getDossier().getAntenneId())
+                    .orElseThrow(() -> new RuntimeException("Antenne non trouvée"));
 
             // Validate and get or create agriculteur
             Agriculteur agriculteur = getOrCreateAgriculteur(request.getAgriculteur());
@@ -161,10 +123,10 @@ public class DossierCreationService {
             // Create dossier
             Dossier dossier = new Dossier();
             dossier.setSaba(request.getDossier().getSaba());
-            dossier.setReference(generateReference(cda, sousRubrique));
+            dossier.setReference(generateReference(antenne, sousRubrique));
             dossier.setNumeroDossier(generateNumeroDossier());
             dossier.setAgriculteur(agriculteur);
-            dossier.setCda(cda);
+            dossier.setAntenne(antenne); // Changed from setCda to setAntenne
             dossier.setSousRubrique(sousRubrique);
             dossier.setUtilisateurCreateur(utilisateur);
             dossier.setStatus(Dossier.DossierStatus.DRAFT);
@@ -223,6 +185,37 @@ public class DossierCreationService {
         }
     }
 
+    // Continue with other methods (getCerclesByProvince, etc. - same as before)
+    public List<GeographicDTO> getCerclesByProvince(Long provinceId) {
+        return cercleRepository.findByProvinceId(provinceId).stream()
+                .map(c -> GeographicDTO.builder()
+                        .id(c.getId())
+                        .designation(c.getDesignation())
+                        .parentId(c.getProvince().getId())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    public List<GeographicDTO> getCommunesByCircle(Long cercleId) {
+        return communeRuraleRepository.findByCercleId(cercleId).stream()
+                .map(c -> GeographicDTO.builder()
+                        .id(c.getId())
+                        .designation(c.getDesignation())
+                        .parentId(c.getCercle().getId())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    public List<GeographicDTO> getDouarsByCommune(Long communeId) {
+        return douarRepository.findByCommuneRuraleId(communeId).stream()
+                .map(d -> GeographicDTO.builder()
+                        .id(d.getId())
+                        .designation(d.getDesignation())
+                        .parentId(d.getCommuneRurale().getId())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
     // Private helper methods
     private SimplifiedRubriqueDTO mapToSimplifiedRubriqueDTO(Rubrique rubrique) {
         List<SimplifiedSousRubriqueDTO> sousRubriquesDTOs = rubrique.getSousRubriques().stream()
@@ -273,16 +266,14 @@ public class DossierCreationService {
     }
 
     private Etape getOrCreateEtape(String designation) {
-        // Try to find existing etape by designation first
         Etape existingEtape = etapeRepository.findByDesignation(designation);
         if (existingEtape != null) {
             return existingEtape;
         }
 
-        // Create new etape if not found
         Etape etape = new Etape();
         etape.setDesignation(designation);
-        etape.setDureeJours(3); // Default 3 days for Phase Antenne
+        etape.setDureeJours(3);
         etape.setOrdre(1);
         etape.setPhase("APPROBATION");
         
@@ -295,14 +286,14 @@ public class DossierCreationService {
         return now.plusDays(dureeJours);
     }
 
-    private String generateReference(CDA cda, SousRubrique sousRubrique) {
+    private String generateReference(Antenne antenne, SousRubrique sousRubrique) {
         String annee = String.valueOf(LocalDate.now().getYear());
-        String cdaCode = String.format("%03d", cda.getId());
+        String antenneCode = String.format("%03d", antenne.getId());
         String sousRubriqueCode = String.format("%02d", sousRubrique.getId());
         long sequence = dossierRepository.count() + 1;
         String seqCode = String.format("%06d", sequence);
 
-        return String.format("DOS-%s-%s-%s-%s", annee, cdaCode, sousRubriqueCode, seqCode);
+        return String.format("DOS-%s-%s-%s-%s", annee, antenneCode, sousRubriqueCode, seqCode);
     }
 
     private String generateNumeroDossier() {
@@ -336,9 +327,8 @@ public class DossierCreationService {
                 .typeProduit(dossier.getSousRubrique().getDesignation())
                 .saba(dossier.getSaba())
                 .montantDemande(request.getDossier().getMontantDemande())
-                .cdaNom(dossier.getCda().getDescription())
-                .antenne(dossier.getCda().getAntennes() != null && !dossier.getCda().getAntennes().isEmpty() 
-                    ? dossier.getCda().getAntennes().get(0).getDesignation() : "N/A")
+                .antenneName(dossier.getAntenne().getDesignation()) // Changed from cdaNom
+                .cdaName(dossier.getAntenne().getCda() != null ? dossier.getAntenne().getCda().getDescription() : "N/A")
                 .build();
     }
 }

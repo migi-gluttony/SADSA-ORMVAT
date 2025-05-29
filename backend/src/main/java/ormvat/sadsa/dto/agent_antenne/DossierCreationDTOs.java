@@ -17,6 +17,7 @@ public class DossierCreationDTOs {
         private AntenneInfoDTO userAntenne;
         private List<SimplifiedRubriqueDTO> rubriques;
         private List<GeographicDTO> provinces;
+        private List<AntenneInfoDTO> antennes; // Added list of all antennes
         private String generatedSaba;
     }
 
@@ -39,10 +40,9 @@ public class DossierCreationDTOs {
         private Long id;
         private String designation;
         private String description;
-        private List<String> documentsRequis; // Just document names for now
+        private List<String> documentsRequis;
     }
 
-    // Reuse existing DTOs from DossierCreationDTOs
     @Data
     @Builder
     @AllArgsConstructor
@@ -73,6 +73,7 @@ public class DossierCreationDTOs {
         private String saba;
         private String reference;
         private Long sousRubriqueId;
+        private Long antenneId; // Changed from cdaId to antenneId
         private LocalDate dateDepot;
         private Double montantDemande;
     }
@@ -102,18 +103,20 @@ public class DossierCreationDTOs {
         private String typeProduit;
         private String saba;
         private Double montantDemande;
-        private String cdaNom;
-        private String antenne;
+        private String antenneName; // Changed from cdaNom to antenneName
+        private String cdaName; // Keep CDA name for receipt
     }
 
     @Data
-@Builder
-public static class AntenneInfoDTO {
-    private Long id;
-    private String designation;
-    private String cdaNom; // CDA name through relationship
-    private Long cdaId;
-}
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class AntenneInfoDTO {
+        private Long id;
+        private String designation;
+        private String cdaNom;
+        private Long cdaId;
+    }
 
     @Data
     @Builder

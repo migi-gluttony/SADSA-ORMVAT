@@ -50,8 +50,8 @@ public class Dossier {
     private Agriculteur agriculteur;
 
     @ManyToOne
-    @JoinColumn(name = "cda_id")
-    private CDA cda;
+    @JoinColumn(name = "antenne_id") // Changed from cda_id to antenne_id
+    private Antenne antenne;
 
     @ManyToOne
     @JoinColumn(name = "sous_rubrique_id")
