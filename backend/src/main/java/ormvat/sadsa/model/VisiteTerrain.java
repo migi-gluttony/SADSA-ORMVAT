@@ -17,6 +17,7 @@ import java.util.List;
 public class VisiteTerrain {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_visite")
     private Long id;
 
     @Column(name = "date_visite")
@@ -38,11 +39,11 @@ public class VisiteTerrain {
     private String coordonneesGPS;
 
     @ManyToOne
-    @JoinColumn(name = "dossier_id")
+    @JoinColumn(name = "id_dossier")
     private Dossier dossier;
 
     @ManyToOne
-    @JoinColumn(name = "utilisateur_commission_id")
+    @JoinColumn(name = "id_utilisateur_commission")
     private Utilisateur utilisateurCommission;
 
     @OneToMany(mappedBy = "visiteTerrain", cascade = CascadeType.ALL)

@@ -16,6 +16,7 @@ import java.util.Date;
 public class PhotoVisite {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_photo")
     private Long id;
 
     @Column(name = "nom_fichier")
@@ -34,6 +35,6 @@ public class PhotoVisite {
     private LocalDateTime datePrise;
 
     @ManyToOne
-    @JoinColumn(name = "visite_terrain_id")
+    @JoinColumn(name = "id_visite")
     private VisiteTerrain visiteTerrain;
 }

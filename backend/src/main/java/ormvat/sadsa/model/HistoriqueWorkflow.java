@@ -16,10 +16,11 @@ import java.util.Date;
 public class HistoriqueWorkflow {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_historique_workflow")
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "dossier_id")
+    @JoinColumn(name = "id_dossier")
     private Dossier dossier;
 
     @Enumerated(EnumType.STRING)
@@ -43,13 +44,13 @@ public class HistoriqueWorkflow {
     private Boolean enRetard = false;
 
     @ManyToOne
-    @JoinColumn(name = "utilisateur_id")
+    @JoinColumn(name = "id_utilisateur")
     private Utilisateur utilisateur;
 
     @Column
     private String commentaire;
 
     @ManyToOne
-    @JoinColumn(name = "etape_id")
+    @JoinColumn(name = "id_etape")
     private Etape etape;
 }

@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 public class Note {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_note")
     private Long id;
 
     @Column
@@ -39,7 +40,7 @@ public class Note {
     private String priorite;
 
     @ManyToOne
-    @JoinColumn(name = "dossier_id")
+    @JoinColumn(name = "id_dossier")
     private Dossier dossier;
 
     @ManyToOne
@@ -50,3 +51,4 @@ public class Note {
     @JoinColumn(name = "utilisateur_destinataire_id")
     private Utilisateur utilisateurDestinataire;
 }
+

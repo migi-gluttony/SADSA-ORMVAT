@@ -17,6 +17,7 @@ import java.util.List;
 public class Dossier {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_dossier")
     private Long id;
 
     @Column(name = "numero_dossier", unique = true)

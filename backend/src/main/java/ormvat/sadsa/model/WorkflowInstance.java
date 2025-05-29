@@ -15,10 +15,11 @@ import lombok.NoArgsConstructor;
 public class WorkflowInstance {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_workflow_instance")
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "dossier_id")
+    @JoinColumn(name = "id_dossier")
     private Dossier dossier;
 
     @Enumerated(EnumType.STRING)
@@ -42,7 +43,7 @@ public class WorkflowInstance {
     private Integer joursRestants;
 
     @ManyToOne
-    @JoinColumn(name = "etape_id")
+    @JoinColumn(name = "id_etape")
     private Etape etape;
 
     public enum EmplacementType {

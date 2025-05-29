@@ -16,6 +16,7 @@ import java.util.Date;
 public class AuditTrail {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_audit_trail")
     private Long id;
 
     @Column(nullable = false)
@@ -37,7 +38,7 @@ public class AuditTrail {
     private LocalDateTime dateAction;
 
     @ManyToOne
-    @JoinColumn(name = "utilisateur_id")
+    @JoinColumn(name = "id_utilisateur")
     private Utilisateur utilisateur;
 
     @Column(name = "adresse_ip")

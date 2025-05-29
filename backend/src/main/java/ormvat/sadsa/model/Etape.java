@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 public class Etape {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_etape")
     private Long id;
 
     @Enumerated(EnumType.STRING)

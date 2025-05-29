@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 public class PieceJointe {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_piece_jointe")
     private Long id;
 
     @Column(name = "nom_fichier")
@@ -37,15 +38,15 @@ public class PieceJointe {
     private LocalDateTime dateUpload;
 
     @ManyToOne
-    @JoinColumn(name = "dossier_id")
+    @JoinColumn(name = "id_dossier")
     private Dossier dossier;
 
     @ManyToOne
-    @JoinColumn(name = "document_requis_id")
+    @JoinColumn(name = "id_document_requis")
     private DocumentRequis documentRequis;
 
     @ManyToOne
-    @JoinColumn(name = "utilisateur_id")
+    @JoinColumn(name = "id_utilisateur")
     private Utilisateur utilisateur;
 
     public enum DocumentStatus {
