@@ -401,6 +401,11 @@ async function loadDossiers() {
     dossiersData.value = response;
     dossiers.value = response.dossiers || [];
     
+    // Load sous-rubriques for filter if not already loaded
+    if (sousRubriqueOptions.value.length === 0) {
+      await loadSousRubriques();
+    }
+    
   } catch (error) {
     console.error('Erreur lors du chargement des dossiers:', error);
     toast.add({
@@ -413,6 +418,29 @@ async function loadDossiers() {
     loading.value = false;
   }
 }
+
+
+async function loadSousRubriques() {
+  try {
+    const response = await ApiService.get('/agent_antenne/dossiers/initialization-data');
+    if (response.rubriques) {
+      const allSousRubriques = [];
+      response.rubriques.forEach(rubrique => {
+        rubrique.sousRubriques.forEach(sr => {
+          allSousRubriques.push({
+            id: sr.id,
+            designation: sr.designation
+          });
+        });
+      });
+      sousRubriqueOptions.value = allSousRubriques;
+    }
+  } catch (error) {
+    console.error('Erreur lors du chargement des sous-rubriques:', error);
+  }
+}
+
+
 
 function handleSearch(query) {
   searchTerm.value = query;

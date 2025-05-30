@@ -83,7 +83,7 @@
               <div><strong>Type:</strong> {{ dossierDetail.dossier.sousRubriqueDesignation }}</div>
               <div><strong>SABA:</strong> {{ dossierDetail.dossier.saba }}</div>
               <div><strong>CDA:</strong> {{ dossierDetail.dossier.cdaNom }}</div>
-              <div><strong>Antenne:</strong> {{ dossierDetail.dossier.antenneNom }}</div>
+              <div><strong>Antenne:</strong> {{ dossierDetail.dossier.antenneDesignation }}</div>
             </div>
           </div>
           
