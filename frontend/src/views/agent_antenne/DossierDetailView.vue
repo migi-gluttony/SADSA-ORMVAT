@@ -403,7 +403,7 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import UserInfoHeader from '@/components/UserInfoHeader.vue';
-import DynamicForm from '@/components/DynamicForm.vue';
+import DynamicForm from '@/components/agent_antenne/dossier_details/DynamicForm.vue';
 import ApiService from '@/services/ApiService';
 
 // PrimeVue components
