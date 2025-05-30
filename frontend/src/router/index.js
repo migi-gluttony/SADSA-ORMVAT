@@ -8,6 +8,7 @@ import LandingPage from '@/views/LandingPage.vue'
 import CreateDossierView from '@/views/agent_antenne/CreateDossierView.vue'
 import DossierListView from '@/views/agent_antenne/DossierListView.vue'
 import DossierDetailView from '@/views/agent_antenne/DossierDetailView.vue'
+import AdminDocumentRequisView from '@/views/admin/AdminDocumentRequisView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -67,6 +68,19 @@ const router = createRouter({
           component: DossierDetailView,
           meta: { title: 'Formulaires du Dossier' },
           props: true
+        }
+      ]
+    },
+    // Admin Routes
+    {
+      path: '/admin',
+      meta: { requiresAuth: true, requiresRole: 'ADMIN' },
+      children: [
+        {
+          path: 'documents-requis',
+          name: 'admin-documents-requis',
+          component: AdminDocumentRequisView,
+          meta: { title: 'Gestion des Documents Requis' }
         }
       ]
     },

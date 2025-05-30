@@ -222,34 +222,10 @@ const menuItems = computed(() => {
     } else if (role === "ADMIN") {
         items.push(
             {
-                label: "Gestion Utilisateurs",
-                icon: "pi pi-users",
-                command: () => router.push("/admin/users"),
-                route: "/admin/users",
-            },
-            {
-                label: "Gestion des CDAs",
-                icon: "pi pi-building",
-                command: () => router.push("/admin/cdas"),
-                route: "/admin/cdas",
-            },
-            {
-                label: "Configuration Système",
-                icon: "pi pi-cog",
-                command: () => router.push("/admin/config"),
-                route: "/admin/config",
-            },
-            {
-                label: "Rapports Globaux",
-                icon: "pi pi-chart-line",
-                command: () => router.push("/admin/reports"),
-                route: "/admin/reports",
-            },
-            {
-                label: "Sauvegarde",
-                icon: "pi pi-download",
-                command: () => router.push("/admin/backup"),
-                route: "/admin/backup",
+                label: "Gestion Dossiers",
+                icon: "pi pi-folder",
+                command: () => router.push("/admin/documents-requis"),
+                route: "/admin/documents-requis",
             }
         );
     }
