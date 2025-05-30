@@ -9,6 +9,7 @@ import CreateDossierView from '@/views/agent_antenne/CreateDossierView.vue'
 import DossierListView from '@/views/agent_antenne/DossierListView.vue'
 import DossierDetailView from '@/views/agent_antenne/DossierDetailView.vue'
 import AdminDocumentRequisView from '@/views/admin/AdminDocumentRequisView.vue'
+import DocumentFillingView from '@/views/agent_antenne/DocumentFillingView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -37,7 +38,7 @@ const router = createRouter({
       component: RegisterView,
       meta: { guest: true, hideHeader: true }
     },
-    
+
     // Agent Antenne Routes
     {
       path: '/agent_antenne',
@@ -67,6 +68,12 @@ const router = createRouter({
           name: 'dossier-forms',
           component: DossierDetailView,
           meta: { title: 'Formulaires du Dossier' },
+          props: true
+        }, {
+          path: 'dossiers/:dossierId/documents',
+          name: 'dossier-documents',
+          component: DocumentFillingView,
+          meta: { title: 'Documents du Dossier' },
           props: true
         }
       ]
