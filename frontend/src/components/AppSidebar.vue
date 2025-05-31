@@ -11,14 +11,10 @@
                                 <div class="logo-icon">
                                     <img src="@/assets/logo/sadsa.svg" alt="sadsa" />
                                 </div>
-                                <div class="logo-text">
-                                    <span class="logo-title">SADSA</span>
-                                    <span class="logo-subtitle">ORMVAT</span>
-                                </div>
                             </div>
                         </router-link>
                         <button class="collapse-btn" @click="toggleSidebar" title="Réduire le menu">
-                            <i class="pi pi-angle-double-left"></i>
+                           <svg data-v-db1e17da="" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" name="LeftBar" width="20" height="20" viewBox="0 0 1024 1024" class="iconify"><path d="M861.866667 162.133333c-17.066667-17.066667-42.666667-29.866667-68.266667-29.866666H226.133333c-25.6 0-51.2 8.533333-68.266666 29.866666S128 204.8 128 230.4v567.466667c0 25.6 8.533333 51.2 29.866667 68.266666 17.066667 17.066667 42.666667 29.866667 68.266666 29.866667h567.466667c25.6 0 51.2-8.533333 68.266667-29.866667 17.066667-17.066667 29.866667-42.666667 29.866666-68.266666V226.133333c0-25.6-8.533333-46.933333-29.866666-64zM366.933333 814.933333H226.133333c-4.266667 0-8.533333 0-12.8-4.266666-4.266667-4.266667-4.266667-8.533333-4.266666-12.8V226.133333c0-4.266667 0-8.533333 4.266666-12.8 4.266667-4.266667 8.533333-4.266667 12.8-4.266666h140.8v605.866666z m448-17.066666c0 4.266667 0 8.533333-4.266666 12.8-4.266667 4.266667-8.533333 4.266667-12.8 4.266666h-354.133334V209.066667h354.133334c4.266667 0 8.533333 0 12.8 4.266666 4.266667 4.266667 4.266667 8.533333 4.266666 12.8v571.733334z" fill="currentColor"></path></svg>
                         </button>
                     </template>
 
@@ -35,7 +31,7 @@
                 <!-- Expand button (only visible when collapsed) -->
                 <div v-if="collapsed" class="expand-btn-container">
                     <button class="expand-btn" @click="toggleSidebar" title="Étendre le menu">
-                        <i class="pi pi-angle-double-right"></i>
+                           <svg data-v-db1e17da="" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" name="LeftBar" width="20" height="20" viewBox="0 0 1024 1024" class="iconify"><path d="M861.866667 162.133333c-17.066667-17.066667-42.666667-29.866667-68.266667-29.866666H226.133333c-25.6 0-51.2 8.533333-68.266666 29.866666S128 204.8 128 230.4v567.466667c0 25.6 8.533333 51.2 29.866667 68.266666 17.066667 17.066667 42.666667 29.866667 68.266666 29.866667h567.466667c25.6 0 51.2-8.533333 68.266667-29.866667 17.066667-17.066667 29.866667-42.666667 29.866666-68.266666V226.133333c0-25.6-8.533333-46.933333-29.866666-64zM366.933333 814.933333H226.133333c-4.266667 0-8.533333 0-12.8-4.266666-4.266667-4.266667-4.266667-8.533333-4.266666-12.8V226.133333c0-4.266667 0-8.533333 4.266666-12.8 4.266667-4.266667 8.533333-4.266667 12.8-4.266666h140.8v605.866666z m448-17.066666c0 4.266667 0 8.533333-4.266666 12.8-4.266667 4.266667-8.533333 4.266667-12.8 4.266666h-354.133334V209.066667h354.133334c4.266667 0 8.533333 0 12.8 4.266666 4.266667 4.266667 4.266667 8.533333 4.266666 12.8v571.733334z" fill="currentColor"></path></svg>
                     </button>
                 </div>
             </div>
@@ -315,7 +311,7 @@ const menuItems = computed(() => {
 
 <style scoped>
 .app-sidebar {
-    width: 280px;
+    width: 250px;
     background: var(--card-background);
     border-right: 1px solid var(--card-border);
     box-shadow: var(--shadow-sm);
@@ -342,8 +338,7 @@ const menuItems = computed(() => {
 
 /* Header section */
 .sidebar-header {
-    padding: var(--component-spacing);
-    background: var(--clr-primary-a0);
+    padding: 0.75rem;
     position: relative;
     border-bottom: 1px solid var(--clr-primary-a10);
 }
@@ -367,8 +362,7 @@ const menuItems = computed(() => {
 .logo-icon {
     width: 40px;
     height: 40px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: var(--border-radius-lg);
+    border-radius: var(--border-radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -376,16 +370,15 @@ const menuItems = computed(() => {
 }
 
 .logo-icon img {
-    width: 24px;
-    height: 24px;
-    filter: brightness(0) invert(1);
+    width: 40px;
+    height: 40px;
+    filter: var(--logo-filter);
 }
 
 .logo-icon-small {
     width: 32px;
     height: 32px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: var(--border-radius-lg);
+    border-radius: var(--border-radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -395,43 +388,21 @@ const menuItems = computed(() => {
 .logo-icon-small img {
     width: 20px;
     height: 20px;
-    filter: brightness(0) invert(1);
+    filter: var(--logo-filter);
 }
 
-.logo-text {
-    display: flex;
-    flex-direction: column;
-}
-
-.logo-title {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--clr-light-a0);
-    letter-spacing: 0.5px;
-    font-family: 'Poppins', sans-serif;
-    line-height: 1;
-}
-
-.logo-subtitle {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.8);
-    font-weight: 500;
-    margin-top: 2px;
-}
 
 .collapse-btn,
 .expand-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: var(--clr-light-a0);
+    border:none !important;
+    color: var(--text-color);
     cursor: pointer;
-    font-size: 0.875rem;
-    padding: 0.5rem;
     border-radius: var(--border-radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
+    background-color: transparent;
 }
 
 .collapse-btn:hover,
@@ -448,7 +419,7 @@ const menuItems = computed(() => {
 
 /* User info section */
 .user-info {
-    padding: var(--component-spacing);
+    padding: 0.9rem;
     border-bottom: 1px solid var(--card-border);
     display: flex;
     align-items: center;
@@ -457,8 +428,8 @@ const menuItems = computed(() => {
 }
 
 .user-avatar {
-    width: 40px;
-    height: 40px;
+    width: 35px;
+    height: 35px;
     border-radius: 50%;
     background: var(--clr-primary-a0);
     display: flex;
@@ -536,7 +507,7 @@ const menuItems = computed(() => {
 
 .nav-item {
     position: relative;
-    border-radius: var(--border-radius-lg);
+    border-radius: var(--border-radius-md);
     cursor: pointer;
     transition: all 0.2s ease;
     overflow: hidden;

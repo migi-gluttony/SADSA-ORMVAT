@@ -378,7 +378,7 @@ export default {
   padding-top: calc(75px + 3rem);
   background: var(--background-color);
   color: var(--text-color);
-  border-radius: 0 0 2rem 2rem;
+  border-radius: 0 0 5px 5px;
   gap: 2rem;
   margin: 0;
 }
@@ -438,7 +438,7 @@ export default {
   max-width: 1200px;
   transform: translateY(-50px);
   background-color: var(--background-color);
-  border-radius: 1rem;
+  border-radius: 5px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
 
@@ -499,7 +499,7 @@ export default {
 .feature-card {
   background-color: var(--background-color);
   padding: 2rem;
-  border-radius: 1rem;
+  border-radius: 5px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   transition: transform 0.3s, box-shadow 0.3s;
   border: 1px solid rgba(var(--primary-color-rgb), 0.1);
@@ -553,7 +553,7 @@ export default {
 .step-card {
   background-color: var(--background-color);
   padding: 2rem;
-  border-radius: 1rem;
+  border-radius: 5px;
   text-align: center;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   min-width: 200px;
@@ -565,7 +565,7 @@ export default {
   color: white;
   width: 40px;
   height: 40px;
-  border-radius: 50%;
+  border-radius: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -605,7 +605,7 @@ export default {
 
 .admin-section {
   background-color: #f5f5f5;
-  border-radius: 2rem;
+  border-radius: 5px;
   margin: 4rem auto;
 }
 
@@ -665,7 +665,7 @@ export default {
   text-align: center;
   padding: 5rem 2rem;
   color: var(--text-color);
-  border-radius: 2rem 2rem 0 0;
+  border-radius: 5px 5px 0 0;
   margin: 0;
 }
 
@@ -712,7 +712,7 @@ export default {
 .map-container {
   flex: 3;
   min-width: 300px;
-  border-radius: 12px;
+  border-radius: 5px;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
@@ -849,7 +849,7 @@ export default {
   height: 3.5rem;
   width: 12rem;
   font-size: large;
-  border-radius: 1rem;
+  border-radius: 5px;
   color: var(--primary-color);
   border-color: var(--primary-color);
   background-color: rgba(0, 0, 0, 0);
@@ -866,7 +866,7 @@ export default {
   height: 3.5rem;
   width: 12rem;
   font-size: large;
-  border-radius: 1rem;
+  border-radius: 5px;
   color: var(--primary-color);
   border-color: var(--primary-color);
   background-color: rgba(0, 0, 0, 0);
@@ -882,7 +882,7 @@ export default {
   height: 3rem;
   width: 10rem;
   font-size: large;
-  border-radius: 1rem;
+  border-radius: 5px;
   color: var(--primary-color);
   border-color: var(--primary-color);
   background-color: rgba(0, 0, 0, 0) !important;

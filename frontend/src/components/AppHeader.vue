@@ -95,7 +95,7 @@ const navigateToLogin = () => {
   box-shadow: 2px 2px 2px 2px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s ease;
   margin: 10px;
-  border-radius: calc(1rem + 3px);
+  border-radius: 5px;
 }
 
 .header-hidden {
@@ -112,7 +112,7 @@ const navigateToLogin = () => {
   justify-content: center;
   /* border-bottom: 1px solid var(--surface-border); */
   margin: 3px;
-  border-radius: 1rem;
+  border-radius: 5px;
   overflow: hidden;
   border: solid 2px var(--primary-color);
 }
@@ -194,7 +194,7 @@ const navigateToLogin = () => {
   height: 3.5rem;
   width: 12rem;
   font-size: large;
-  border-radius: 1rem;
+  border-radius: 5px;
   color: var(--primary-color);
   border-color: var(--primary-color);
 }

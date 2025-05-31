@@ -882,7 +882,7 @@ watch(jsonProprietesText, () => {
 .stat-icon {
   width: 3rem;
   height: 3rem;
-  border-radius: 50%;
+  border-radius: var(--border-radius-md);
   background: var(--clr-surface-tonal-a0);
   display: flex;
   align-items: center;
@@ -943,7 +943,7 @@ watch(jsonProprietesText, () => {
   width: 50px;
   height: 50px;
   background: var(--primary-color);
-  border-radius: var(--border-radius-lg);
+  border-radius: var(--border-radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -975,7 +975,7 @@ watch(jsonProprietesText, () => {
 
 .sous-rubrique-card {
   border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-lg);
+  border-radius: var(--border-radius-md);
   overflow: hidden;
   background: var(--card-background);
 }

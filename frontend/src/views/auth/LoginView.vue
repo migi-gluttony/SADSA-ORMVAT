@@ -297,7 +297,7 @@ const handleLogin = async () => {
   padding: 1rem;
   border-left: 3px solid rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 0 8px 8px 0;
+  border-radius: 0 5px 5px 0;
   line-height: 1.5;
 }
 
@@ -314,7 +314,7 @@ const handleLogin = async () => {
   width: 100%;
   max-width: 450px;
   background: var(--background-color);
-  border-radius: 20px;
+  border-radius: 5px;
   padding: 3rem;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
   border: 1px solid rgba(var(--primary-color-rgb), 0.1);
@@ -366,7 +366,7 @@ const handleLogin = async () => {
 .form-input {
   width: 100%;
   padding: 0.875rem 1rem;
-  border-radius: 10px;
+  border-radius: 5px;
   border: 2px solid var(--surface-border);
   background: var(--surface-ground);
   transition: all 0.2s ease;
@@ -411,7 +411,7 @@ const handleLogin = async () => {
 }
 .custom-checkbox{
   box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
-  border-radius: 15px;
+  border-radius: 5px;
 }
 .forgot-link:hover {
   text-decoration: underline;
@@ -422,7 +422,7 @@ const handleLogin = async () => {
   padding: 0.875rem;
   font-size: 1rem;
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: 5px;
   background: var(--primary-color);
   border: none;
   color: white;
@@ -445,7 +445,7 @@ const handleLogin = async () => {
   margin-top: 1.5rem;
   padding: 1rem;
   background-color: rgba(244, 67, 54, 0.1);
-  border-radius: 10px;
+  border-radius: 5px;
   color: #f44336;
   display: flex;
   align-items: center;
@@ -475,7 +475,7 @@ const handleLogin = async () => {
   margin-top: 1rem;
   padding: 0.75rem;
   background: rgba(var(--primary-color-rgb), 0.05);
-  border-radius: 8px;
+  border-radius: 5px;
 }
 
 .admin-contact small {
@@ -490,7 +490,7 @@ const handleLogin = async () => {
 :deep(.p-password-input) {
   width: 100%;
   padding: 0.875rem 1rem;
-  border-radius: 10px;
+  border-radius: 5px;
   border: 2px solid var(--surface-border);
   background: var(--surface-ground);
   transition: all 0.2s ease;
@@ -507,7 +507,7 @@ const handleLogin = async () => {
 
 /* Checkbox styling */
 :deep(.p-checkbox .p-checkbox-box) {
-  border-radius: 6px;
+  border-radius: 5px;
   border: 2px solid var(--surface-border);
 }
 
