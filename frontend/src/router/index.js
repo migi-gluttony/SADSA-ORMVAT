@@ -10,6 +10,7 @@ import DossierListView from '@/views/common/DossierListView.vue'
 import DossierDetailView from '@/views/common/DossierDetailView.vue'
 import AdminDocumentRequisView from '@/views/admin/AdminDocumentRequisView.vue'
 import DocumentFillingView from '@/views/agent_antenne/DocumentFillingView.vue'
+import ProfileView from '@/views/common/ProfileView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -38,7 +39,12 @@ const router = createRouter({
       component: RegisterView,
       meta: { guest: true, hideHeader: true }
     },
-
+{
+      path: '/profile',
+      name: 'profile',
+      component: ProfileView,
+      meta: { requiresAuth: true }
+    },
     // Agent Antenne Routes
     {
       path: '/agent_antenne/dossiers',

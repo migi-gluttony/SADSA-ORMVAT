@@ -1,7 +1,8 @@
 <template>
   <!-- Send to GUC Dialog -->
   <Dialog 
-    v-model:visible="dialogs.sendToGUC.visible" 
+    :visible="dialogsState.sendToGUC.visible" 
+    @update:visible="updateDialogVisibility('sendToGUC', $event)"
     modal 
     header="Envoyer au GUC"
     :style="{ width: '500px' }"
@@ -11,9 +12,9 @@
       <div class="confirmation-text">
         <p>Confirmer l'envoi de ce dossier au Guichet Unique Central ?</p>
         <div class="dossier-summary">
-          <strong>{{ dialogs.sendToGUC.dossier?.reference }}</strong><br>
-          {{ getAgriculteurName(dialogs.sendToGUC.dossier) }}<br>
-          <small>Type: {{ dialogs.sendToGUC.dossier?.sousRubriqueDesignation }}</small>
+          <strong>{{ dialogsState.sendToGUC.dossier?.reference }}</strong><br>
+          {{ getAgriculteurName(dialogsState.sendToGUC.dossier) }}<br>
+          <small>Type: {{ dialogsState.sendToGUC.dossier?.sousRubriqueDesignation }}</small>
         </div>
         <p class="info-text">Une fois envoyé, le dossier ne pourra plus être modifié à l'antenne et sera traité par le GUC.</p>
       </div>
@@ -23,7 +24,7 @@
       <label for="sendComment">Commentaire pour le GUC (optionnel)</label>
       <Textarea 
         id="sendComment"
-        v-model="dialogs.sendToGUC.comment" 
+        v-model="dialogsState.sendToGUC.comment" 
         rows="3" 
         placeholder="Commentaires ou instructions pour le GUC..."
       />
@@ -41,14 +42,15 @@
         icon="pi pi-send" 
         @click="confirmAction('sendToGUC')"
         class="p-button-success"
-        :loading="dialogs.sendToGUC.loading"
+        :loading="dialogsState.sendToGUC.loading"
       />
     </template>
   </Dialog>
 
   <!-- Send to Commission Dialog -->
   <Dialog 
-    v-model:visible="dialogs.sendToCommission.visible" 
+    :visible="dialogsState.sendToCommission.visible" 
+    @update:visible="updateDialogVisibility('sendToCommission', $event)"
     modal 
     header="Envoyer à la Commission AHA-AF"
     :style="{ width: '600px' }"
@@ -58,9 +60,9 @@
       <div class="confirmation-text">
         <p>Envoyer ce dossier à la Commission AHA-AF pour visite terrain ?</p>
         <div class="dossier-summary">
-          <strong>{{ dialogs.sendToCommission.dossier?.reference }}</strong><br>
-          {{ getAgriculteurName(dialogs.sendToCommission.dossier) }}<br>
-          <small>Type: {{ dialogs.sendToCommission.dossier?.sousRubriqueDesignation }}</small>
+          <strong>{{ dialogsState.sendToCommission.dossier?.reference }}</strong><br>
+          {{ getAgriculteurName(dialogsState.sendToCommission.dossier) }}<br>
+          <small>Type: {{ dialogsState.sendToCommission.dossier?.sousRubriqueDesignation }}</small>
         </div>
         <p class="info-text">La commission effectuera une visite terrain pour évaluer la conformité du projet.</p>
       </div>
@@ -71,10 +73,10 @@
         <label for="commissionComment">Commentaire pour la Commission *</label>
         <Textarea 
           id="commissionComment"
-          v-model="dialogs.sendToCommission.comment" 
+          v-model="dialogsState.sendToCommission.comment" 
           rows="3" 
           placeholder="Instructions spécifiques pour la commission..."
-          :class="{ 'p-invalid': !dialogs.sendToCommission.comment?.trim() }"
+          :class="{ 'p-invalid': !dialogsState.sendToCommission.comment?.trim() }"
         />
       </div>
       
@@ -82,7 +84,7 @@
         <label for="commissionPriority">Priorité du dossier</label>
         <Select 
           id="commissionPriority"
-          v-model="dialogs.sendToCommission.priority" 
+          v-model="dialogsState.sendToCommission.priority" 
           :options="priorityOptions"
           optionLabel="label"
           optionValue="value"
@@ -104,15 +106,16 @@
         icon="pi pi-forward" 
         @click="confirmAction('sendToCommission')"
         class="p-button-info"
-        :loading="dialogs.sendToCommission.loading"
-        :disabled="!dialogs.sendToCommission.comment?.trim()"
+        :loading="dialogsState.sendToCommission.loading"
+        :disabled="!dialogsState.sendToCommission.comment?.trim()"
       />
     </template>
   </Dialog>
 
   <!-- Return to Antenne Dialog -->
   <Dialog 
-    v-model:visible="dialogs.returnToAntenne.visible" 
+    :visible="dialogsState.returnToAntenne.visible" 
+    @update:visible="updateDialogVisibility('returnToAntenne', $event)"
     modal 
     header="Retourner à l'Antenne"
     :style="{ width: '600px' }"
@@ -122,8 +125,8 @@
       <div class="confirmation-text">
         <p>Retourner ce dossier à l'antenne pour complétion ?</p>
         <div class="dossier-summary">
-          <strong>{{ dialogs.returnToAntenne.dossier?.reference }}</strong><br>
-          {{ getAgriculteurName(dialogs.returnToAntenne.dossier) }}
+          <strong>{{ dialogsState.returnToAntenne.dossier?.reference }}</strong><br>
+          {{ getAgriculteurName(dialogsState.returnToAntenne.dossier) }}
         </div>
         <p class="warning-text">Le dossier repassera en mode modification à l'antenne.</p>
       </div>
@@ -134,10 +137,10 @@
         <label for="returnComment">Motif du retour *</label>
         <Textarea 
           id="returnComment"
-          v-model="dialogs.returnToAntenne.comment" 
+          v-model="dialogsState.returnToAntenne.comment" 
           rows="4" 
           placeholder="Expliquez pourquoi le dossier est retourné et ce qui doit être corrigé..."
-          :class="{ 'p-invalid': !dialogs.returnToAntenne.comment?.trim() }"
+          :class="{ 'p-invalid': !dialogsState.returnToAntenne.comment?.trim() }"
         />
       </div>
       
@@ -147,7 +150,7 @@
           <div class="checkbox-item" v-for="reason in returnReasons" :key="reason.value">
             <Checkbox 
               :id="reason.value"
-              v-model="dialogs.returnToAntenne.reasons" 
+              v-model="dialogsState.returnToAntenne.reasons" 
               :value="reason.value"
             />
             <label :for="reason.value">{{ reason.label }}</label>
@@ -168,15 +171,16 @@
         icon="pi pi-undo" 
         @click="confirmAction('returnToAntenne')"
         class="p-button-warning"
-        :loading="dialogs.returnToAntenne.loading"
-        :disabled="!dialogs.returnToAntenne.comment?.trim()"
+        :loading="dialogsState.returnToAntenne.loading"
+        :disabled="!dialogsState.returnToAntenne.comment?.trim()"
       />
     </template>
   </Dialog>
 
   <!-- Reject Dialog -->
   <Dialog 
-    v-model:visible="dialogs.reject.visible" 
+    :visible="dialogsState.reject.visible" 
+    @update:visible="updateDialogVisibility('reject', $event)"
     modal 
     header="Rejeter le Dossier"
     :style="{ width: '600px' }"
@@ -186,8 +190,8 @@
       <div class="confirmation-text">
         <p>Rejeter définitivement ce dossier ?</p>
         <div class="dossier-summary">
-          <strong>{{ dialogs.reject.dossier?.reference }}</strong><br>
-          {{ getAgriculteurName(dialogs.reject.dossier) }}
+          <strong>{{ dialogsState.reject.dossier?.reference }}</strong><br>
+          {{ getAgriculteurName(dialogsState.reject.dossier) }}
         </div>
         <p class="danger-text">Cette action est <strong>définitive</strong> et ne peut pas être annulée.</p>
       </div>
@@ -198,10 +202,10 @@
         <label for="rejectComment">Motif du rejet *</label>
         <Textarea 
           id="rejectComment"
-          v-model="dialogs.reject.comment" 
+          v-model="dialogsState.reject.comment" 
           rows="4" 
           placeholder="Expliquez clairement les raisons du rejet du dossier..."
-          :class="{ 'p-invalid': !dialogs.reject.comment?.trim() }"
+          :class="{ 'p-invalid': !dialogsState.reject.comment?.trim() }"
         />
       </div>
       
@@ -209,7 +213,7 @@
         <div class="checkbox-item">
           <Checkbox 
             id="definitiveReject"
-            v-model="dialogs.reject.definitive" 
+            v-model="dialogsState.reject.definitive" 
             :binary="true"
           />
           <label for="definitiveReject">Rejet définitif (l'agriculteur ne pourra pas resoumettre)</label>
@@ -229,15 +233,16 @@
         icon="pi pi-times-circle" 
         @click="confirmAction('reject')"
         class="p-button-danger"
-        :loading="dialogs.reject.loading"
-        :disabled="!dialogs.reject.comment?.trim()"
+        :loading="dialogsState.reject.loading"
+        :disabled="!dialogsState.reject.comment?.trim()"
       />
     </template>
   </Dialog>
 
   <!-- Delete Dialog -->
   <Dialog 
-    v-model:visible="dialogs.delete.visible" 
+    :visible="dialogsState.delete.visible" 
+    @update:visible="updateDialogVisibility('delete', $event)"
     modal 
     header="Confirmer la suppression"
     :style="{ width: '450px' }"
@@ -247,8 +252,8 @@
       <div class="confirmation-text">
         <p>Êtes-vous sûr de vouloir supprimer ce dossier ?</p>
         <div class="dossier-summary">
-          <strong>{{ dialogs.delete.dossier?.reference }}</strong><br>
-          {{ getAgriculteurName(dialogs.delete.dossier) }}
+          <strong>{{ dialogsState.delete.dossier?.reference }}</strong><br>
+          {{ getAgriculteurName(dialogsState.delete.dossier) }}
         </div>
         <p class="danger-text">Cette action est <strong>irréversible</strong>.</p>
       </div>
@@ -258,7 +263,7 @@
       <label for="deleteComment">Motif de suppression (optionnel)</label>
       <Textarea 
         id="deleteComment"
-        v-model="dialogs.delete.comment" 
+        v-model="dialogsState.delete.comment" 
         rows="3" 
         placeholder="Raison de la suppression..."
       />
@@ -276,14 +281,15 @@
         icon="pi pi-trash" 
         @click="confirmAction('delete')"
         class="p-button-danger"
-        :loading="dialogs.delete.loading"
+        :loading="dialogsState.delete.loading"
       />
     </template>
   </Dialog>
 
   <!-- Delete File Dialog -->
   <Dialog 
-    v-model:visible="dialogs.deleteFile.visible" 
+    :visible="dialogsState.deleteFile.visible" 
+    @update:visible="updateDialogVisibility('deleteFile', $event)"
     modal 
     header="Supprimer le fichier"
     :style="{ width: '400px' }"
@@ -293,8 +299,8 @@
       <div class="confirmation-text">
         <p>Supprimer ce fichier ?</p>
         <div class="file-summary">
-          <strong>{{ dialogs.deleteFile.file?.nomFichier }}</strong><br>
-          <small>{{ dialogs.deleteFile.file?.typeDocument }}</small>
+          <strong>{{ dialogsState.deleteFile.file?.nomFichier }}</strong><br>
+          <small>{{ dialogsState.deleteFile.file?.typeDocument }}</small>
         </div>
         <p class="warning-text">Cette action ne peut pas être annulée.</p>
       </div>
@@ -312,14 +318,14 @@
         icon="pi pi-trash" 
         @click="confirmAction('deleteFile')"
         class="p-button-danger"
-        :loading="dialogs.deleteFile.loading"
+        :loading="dialogsState.deleteFile.loading"
       />
     </template>
   </Dialog>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, reactive, watch } from 'vue';
 
 // PrimeVue components
 import Dialog from 'primevue/dialog';
@@ -338,6 +344,27 @@ const props = defineProps({
 
 // Emits
 const emit = defineEmits(['action-confirmed', 'dialog-closed']);
+
+// Internal state management
+const dialogsState = reactive({
+  sendToGUC: { visible: false, dossier: null, loading: false, comment: '' },
+  sendToCommission: { visible: false, dossier: null, loading: false, comment: '', priority: 'NORMALE' },
+  returnToAntenne: { visible: false, dossier: null, loading: false, comment: '', reasons: [] },
+  reject: { visible: false, dossier: null, loading: false, comment: '', definitive: false },
+  delete: { visible: false, dossier: null, loading: false, comment: '' },
+  deleteFile: { visible: false, file: null, loading: false }
+});
+
+// Watch props and sync internal state
+watch(() => props.dialogs, (newDialogs) => {
+  if (newDialogs) {
+    Object.keys(dialogsState).forEach(key => {
+      if (newDialogs[key]) {
+        Object.assign(dialogsState[key], newDialogs[key]);
+      }
+    });
+  }
+}, { immediate: true, deep: true });
 
 // Options
 const priorityOptions = ref([
@@ -362,12 +389,20 @@ function getAgriculteurName(dossier) {
   return `${dossier.agriculteurPrenom || ''} ${dossier.agriculteurNom || ''}`.trim();
 }
 
+function updateDialogVisibility(dialogKey, visible) {
+  dialogsState[dialogKey].visible = visible;
+  if (!visible) {
+    emit('dialog-closed');
+  }
+}
+
 function closeDialog(action) {
+  dialogsState[action].visible = false;
   emit('dialog-closed');
 }
 
 function confirmAction(action) {
-  const dialog = props.dialogs[action];
+  const dialog = dialogsState[action];
   
   let data = {
     comment: dialog.comment || ''

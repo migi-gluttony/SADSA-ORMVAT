@@ -171,6 +171,19 @@
       <span>Chargement des dossiers...</span>
     </div>
 
+    <!-- Error State -->
+    <div v-else-if="error" class="error-container">
+      <i class="pi pi-exclamation-triangle"></i>
+      <h3>Erreur de chargement</h3>
+      <p>{{ error }}</p>
+      <Button 
+        label="Réessayer" 
+        icon="pi pi-refresh" 
+        @click="loadDossiers"
+        class="p-button-outlined"
+      />
+    </div>
+
     <!-- Empty State -->
     <div v-else-if="dossiers.length === 0" class="empty-state">
       <div class="empty-content">
@@ -289,17 +302,17 @@
             <td class="col-progress">
               <div class="progress-cell">
                 <div class="progress-info">
-                  <span class="progress-text">{{ dossier.formsCompleted }}/{{ dossier.totalForms }} formulaires</span>
-                  <span class="progress-percentage">{{ Math.round(dossier.completionPercentage) }}%</span>
+                  <span class="progress-text">{{ dossier.formsCompleted || 0 }}/{{ dossier.totalForms || 0 }} formulaires</span>
+                  <span class="progress-percentage">{{ Math.round(dossier.completionPercentage || 0) }}%</span>
                 </div>
                 <ProgressBar 
-                  :value="dossier.completionPercentage" 
+                  :value="dossier.completionPercentage || 0" 
                   :show-value="false"
                   class="progress-bar"
                   :class="{
-                    'progress-complete': dossier.completionPercentage === 100,
-                    'progress-medium': dossier.completionPercentage >= 50 && dossier.completionPercentage < 100,
-                    'progress-low': dossier.completionPercentage < 50
+                    'progress-complete': (dossier.completionPercentage || 0) === 100,
+                    'progress-medium': (dossier.completionPercentage || 0) >= 50 && (dossier.completionPercentage || 0) < 100,
+                    'progress-low': (dossier.completionPercentage || 0) < 50
                   }"
                 />
               </div>
@@ -323,7 +336,7 @@
               <div class="details-cell">
                 <div class="time-info">
                   <i class="pi pi-clock"></i>
-                  <span v-if="dossier.joursRestants > 0" class="time-remaining">
+                  <span v-if="(dossier.joursRestants || 0) > 0" class="time-remaining">
                     {{ dossier.joursRestants }} jour(s)
                   </span>
                   <span v-else class="time-expired">Délai dépassé</span>
@@ -347,7 +360,7 @@
                 <!-- Agent Antenne specific actions -->
                 <template v-if="userRole === 'AGENT_ANTENNE'">
                   <Button 
-                    v-if="dossier.permissions?.peutEtreModifie && dossier.completionPercentage < 100" 
+                    v-if="dossier.permissions?.peutEtreModifie && (dossier.completionPercentage || 0) < 100" 
                     icon="pi pi-pencil" 
                     @click="continueDossier(dossier.id)"
                     class="p-button-sm action-btn btn-edit"
@@ -426,7 +439,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import AuthService from '@/services/AuthService';
@@ -452,6 +465,7 @@ const toast = useToast();
 
 // State
 const loading = ref(false);
+const error = ref(null);
 const dossiers = ref([]);
 const dossiersData = ref(null);
 const searchTerm = ref('');
@@ -463,7 +477,7 @@ const pageSize = ref(10);
 const totalRecords = computed(() => dossiersData.value?.totalCount || 0);
 
 // Filters
-const filters = ref({
+const filters = reactive({
   statut: null,
   sousRubriqueId: null,
   antenneId: null,
@@ -480,7 +494,7 @@ const prioriteOptions = ref([
 ]);
 
 // Dialogs
-const actionDialogs = ref({
+const actionDialogs = reactive({
   sendToGUC: { visible: false, dossier: null, loading: false, comment: '' },
   sendToCommission: { visible: false, dossier: null, loading: false, comment: '', priority: 'NORMALE' },
   returnToAntenne: { visible: false, dossier: null, loading: false, comment: '', reasons: [] },
@@ -488,7 +502,7 @@ const actionDialogs = ref({
   delete: { visible: false, dossier: null, loading: false, comment: '' }
 });
 
-const addNoteDialog = ref({
+const addNoteDialog = reactive({
   visible: false,
   dossier: null
 });
@@ -496,18 +510,26 @@ const addNoteDialog = ref({
 // Computed
 const hasActiveFilters = computed(() => {
   const hasSearch = searchTerm.value && searchTerm.value.trim();
-  const hasStatus = filters.value.statut;
-  const hasSubRubrique = filters.value.sousRubriqueId;
-  const hasAntenne = filters.value.antenneId;
-  const hasPriority = filters.value.priorite;
+  const hasStatus = filters.statut;
+  const hasSubRubrique = filters.sousRubriqueId;
+  const hasAntenne = filters.antenneId;
+  const hasPriority = filters.priorite;
   
   return hasSearch || hasStatus || hasSubRubrique || hasAntenne || hasPriority;
 });
 
 // Methods
-onMounted(() => {
-  loadDossiers();
-  loadFilterOptions();
+onMounted(async () => {
+  console.log('DossierListView mounted, user role:', userRole.value);
+  console.log('Current route:', router.currentRoute.value.path);
+  
+  try {
+    await loadFilterOptions();
+    await loadDossiers();
+  } catch (err) {
+    console.error('Error during component initialization:', err);
+    error.value = 'Erreur lors de l\'initialisation du composant';
+  }
 });
 
 function getPageTitle() {
@@ -546,6 +568,8 @@ function getStatusOptions() {
 async function loadDossiers() {
   try {
     loading.value = true;
+    error.value = null;
+    console.log('Starting to load dossiers for role:', userRole.value);
     
     const params = {
       page: currentPage.value,
@@ -556,26 +580,52 @@ async function loadDossiers() {
 
     // Add search and filters
     if (searchTerm.value?.trim()) params.searchTerm = searchTerm.value.trim();
-    if (filters.value.statut) params.statut = filters.value.statut;
-    if (filters.value.sousRubriqueId) params.sousRubriqueId = filters.value.sousRubriqueId;
-    if (filters.value.antenneId) params.antenneId = filters.value.antenneId;
-    if (filters.value.priorite) params.priorite = filters.value.priorite;
+    if (filters.statut) params.statut = filters.statut;
+    if (filters.sousRubriqueId) params.sousRubriqueId = filters.sousRubriqueId;
+    if (filters.antenneId) params.antenneId = filters.antenneId;
+    if (filters.priorite) params.priorite = filters.priorite;
 
     console.log('Loading dossiers with params:', params);
 
     const response = await ApiService.get('/dossiers', params);
+    console.log('API response received:', response);
     
     dossiersData.value = response;
     dossiers.value = response.dossiers || [];
     
-  } catch (error) {
-    console.error('Erreur lors du chargement des dossiers:', error);
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: 'Impossible de charger les dossiers',
-      life: 3000
+    console.log('Dossiers loaded successfully:', dossiers.value.length, 'items');
+    
+  } catch (err) {
+    console.error('Erreur lors du chargement des dossiers:', err);
+    console.error('Error details:', {
+      message: err.message,
+      status: err.response?.status,
+      data: err.response?.data
     });
+    
+    error.value = err.message || 'Impossible de charger les dossiers';
+    
+    // Initialize with empty data to prevent template errors
+    dossiersData.value = {
+      dossiers: [],
+      totalCount: 0,
+      currentPage: 0,
+      pageSize: pageSize.value,
+      totalPages: 0,
+      statistics: {
+        totalDossiers: 0,
+        dossiersEnCours: 0,
+        dossiersApprouves: 0,
+        dossiersRejetes: 0,
+        dossiersEnRetard: 0,
+        tauxCompletion: 0,
+        dossiersCeMois: 0,
+        dossiersAttenteTraitement: 0,
+        dossiersEnCommission: 0
+      }
+    };
+    dossiers.value = [];
+    
   } finally {
     loading.value = false;
   }
@@ -583,27 +633,35 @@ async function loadDossiers() {
 
 async function loadFilterOptions() {
   try {
-    // Load sous-rubriques for filter
-    const initResponse = await ApiService.get('/agent_antenne/dossiers/initialization-data');
-    if (initResponse.rubriques) {
-      const allSousRubriques = [];
-      initResponse.rubriques.forEach(rubrique => {
-        rubrique.sousRubriques.forEach(sr => {
-          allSousRubriques.push({
-            id: sr.id,
-            designation: sr.designation
-          });
-        });
-      });
-      sousRubriqueOptions.value = allSousRubriques;
-    }
+    console.log('Loading filter options...');
+    
+    // Load basic filter options - using hardcoded options for now
+    sousRubriqueOptions.value = [
+      { id: 1, designation: 'FILIERES VEGETALES - Équipements' },
+      { id: 2, designation: 'FILIERES VEGETALES - Matériel' },
+      { id: 3, designation: 'FILIERES ANIMALES - Équipements' },
+      { id: 4, designation: 'FILIERES ANIMALES - Installations' },
+      { id: 5, designation: 'AMENAGEMENT HYDRO-AGRICOLE' },
+      { id: 6, designation: 'AMELIORATION FONCIERE' }
+    ];
 
     // Load antennes for GUC filter
     if (userRole.value === 'AGENT_GUC') {
-      antenneOptions.value = initResponse.antennes || [];
+      antenneOptions.value = [
+        { id: 1, designation: 'Antenne Bni Amir' },
+        { id: 2, designation: 'Antenne Souk Sebt' },
+        { id: 3, designation: 'Antenne Ouldad M\'Bark' },
+        { id: 4, designation: 'Antenne Dar Ouled Zidouh' },
+        { id: 5, designation: 'Antenne Afourer' }
+      ];
     }
-  } catch (error) {
-    console.error('Erreur lors du chargement des options de filtre:', error);
+    
+    console.log('Filter options loaded successfully');
+  } catch (err) {
+    console.error('Erreur lors du chargement des options de filtre:', err);
+    // Don't throw error, just use empty options
+    sousRubriqueOptions.value = [];
+    antenneOptions.value = [];
   }
 }
 
@@ -623,12 +681,12 @@ function applyFilters() {
 }
 
 function clearFilters() {
-  filters.value = {
+  Object.assign(filters, {
     statut: null,
     sousRubriqueId: null,
     antenneId: null,
     priorite: null
-  };
+  });
   searchTerm.value = '';
   applyFilters();
 }
@@ -657,7 +715,7 @@ function continueDossier(dossierId) {
 
 // Action methods
 function confirmSendToGUC(dossier) {
-  actionDialogs.value.sendToGUC = {
+  actionDialogs.sendToGUC = {
     visible: true,
     dossier: dossier,
     loading: false,
@@ -666,7 +724,7 @@ function confirmSendToGUC(dossier) {
 }
 
 function confirmDeleteDossier(dossier) {
-  actionDialogs.value.delete = {
+  actionDialogs.delete = {
     visible: true,
     dossier: dossier,
     loading: false,
@@ -675,10 +733,8 @@ function confirmDeleteDossier(dossier) {
 }
 
 function showAddNoteDialog(dossier) {
-  addNoteDialog.value = {
-    visible: true,
-    dossier: dossier
-  };
+  addNoteDialog.visible = true;
+  addNoteDialog.dossier = dossier;
 }
 
 function getActionMenuItems(dossier) {
@@ -725,7 +781,7 @@ function handlePrimaryAction(dossier) {
 }
 
 function showActionDialog(action, dossier) {
-  actionDialogs.value[action] = {
+  actionDialogs[action] = {
     visible: true,
     dossier: dossier,
     loading: false,
@@ -791,26 +847,32 @@ async function handleActionConfirmed(actionData) {
       loadDossiers();
     }
     
-  } catch (error) {
-    console.error(`Erreur lors de l'action ${actionData.action}:`, error);
+  } catch (err) {
+    console.error(`Erreur lors de l'action ${actionData.action}:`, err);
     toast.add({
       severity: 'error',
       summary: 'Erreur',
-      detail: error.message || 'Une erreur est survenue',
+      detail: err.message || 'Une erreur est survenue',
       life: 3000
     });
+  } finally {
+    // Reset loading state
+    const dialog = actionDialogs[actionData.action];
+    if (dialog) {
+      dialog.loading = false;
+    }
   }
 }
 
 function handleDialogClosed() {
   // Reset all dialogs
-  Object.keys(actionDialogs.value).forEach(key => {
-    actionDialogs.value[key].visible = false;
+  Object.keys(actionDialogs).forEach(key => {
+    actionDialogs[key].visible = false;
   });
 }
 
 async function handleNoteAdded() {
-  addNoteDialog.value.visible = false;
+  addNoteDialog.visible = false;
   toast.add({
     severity: 'success',
     summary: 'Succès',
@@ -830,7 +892,7 @@ async function exportToExcel() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${AuthService.getToken()}`
       },
-      body: JSON.stringify(filters.value)
+      body: JSON.stringify(filters)
     });
     
     if (!response.ok) throw new Error('Erreur d\'export');
@@ -852,8 +914,8 @@ async function exportToExcel() {
       life: 3000
     });
     
-  } catch (error) {
-    console.error('Erreur lors de l\'export:', error);
+  } catch (err) {
+    console.error('Erreur lors de l\'export:', err);
     toast.add({
       severity: 'error',
       summary: 'Erreur',
@@ -903,8 +965,6 @@ function formatDate(date) {
 </script>
 
 <style scoped>
-/* Copy all styles from the original DossierListView.vue and add some new ones */
-
 .dossier-list-container {
   max-width: 1400px;
   margin: 0 auto;
@@ -1137,7 +1197,7 @@ function formatDate(date) {
 }
 
 /* Loading and Empty States */
-.loading-container {
+.loading-container, .error-container {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1148,6 +1208,11 @@ function formatDate(date) {
   background: var(--card-background);
   border: 1px solid var(--card-border);
   border-radius: var(--border-radius-md);
+}
+
+.error-container i {
+  font-size: 3rem;
+  color: var(--danger-color);
 }
 
 .empty-state {

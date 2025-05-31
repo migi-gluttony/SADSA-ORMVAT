@@ -260,7 +260,7 @@ public class DossierManagementService {
             Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
-            // Update dossier status
+            // Update dossier status to allow editing at antenne
             dossier.setStatus(Dossier.DossierStatus.RETURNED_FOR_COMPLETION);
             dossierRepository.save(dossier);
 
@@ -445,15 +445,19 @@ public class DossierManagementService {
 
     private DossierPermissionsDTO calculatePermissions(Dossier dossier, Utilisateur utilisateur) {
         boolean isDraft = dossier.getStatus() == Dossier.DossierStatus.DRAFT;
+        boolean isReturnedForCompletion = dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
         boolean isSubmitted = dossier.getStatus() == Dossier.DossierStatus.SUBMITTED;
         boolean isInReview = dossier.getStatus() == Dossier.DossierStatus.IN_REVIEW;
+        
+        // Agent Antenne can edit if it's DRAFT or RETURNED_FOR_COMPLETION
+        boolean canEditAtAntenne = isDraft || isReturnedForCompletion;
         
         switch (utilisateur.getRole()) {
             case AGENT_ANTENNE:
                 return DossierPermissionsDTO.builder()
-                        .peutEtreModifie(isDraft)
-                        .peutEtreEnvoye(isDraft)
-                        .peutEtreSupprime(isDraft)
+                        .peutEtreModifie(canEditAtAntenne)
+                        .peutEtreEnvoye(canEditAtAntenne) // Can send if can edit
+                        .peutEtreSupprime(isDraft) // Only delete drafts
                         .peutAjouterNotes(true)
                         .peutRetournerAntenne(false)
                         .peutEnvoyerCommission(false)
@@ -741,8 +745,9 @@ public class DossierManagementService {
 
     // Add other missing methods with proper implementations for role-based access
     private boolean canSendToGUC(Dossier dossier, Utilisateur utilisateur) {
-        return dossier.getStatus() == Dossier.DossierStatus.DRAFT &&
-                utilisateur.getRole() == Utilisateur.UserRole.AGENT_ANTENNE;
+        boolean canEdit = dossier.getStatus() == Dossier.DossierStatus.DRAFT || 
+                         dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
+        return canEdit && utilisateur.getRole() == Utilisateur.UserRole.AGENT_ANTENNE;
     }
 
     private boolean canDeleteDossier(Dossier dossier, Utilisateur utilisateur) {

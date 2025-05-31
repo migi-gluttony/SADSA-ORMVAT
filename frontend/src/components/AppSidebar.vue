@@ -14,7 +14,7 @@
                             </div>
                         </router-link>
                         <button class="collapse-btn" @click="toggleSidebar" title="Réduire le menu">
-                           <svg data-v-db1e17da="" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" name="LeftBar" width="20" height="20" viewBox="0 0 1024 1024" class="iconify"><path d="M861.866667 162.133333c-17.066667-17.066667-42.666667-29.866667-68.266667-29.866666H226.133333c-25.6 0-51.2 8.533333-68.266666 29.866666S128 204.8 128 230.4v567.466667c0 25.6 8.533333 51.2 29.866667 68.266666 17.066667 17.066667 42.666667 29.866667 68.266666 29.866667h567.466667c25.6 0 51.2-8.533333 68.266667-29.866667 17.066667-17.066667 29.866667-42.666667 29.866666-68.266666V226.133333c0-25.6-8.533333-46.933333-29.866666-64zM366.933333 814.933333H226.133333c-4.266667 0-8.533333 0-12.8-4.266666-4.266667-4.266667-4.266667-8.533333-4.266666-12.8V226.133333c0-4.266667 0-8.533333 4.266666-12.8 4.266667-4.266667 8.533333-4.266667 12.8-4.266666h140.8v605.866666z m448-17.066666c0 4.266667 0 8.533333-4.266666 12.8-4.266667 4.266667-8.533333 4.266667-12.8 4.266666h-354.133334V209.066667h354.133334c4.266667 0 8.533333 0 12.8 4.266666 4.266667 4.266667 4.266667 8.533333 4.266666 12.8v571.733334z" fill="currentColor"></path></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm5-2v16"/><path d="m15 10l-2 2l2 2"/></g></svg>
                         </button>
                     </template>
 
@@ -31,8 +31,7 @@
                 <!-- Expand button (only visible when collapsed) -->
                 <div v-if="collapsed" class="expand-btn-container">
                     <button class="expand-btn" @click="toggleSidebar" title="Étendre le menu">
-                           <svg data-v-db1e17da="" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" name="LeftBar" width="20" height="20" viewBox="0 0 1024 1024" class="iconify"><path d="M861.866667 162.133333c-17.066667-17.066667-42.666667-29.866667-68.266667-29.866666H226.133333c-25.6 0-51.2 8.533333-68.266666 29.866666S128 204.8 128 230.4v567.466667c0 25.6 8.533333 51.2 29.866667 68.266666 17.066667 17.066667 42.666667 29.866667 68.266666 29.866667h567.466667c25.6 0 51.2-8.533333 68.266667-29.866667 17.066667-17.066667 29.866667-42.666667 29.866666-68.266666V226.133333c0-25.6-8.533333-46.933333-29.866666-64zM366.933333 814.933333H226.133333c-4.266667 0-8.533333 0-12.8-4.266666-4.266667-4.266667-4.266667-8.533333-4.266666-12.8V226.133333c0-4.266667 0-8.533333 4.266666-12.8 4.266667-4.266667 8.533333-4.266667 12.8-4.266666h140.8v605.866666z m448-17.066666c0 4.266667 0 8.533333-4.266666 12.8-4.266667 4.266667-8.533333 4.266667-12.8 4.266666h-354.133334V209.066667h354.133334c4.266667 0 8.533333 0 12.8 4.266666 4.266667 4.266667 4.266667 8.533333 4.266666 12.8v571.733334z" fill="currentColor"></path></svg>
-                    </button>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm11-2v16"/><path d="m9 10l2 2l-2 2"/></g></svg>                    </button>
                 </div>
             </div>
 
@@ -238,12 +237,6 @@ const menuItems = computed(() => {
                 icon: "pi pi-file-plus",
                 command: () => router.push("/agent_antenne/dossiers/create"),
                 route: "/agent_antenne/dossiers/create",
-            },
-            {
-                label: "Statistiques",
-                icon: "pi pi-chart-bar",
-                command: () => router.push("/agent_antenne/statistics"),
-                route: "/agent_antenne/statistics",
             }
         );
     } else if (role === "AGENT_GUC") {
@@ -253,18 +246,6 @@ const menuItems = computed(() => {
                 icon: "pi pi-folder-open",
                 command: () => router.push("/agent_guc/dossiers"),
                 route: "/agent_guc/dossiers",
-            },
-            {
-                label: "Transmission",
-                icon: "pi pi-send",
-                command: () => router.push("/agent_guc/transmission"),
-                route: "/agent_guc/transmission",
-            },
-            {
-                label: "Rapports",
-                icon: "pi pi-file-pdf",
-                command: () => router.push("/agent_guc/reports"),
-                route: "/agent_guc/reports",
             }
         );
     } else if (role === "AGENT_COMMISSION") {

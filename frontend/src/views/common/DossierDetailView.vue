@@ -1,10 +1,5 @@
 <template>
   <div class="dossier-detail-container">
-    <UserInfoHeader 
-      search-placeholder="Rechercher..."
-      @search="handleSearch"
-    />
-
     <!-- Loading State -->
     <div v-if="loading" class="loading-container">
       <ProgressSpinner size="50px" />
@@ -42,14 +37,14 @@
           <!-- Agent Antenne Actions -->
           <template v-if="userRole === 'AGENT_ANTENNE'">
             <Button 
-              v-if="dossierDetail.permissions?.peutEtreEnvoye && canSendToGUC()"
+              v-if="canEdit()"
               label="Envoyer au GUC" 
               icon="pi pi-send" 
               @click="confirmSendToGUC"
               class="p-button-success"
             />
             <Button 
-              v-if="dossierDetail.permissions?.peutEtreSupprime"
+              v-if="canDelete()"
               label="Supprimer" 
               icon="pi pi-trash" 
               @click="confirmDelete"
@@ -67,18 +62,18 @@
             />
             
             <SplitButton 
-              v-if="dossierDetail.availableActions && dossierDetail.availableActions.length > 0"
-              :model="getActionMenuItems()" 
+              v-if="hasGUCActions()"
+              :model="getGUCActionMenuItems()" 
               class="action-split-btn"
-              @click="handlePrimaryAction"
+              @click="handlePrimaryGUCAction"
             >
-              {{ getPrimaryActionLabel() }}
+              {{ getPrimaryGUCActionLabel() }}
             </SplitButton>
           </template>
         </div>
       </div>
 
-      <!-- Dossier Summary with role-specific information -->
+      <!-- Dossier Summary -->
       <div class="dossier-summary component-card">
         <div class="summary-header">
           <div class="header-left">
@@ -182,7 +177,7 @@
             icon="pi pi-file-edit" 
             @click="goToDocumentFilling"
             class="p-button-success p-button-lg"
-            :disabled="!dossierDetail.permissions?.peutEtreModifie"
+            :disabled="!canEdit()"
           />
           <p class="forms-help">
             Cliquez pour accéder à l'interface de remplissage des documents et formulaires requis.
@@ -257,7 +252,7 @@
               label="Gérer les documents" 
               icon="pi pi-external-link" 
               @click="goToDocumentFilling"
-              :disabled="!dossierDetail.permissions?.peutEtreModifie"
+              :disabled="!canEdit()"
               class="p-button-outlined p-button-sm"
             />
             <Button 
@@ -306,10 +301,9 @@
                 @click="downloadFile(file)"
                 class="p-button-outlined p-button-sm"
                 v-tooltip.top="'Télécharger'"
-                :disabled="!file.canDownload"
               />
               <Button 
-                v-if="userRole === 'AGENT_ANTENNE' && file.canDelete"
+                v-if="canDeleteFile(file)"
                 icon="pi pi-trash" 
                 @click="confirmDeleteFile(file)"
                 class="p-button-danger p-button-outlined p-button-sm"
@@ -320,7 +314,7 @@
         </div>
       </div>
 
-      <!-- Notes Section (Enhanced for GUC) -->
+      <!-- Notes Section -->
       <div class="notes-section component-card">
         <div class="section-header">
           <h3><i class="pi pi-comments"></i> Notes et Communications</h3>
@@ -460,7 +454,6 @@ import AuthService from '@/services/AuthService';
 import ApiService from '@/services/ApiService';
 
 // Import components
-import UserInfoHeader from '@/components/UserInfoHeader.vue';
 import ActionDialogs from '@/components/dossiers/ActionDialogs.vue';
 import AddNoteDialog from '@/components/dossiers/AddNoteDialog.vue';
 import FormDataViewerDialog from '@/components/dossiers/FormDataViewerDialog.vue';
@@ -526,6 +519,73 @@ const sortedNotes = computed(() => {
     new Date(b.dateCreation) - new Date(a.dateCreation)
   );
 });
+
+// Permission methods
+function canEdit() {
+  const status = dossierDetail.value?.dossier?.statut;
+  return userRole.value === 'AGENT_ANTENNE' && 
+         (status === 'DRAFT' || status === 'Brouillon' || status === 'RETURNED_FOR_COMPLETION' || status === 'Retourné pour complétion');
+}
+
+function canDelete() {
+  const status = dossierDetail.value?.dossier?.statut;
+  return userRole.value === 'AGENT_ANTENNE' && 
+         (status === 'DRAFT' || status === 'Brouillon');
+}
+
+function canDeleteFile(file) {
+  return userRole.value === 'AGENT_ANTENNE' && canEdit();
+}
+
+function hasGUCActions() {
+  if (userRole.value !== 'AGENT_GUC') return false;
+  const status = dossierDetail.value?.dossier?.statut;
+  return status === 'SUBMITTED' || status === 'Soumis au GUC' || status === 'IN_REVIEW' || status === 'En cours d\'examen';
+}
+
+function getGUCActionMenuItems() {
+  const items = [];
+  const status = dossierDetail.value?.dossier?.statut;
+  
+  if (status === 'SUBMITTED' || status === 'Soumis au GUC') {
+    items.push({
+      label: 'Envoyer à la Commission',
+      icon: 'pi pi-forward',
+      command: () => showActionDialog('sendToCommission')
+    });
+  }
+  
+  if (status === 'SUBMITTED' || status === 'Soumis au GUC' || status === 'IN_REVIEW' || status === 'En cours d\'examen') {
+    items.push({
+      label: 'Retourner à l\'Antenne',
+      icon: 'pi pi-undo',
+      command: () => showActionDialog('returnToAntenne')
+    });
+    
+    items.push({
+      label: 'Rejeter',
+      icon: 'pi pi-times-circle',
+      command: () => showActionDialog('reject')
+    });
+  }
+  
+  return items;
+}
+
+function getPrimaryGUCActionLabel() {
+  const status = dossierDetail.value?.dossier?.statut;
+  if (status === 'SUBMITTED' || status === 'Soumis au GUC') {
+    return 'Commission';
+  }
+  return 'Actions';
+}
+
+function handlePrimaryGUCAction() {
+  const status = dossierDetail.value?.dossier?.statut;
+  if (status === 'SUBMITTED' || status === 'Soumis au GUC') {
+    showActionDialog('sendToCommission');
+  }
+}
 
 // Methods
 onMounted(() => {
@@ -594,12 +654,6 @@ function getWorkflowLocationText() {
   }
 }
 
-function canSendToGUC() {
-  return dossierDetail.value?.permissions?.peutEtreEnvoye && 
-         (dossierDetail.value.dossier.statut === 'Phase Antenne' || 
-          dossierDetail.value.dossier.statut === 'DRAFT');
-}
-
 // Action methods
 function confirmSendToGUC() {
   actionDialogs.value.sendToGUC = {
@@ -634,52 +688,6 @@ function showAddNoteDialog() {
   };
 }
 
-function getActionMenuItems() {
-  const items = [];
-  const actions = dossierDetail.value?.availableActions || [];
-  
-  if (actions.find(a => a.action === 'send_to_commission')) {
-    items.push({
-      label: 'Envoyer à la Commission',
-      icon: 'pi pi-forward',
-      command: () => showActionDialog('sendToCommission')
-    });
-  }
-  
-  if (actions.find(a => a.action === 'return_to_antenne')) {
-    items.push({
-      label: 'Retourner à l\'Antenne',
-      icon: 'pi pi-undo',
-      command: () => showActionDialog('returnToAntenne')
-    });
-  }
-  
-  if (actions.find(a => a.action === 'reject')) {
-    items.push({
-      label: 'Rejeter',
-      icon: 'pi pi-times-circle',
-      command: () => showActionDialog('reject')
-    });
-  }
-  
-  return items;
-}
-
-function getPrimaryActionLabel() {
-  const actions = dossierDetail.value?.availableActions || [];
-  if (actions.find(a => a.action === 'send_to_commission')) {
-    return 'Commission';
-  }
-  return 'Actions';
-}
-
-function handlePrimaryAction() {
-  const actions = dossierDetail.value?.availableActions || [];
-  if (actions.find(a => a.action === 'send_to_commission')) {
-    showActionDialog('sendToCommission');
-  }
-}
-
 function showActionDialog(action) {
   actionDialogs.value[action] = {
     visible: true,
@@ -694,7 +702,7 @@ function showActionDialog(action) {
 
 async function handleActionConfirmed(actionData) {
   try {
-    const { action, dossier, data } = actionData;
+    const { action, dossier, file, data } = actionData;
     
     let endpoint = '';
     let payload = {};
@@ -731,16 +739,20 @@ async function handleActionConfirmed(actionData) {
         endpoint = `/dossiers/${dossier.id}`;
         payload = { motif: data.comment };
         break;
+      case 'deleteFile':
+        endpoint = `/dossiers/${dossierId.value}/documents/piece-jointe/${file.id}`;
+        payload = {};
+        break;
     }
     
-    const method = action === 'delete' ? 'delete' : 'post';
+    const method = (action === 'delete' || action === 'deleteFile') ? 'delete' : 'post';
     const response = await ApiService[method](endpoint, payload);
     
-    if (response.success) {
+    if (response.success || action === 'deleteFile') {
       toast.add({
         severity: 'success',
         summary: 'Succès',
-        detail: response.message,
+        detail: response.message || 'Action effectuée avec succès',
         life: 4000
       });
       
@@ -788,7 +800,6 @@ function viewFormData(form) {
 }
 
 function replyToNote(note) {
-  // Implementation for replying to a note
   console.log('Reply to note:', note);
 }
 
@@ -868,10 +879,6 @@ async function downloadAllDocuments() {
   }
 }
 
-function handleSearch(query) {
-  console.log('Search:', query);
-}
-
 // Utility functions
 function getStatusSeverity(status) {
   const severityMap = {
@@ -880,11 +887,16 @@ function getStatusSeverity(status) {
     'Commission Technique': 'secondary',
     'Réalisation': 'success',
     'DRAFT': 'secondary',
+    'Brouillon': 'secondary',
     'SUBMITTED': 'info',
+    'Soumis au GUC': 'info',
     'IN_REVIEW': 'warning',
+    'En cours d\'examen': 'warning',
     'APPROVED': 'success',
     'REJECTED': 'danger',
-    'COMPLETED': 'success'
+    'COMPLETED': 'success',
+    'RETURNED_FOR_COMPLETION': 'warning',
+    'Retourné pour complétion': 'warning'
   };
   return severityMap[status] || 'info';
 }
@@ -955,8 +967,7 @@ function formatFileSize(bytes) {
 </script>
 
 <style scoped>
-/* Copy base styles from original and add new ones for role-specific features */
-
+/* Copy all the styles from the original component - keeping the same styling */
 .dossier-detail-container {
   max-width: 1200px;
   margin: 0 auto;
