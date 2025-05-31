@@ -26,14 +26,15 @@ public class SecurityConfiguration {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                
+
                         // Allow authentication endpoints without authentication
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/agent_antenne/**").permitAll()
+                        .requestMatchers("/api/agent_antenne/**").hasAnyRole("AGENT_ANTENNE")
                         .requestMatchers("/api/agent_guc/**").hasRole("AGENT_GUC")
                         .requestMatchers("/api/agent_commission/**").hasRole("AGENT_COMMISSION")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-
+                        // Common dossier endpoints - accessible by multiple roles
+                        .requestMatchers("/api/dossiers/**").hasAnyRole("AGENT_ANTENNE", "AGENT_GUC", "ADMIN")
                         // Any other request requires authentication
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

@@ -1,13 +1,25 @@
 <template>
   <div class="dossier-list-container">
-    <!-- Header with actions -->
+    <!-- Header with role-specific title and actions -->
     <div class="list-header">
       <div class="header-info">
-        <h1><i class="pi pi-folder-open"></i> Mes Dossiers</h1>
-        <p v-if="dossiersData">{{ dossiersData.totalCount }} dossier(s) - CDA: {{ dossiersData.currentUserCDA }}</p>
+        <h1>
+          <i class="pi pi-folder-open"></i> 
+          {{ getPageTitle() }}
+        </h1>
+        <p v-if="dossiersData">
+          {{ dossiersData.totalCount }} dossier(s) 
+          <span v-if="dossiersData.currentUserRole === 'AGENT_ANTENNE'">
+            - CDA: {{ dossiersData.currentUserCDA }}
+          </span>
+          <span v-else-if="dossiersData.currentUserRole === 'AGENT_GUC'">
+            - Tous les dossiers soumis
+          </span>
+        </p>
       </div>
       <div class="header-actions">
         <Button 
+          v-if="userRole === 'AGENT_ANTENNE'"
           label="Nouveau Dossier" 
           icon="pi pi-plus" 
           @click="navigateToCreate"
@@ -20,10 +32,43 @@
           :loading="loading"
           class="p-button-outlined"
         />
+        <Button 
+          v-if="userRole === 'AGENT_GUC'"
+          label="Export Excel" 
+          icon="pi pi-file-excel" 
+          @click="exportToExcel"
+          class="p-button-outlined"
+        />
       </div>
     </div>
 
-    <!-- Filters with Search -->
+    <!-- Role-specific statistics -->
+    <div v-if="dossiersData?.statistics" class="statistics-section">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">{{ dossiersData.statistics.totalDossiers }}</div>
+          <div class="stat-label">Total dossiers</div>
+        </div>
+        <div class="stat-card" v-if="userRole === 'AGENT_ANTENNE'">
+          <div class="stat-value">{{ dossiersData.statistics.dossiersEnCours }}</div>
+          <div class="stat-label">En cours</div>
+        </div>
+        <div class="stat-card" v-if="userRole === 'AGENT_GUC'">
+          <div class="stat-value">{{ dossiersData.statistics.dossiersAttenteTraitement }}</div>
+          <div class="stat-label">En attente traitement</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">{{ dossiersData.statistics.dossiersApprouves }}</div>
+          <div class="stat-label">Approuvés</div>
+        </div>
+        <div class="stat-card warning" v-if="dossiersData.statistics.dossiersEnRetard > 0">
+          <div class="stat-value">{{ dossiersData.statistics.dossiersEnRetard }}</div>
+          <div class="stat-label">En retard</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Enhanced filters with role-specific options -->
     <div class="filters-section">
       <div class="filters-grid">
         <!-- Search Input -->
@@ -53,7 +98,7 @@
           <label>STATUT</label>
           <Select 
             v-model="filters.statut" 
-            :options="statutOptions"
+            :options="getStatusOptions()"
             optionLabel="label"
             optionValue="value"
             placeholder="Tous les statuts"
@@ -78,7 +123,35 @@
           />
         </div>
 
+        <!-- Antenne Filter (GUC only) -->
+        <div v-if="userRole === 'AGENT_GUC'" class="filter-group">
+          <label>ANTENNE</label>
+          <Select 
+            v-model="filters.antenneId" 
+            :options="antenneOptions"
+            optionLabel="designation"
+            optionValue="id"
+            placeholder="Toutes les antennes"
+            @change="applyFilters"
+            class="filter-select"
+            :clearable="true"
+          />
+        </div>
 
+        <!-- Priority Filter (GUC only) -->
+        <div v-if="userRole === 'AGENT_GUC'" class="filter-group">
+          <label>PRIORITÉ</label>
+          <Select 
+            v-model="filters.priorite" 
+            :options="prioriteOptions"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Toutes priorités"
+            @change="applyFilters"
+            class="filter-select"
+            :clearable="true"
+          />
+        </div>
 
         <!-- Clear Filters -->
         <div class="filter-actions">
@@ -104,7 +177,8 @@
         <i class="pi pi-folder-open empty-icon"></i>
         <h3>Aucun dossier trouvé</h3>
         <p v-if="hasActiveFilters">Aucun dossier ne correspond à vos critères de recherche et filtres.</p>
-        <p v-else>Vous n'avez pas encore créé de dossier.</p>
+        <p v-else-if="userRole === 'AGENT_ANTENNE'">Vous n'avez pas encore créé de dossier.</p>
+        <p v-else-if="userRole === 'AGENT_GUC'">Aucun dossier n'a encore été soumis au GUC.</p>
         <div class="empty-actions">
           <Button 
             v-if="hasActiveFilters"
@@ -114,6 +188,7 @@
             class="p-button-outlined"
           />
           <Button 
+            v-if="userRole === 'AGENT_ANTENNE'"
             label="Créer mon premier dossier" 
             icon="pi pi-plus" 
             @click="navigateToCreate"
@@ -137,6 +212,7 @@
               <i class="pi pi-sort-alt sort-icon"></i>
             </th>
             <th class="col-project">Type de Projet</th>
+            <th v-if="userRole === 'AGENT_GUC'" class="col-antenne">Antenne</th>
             <th class="col-status">
               Statut
               <i class="pi pi-sort-alt sort-icon"></i>
@@ -145,6 +221,7 @@
               Avancement
               <i class="pi pi-sort-alt sort-icon"></i>
             </th>
+            <th v-if="userRole === 'AGENT_GUC'" class="col-priority">Priorité</th>
             <th class="col-details">Délais</th>
             <th class="col-actions">Actions</th>
           </tr>
@@ -184,10 +261,18 @@
             <td class="col-project">
               <div class="project-cell">
                 <div class="project-type">{{ dossier.sousRubriqueDesignation }}</div>
-                <div class="project-amount" v-if="dossier.montantDemande">
+                <div class="project-amount" v-if="dossier.montantSubvention">
                   <i class="pi pi-money-bill"></i>
-                  {{ formatCurrency(dossier.montantDemande) }}
+                  {{ formatCurrency(dossier.montantSubvention) }}
                 </div>
+              </div>
+            </td>
+
+            <!-- Antenne Column (GUC only) -->
+            <td v-if="userRole === 'AGENT_GUC'" class="col-antenne">
+              <div class="antenne-cell">
+                <div class="antenne-name">{{ dossier.antenneDesignation }}</div>
+                <div class="cda-name">{{ dossier.cdaNom }}</div>
               </div>
             </td>
 
@@ -205,7 +290,7 @@
               <div class="progress-cell">
                 <div class="progress-info">
                   <span class="progress-text">{{ dossier.formsCompleted }}/{{ dossier.totalForms }} formulaires</span>
-                  <span class="progress-percentage">{{ dossier.completionPercentage }}%</span>
+                  <span class="progress-percentage">{{ Math.round(dossier.completionPercentage) }}%</span>
                 </div>
                 <ProgressBar 
                   :value="dossier.completionPercentage" 
@@ -217,6 +302,19 @@
                     'progress-low': dossier.completionPercentage < 50
                   }"
                 />
+              </div>
+            </td>
+
+            <!-- Priority Column (GUC only) -->
+            <td v-if="userRole === 'AGENT_GUC'" class="col-priority">
+              <Tag 
+                :value="dossier.priorite || 'NORMALE'" 
+                :severity="getPrioritySeverity(dossier.priorite)"
+                class="priority-tag"
+              />
+              <div v-if="dossier.notesCount > 0" class="notes-indicator">
+                <i class="pi pi-comment"></i>
+                <span>{{ dossier.notesCount }}</span>
               </div>
             </td>
 
@@ -246,29 +344,51 @@
                   v-tooltip.top="'Voir détails'"
                 />
                 
-                <Button 
-                  v-if="dossier.peutEtreModifie && dossier.completionPercentage < 100" 
-                  icon="pi pi-pencil" 
-                  @click="continueDossier(dossier.id)"
-                  class="p-button-sm action-btn btn-edit"
-                  v-tooltip.top="'Continuer'"
-                />
+                <!-- Agent Antenne specific actions -->
+                <template v-if="userRole === 'AGENT_ANTENNE'">
+                  <Button 
+                    v-if="dossier.permissions?.peutEtreModifie && dossier.completionPercentage < 100" 
+                    icon="pi pi-pencil" 
+                    @click="continueDossier(dossier.id)"
+                    class="p-button-sm action-btn btn-edit"
+                    v-tooltip.top="'Continuer'"
+                  />
 
-                <Button 
-                  v-if="dossier.peutEtreEnvoye" 
-                  icon="pi pi-send" 
-                  @click="confirmSendToGUC(dossier)"
-                  class="p-button-success p-button-sm action-btn"
-                  v-tooltip.top="'Envoyer au GUC'"
-                />
+                  <Button 
+                    v-if="dossier.permissions?.peutEtreEnvoye" 
+                    icon="pi pi-send" 
+                    @click="confirmSendToGUC(dossier)"
+                    class="p-button-success p-button-sm action-btn"
+                    v-tooltip.top="'Envoyer au GUC'"
+                  />
 
-                <Button 
-                  v-if="dossier.peutEtreSupprime" 
-                  icon="pi pi-trash" 
-                  @click="confirmDeleteDossier(dossier)"
-                  class="p-button-danger p-button-outlined p-button-sm action-btn"
-                  v-tooltip.top="'Supprimer'"
-                />
+                  <Button 
+                    v-if="dossier.permissions?.peutEtreSupprime" 
+                    icon="pi pi-trash" 
+                    @click="confirmDeleteDossier(dossier)"
+                    class="p-button-danger p-button-outlined p-button-sm action-btn"
+                    v-tooltip.top="'Supprimer'"
+                  />
+                </template>
+
+                <!-- Agent GUC specific actions -->
+                <template v-if="userRole === 'AGENT_GUC'">
+                  <Button 
+                    icon="pi pi-comment" 
+                    @click="showAddNoteDialog(dossier)"
+                    class="p-button-info p-button-sm action-btn"
+                    v-tooltip.top="'Ajouter note'"
+                  />
+
+                  <SplitButton 
+                    v-if="dossier.availableActions && dossier.availableActions.length > 0"
+                    :model="getActionMenuItems(dossier)" 
+                    class="p-button-sm action-split-btn"
+                    @click="handlePrimaryAction(dossier)"
+                  >
+                    {{ getPrimaryActionLabel(dossier) }}
+                  </SplitButton>
+                </template>
               </div>
             </td>
           </tr>
@@ -287,119 +407,44 @@
       />
     </div>
 
-    <!-- Delete Confirmation Dialog -->
-    <Dialog 
-      v-model:visible="deleteDialog.visible" 
-      modal 
-      header="Confirmer la suppression"
-      :style="{ width: '450px' }"
-    >
-      <div class="delete-confirmation">
-        <i class="pi pi-exclamation-triangle warning-icon"></i>
-        <div class="confirmation-text">
-          <p>Êtes-vous sûr de vouloir supprimer ce dossier ?</p>
-          <div class="dossier-summary">
-            <strong>{{ deleteDialog.dossier?.reference }}</strong><br>
-            {{ deleteDialog.dossier?.agriculteurPrenom }} {{ deleteDialog.dossier?.agriculteurNom }}
-          </div>
-          <p class="warning-text">Cette action est irréversible.</p>
-        </div>
-      </div>
-      
-      <div class="delete-comment">
-        <label for="deleteComment">COMMENTAIRE (OPTIONNEL)</label>
-        <Textarea 
-          id="deleteComment"
-          v-model="deleteDialog.comment" 
-          rows="3" 
-          placeholder="Raison de la suppression..."
-        />
-      </div>
+    <!-- Action Dialogs -->
+    <ActionDialogs 
+      :dialogs="actionDialogs"
+      @action-confirmed="handleActionConfirmed"
+      @dialog-closed="handleDialogClosed"
+    />
 
-      <template #footer>
-        <Button 
-          label="Annuler" 
-          icon="pi pi-times" 
-          @click="deleteDialog.visible = false"
-          class="p-button-outlined"
-        />
-        <Button 
-          label="Supprimer" 
-          icon="pi pi-trash" 
-          @click="deleteDossier"
-          class="p-button-danger"
-          :loading="deleteDialog.loading"
-        />
-      </template>
-    </Dialog>
-
-    <!-- Send to GUC Confirmation Dialog -->
-    <Dialog 
-      v-model:visible="sendDialog.visible" 
-      modal 
-      header="Envoyer au GUC"
-      :style="{ width: '450px' }"
-    >
-      <div class="send-confirmation">
-        <i class="pi pi-send confirmation-icon"></i>
-        <div class="confirmation-text">
-          <p>Confirmer l'envoi de ce dossier au Guichet Unique Central ?</p>
-          <div class="dossier-summary">
-            <strong>{{ sendDialog.dossier?.reference }}</strong><br>
-            {{ sendDialog.dossier?.agriculteurPrenom }} {{ sendDialog.dossier?.agriculteurNom }}<br>
-            <small>Complété à {{ sendDialog.dossier?.completionPercentage }}%</small>
-          </div>
-          <p class="info-text">Une fois envoyé, le dossier ne pourra plus être modifié.</p>
-        </div>
-      </div>
-      
-      <div class="send-comment">
-        <label for="sendComment">COMMENTAIRE (OPTIONNEL)</label>
-        <Textarea 
-          id="sendComment"
-          v-model="sendDialog.comment" 
-          rows="3" 
-          placeholder="Commentaires pour le GUC..."
-        />
-      </div>
-
-      <template #footer>
-        <Button 
-          label="Annuler" 
-          icon="pi pi-times" 
-          @click="sendDialog.visible = false"
-          class="p-button-outlined"
-        />
-        <Button 
-          label="Envoyer" 
-          icon="pi pi-send" 
-          @click="sendDossierToGUC"
-          class="p-button-success btn-primary"
-          :loading="sendDialog.loading"
-        />
-      </template>
-    </Dialog>
+    <!-- Add Note Dialog (GUC) -->
+    <AddNoteDialog 
+      v-model:visible="addNoteDialog.visible"
+      :dossier="addNoteDialog.dossier"
+      @note-added="handleNoteAdded"
+    />
 
     <Toast />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
+import AuthService from '@/services/AuthService';
 import ApiService from '@/services/ApiService';
+
+// Import child components
+import ActionDialogs from '@/components/dossiers/ActionDialogs.vue';
+import AddNoteDialog from '@/components/dossiers/AddNoteDialog.vue';
 
 // PrimeVue components
 import Button from 'primevue/button';
+import SplitButton from 'primevue/splitbutton';
 import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
 import ProgressSpinner from 'primevue/progressspinner';
 import ProgressBar from 'primevue/progressbar';
 import Tag from 'primevue/tag';
 import Paginator from 'primevue/paginator';
-import Dialog from 'primevue/dialog';
-import Textarea from 'primevue/textarea';
 import Toast from 'primevue/toast';
 
 const router = useRouter();
@@ -410,6 +455,7 @@ const loading = ref(false);
 const dossiers = ref([]);
 const dossiersData = ref(null);
 const searchTerm = ref('');
+const userRole = ref(AuthService.getCurrentUser()?.role || '');
 
 // Pagination
 const currentPage = ref(0);
@@ -419,51 +465,83 @@ const totalRecords = computed(() => dossiersData.value?.totalCount || 0);
 // Filters
 const filters = ref({
   statut: null,
-  sousRubriqueId: null
+  sousRubriqueId: null,
+  antenneId: null,
+  priorite: null
 });
 
-const statutOptions = ref([
-  { label: 'Brouillon', value: 'DRAFT' },
-  { label: 'Soumis', value: 'SUBMITTED' },
-  { label: 'En révision', value: 'IN_REVIEW' },
-  { label: 'Approuvé', value: 'APPROVED' },
-  { label: 'Rejeté', value: 'REJECTED' },
-  { label: 'Terminé', value: 'COMPLETED' },
-  { label: 'Annulé', value: 'CANCELLED' },
-  { label: 'Retourné pour complétion', value: 'RETURNED_FOR_COMPLETION' },
-  { label: 'En attente de correction', value: 'PENDING_CORRECTION' }
+// Filter options
+const sousRubriqueOptions = ref([]);
+const antenneOptions = ref([]);
+const prioriteOptions = ref([
+  { label: 'Haute', value: 'HAUTE' },
+  { label: 'Normale', value: 'NORMALE' },
+  { label: 'Faible', value: 'FAIBLE' }
 ]);
 
-const sousRubriqueOptions = ref([]);
+// Dialogs
+const actionDialogs = ref({
+  sendToGUC: { visible: false, dossier: null, loading: false, comment: '' },
+  sendToCommission: { visible: false, dossier: null, loading: false, comment: '', priority: 'NORMALE' },
+  returnToAntenne: { visible: false, dossier: null, loading: false, comment: '', reasons: [] },
+  reject: { visible: false, dossier: null, loading: false, comment: '', definitive: false },
+  delete: { visible: false, dossier: null, loading: false, comment: '' }
+});
 
-// Computed for checking if there are active filters
+const addNoteDialog = ref({
+  visible: false,
+  dossier: null
+});
+
+// Computed
 const hasActiveFilters = computed(() => {
   const hasSearch = searchTerm.value && searchTerm.value.trim();
   const hasStatus = filters.value.statut;
   const hasSubRubrique = filters.value.sousRubriqueId;
+  const hasAntenne = filters.value.antenneId;
+  const hasPriority = filters.value.priorite;
   
-  return hasSearch || hasStatus || hasSubRubrique;
-});
-
-// Dialogs
-const deleteDialog = ref({
-  visible: false,
-  dossier: null,
-  comment: '',
-  loading: false
-});
-
-const sendDialog = ref({
-  visible: false,
-  dossier: null,
-  comment: '',
-  loading: false
+  return hasSearch || hasStatus || hasSubRubrique || hasAntenne || hasPriority;
 });
 
 // Methods
 onMounted(() => {
   loadDossiers();
+  loadFilterOptions();
 });
+
+function getPageTitle() {
+  switch (userRole.value) {
+    case 'AGENT_ANTENNE':
+      return 'Mes Dossiers';
+    case 'AGENT_GUC':
+      return 'Dossiers - Guichet Unique Central';
+    case 'ADMIN':
+      return 'Tous les Dossiers';
+    default:
+      return 'Dossiers';
+  }
+}
+
+function getStatusOptions() {
+  const commonOptions = [
+    { label: 'Soumis', value: 'SUBMITTED' },
+    { label: 'En révision', value: 'IN_REVIEW' },
+    { label: 'Approuvé', value: 'APPROVED' },
+    { label: 'Rejeté', value: 'REJECTED' },
+    { label: 'Terminé', value: 'COMPLETED' }
+  ];
+
+  if (userRole.value === 'AGENT_ANTENNE') {
+    return [
+      { label: 'Brouillon', value: 'DRAFT' },
+      { label: 'Retourné pour complétion', value: 'RETURNED_FOR_COMPLETION' },
+      ...commonOptions
+    ];
+  }
+
+  return commonOptions;
+}
 
 async function loadDossiers() {
   try {
@@ -476,32 +554,19 @@ async function loadDossiers() {
       sortDirection: 'DESC'
     };
 
-    // Add search term if provided
-    if (searchTerm.value && searchTerm.value.trim()) {
-      params.searchTerm = searchTerm.value.trim();
-    }
-
-    // Add status filter if provided
-    if (filters.value.statut) {
-      params.statut = filters.value.statut;
-    }
-
-    // Add project type filter if provided
-    if (filters.value.sousRubriqueId) {
-      params.sousRubriqueId = filters.value.sousRubriqueId;
-    }
+    // Add search and filters
+    if (searchTerm.value?.trim()) params.searchTerm = searchTerm.value.trim();
+    if (filters.value.statut) params.statut = filters.value.statut;
+    if (filters.value.sousRubriqueId) params.sousRubriqueId = filters.value.sousRubriqueId;
+    if (filters.value.antenneId) params.antenneId = filters.value.antenneId;
+    if (filters.value.priorite) params.priorite = filters.value.priorite;
 
     console.log('Loading dossiers with params:', params);
 
-    const response = await ApiService.get('/agent_antenne/dossiers', params);
+    const response = await ApiService.get('/dossiers', params);
     
     dossiersData.value = response;
     dossiers.value = response.dossiers || [];
-    
-    // Load sous-rubriques for filter if not already loaded
-    if (sousRubriqueOptions.value.length === 0) {
-      await loadSousRubriques();
-    }
     
   } catch (error) {
     console.error('Erreur lors du chargement des dossiers:', error);
@@ -516,12 +581,13 @@ async function loadDossiers() {
   }
 }
 
-async function loadSousRubriques() {
+async function loadFilterOptions() {
   try {
-    const response = await ApiService.get('/agent_antenne/dossiers/initialization-data');
-    if (response.rubriques) {
+    // Load sous-rubriques for filter
+    const initResponse = await ApiService.get('/agent_antenne/dossiers/initialization-data');
+    if (initResponse.rubriques) {
       const allSousRubriques = [];
-      response.rubriques.forEach(rubrique => {
+      initResponse.rubriques.forEach(rubrique => {
         rubrique.sousRubriques.forEach(sr => {
           allSousRubriques.push({
             id: sr.id,
@@ -531,12 +597,15 @@ async function loadSousRubriques() {
       });
       sousRubriqueOptions.value = allSousRubriques;
     }
+
+    // Load antennes for GUC filter
+    if (userRole.value === 'AGENT_GUC') {
+      antenneOptions.value = initResponse.antennes || [];
+    }
   } catch (error) {
-    console.error('Erreur lors du chargement des sous-rubriques:', error);
+    console.error('Erreur lors du chargement des options de filtre:', error);
   }
 }
-
-
 
 function handleSearch() {
   currentPage.value = 0;
@@ -550,17 +619,17 @@ function clearSearch() {
 
 function applyFilters() {
   currentPage.value = 0;
-  console.log('Applying filters:', filters.value);
   loadDossiers();
 }
 
 function clearFilters() {
   filters.value = {
     statut: null,
-    sousRubriqueId: null
+    sousRubriqueId: null,
+    antenneId: null,
+    priorite: null
   };
   searchTerm.value = '';
-  console.log('Filters cleared');
   applyFilters();
 }
 
@@ -570,98 +639,231 @@ function onPageChange(event) {
   loadDossiers();
 }
 
+// Navigation methods
 function navigateToCreate() {
   router.push('/agent_antenne/dossiers/create');
 }
 
 function viewDossierDetail(dossierId) {
-  router.push(`/agent_antenne/dossiers/${dossierId}`);
+  const route = userRole.value === 'AGENT_ANTENNE' 
+    ? `/agent_antenne/dossiers/${dossierId}`
+    : `/agent_guc/dossiers/${dossierId}`;
+  router.push(route);
 }
 
 function continueDossier(dossierId) {
   router.push(`/agent_antenne/dossiers/${dossierId}/forms`);
 }
 
-function confirmDeleteDossier(dossier) {
-  deleteDialog.value = {
-    visible: true,
-    dossier: dossier,
-    comment: '',
-    loading: false
-  };
-}
-
-async function deleteDossier() {
-  try {
-    deleteDialog.value.loading = true;
-    
-    await ApiService.delete(`/agent_antenne/dossiers/${deleteDialog.value.dossier.id}`, {
-      comment: deleteDialog.value.comment
-    });
-    
-    toast.add({
-      severity: 'success',
-      summary: 'Succès',
-      detail: 'Dossier supprimé avec succès',
-      life: 3000
-    });
-    
-    deleteDialog.value.visible = false;
-    loadDossiers();
-    
-  } catch (error) {
-    console.error('Erreur lors de la suppression:', error);
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: 'Impossible de supprimer le dossier',
-      life: 3000
-    });
-  } finally {
-    deleteDialog.value.loading = false;
-  }
-}
-
+// Action methods
 function confirmSendToGUC(dossier) {
-  sendDialog.value = {
+  actionDialogs.value.sendToGUC = {
     visible: true,
     dossier: dossier,
-    comment: '',
-    loading: false
+    loading: false,
+    comment: ''
   };
 }
 
-async function sendDossierToGUC() {
-  try {
-    sendDialog.value.loading = true;
-    
-    await ApiService.post(`/agent_antenne/dossiers/${sendDialog.value.dossier.id}/send-to-guc`, {
-      comment: sendDialog.value.comment
+function confirmDeleteDossier(dossier) {
+  actionDialogs.value.delete = {
+    visible: true,
+    dossier: dossier,
+    loading: false,
+    comment: ''
+  };
+}
+
+function showAddNoteDialog(dossier) {
+  addNoteDialog.value = {
+    visible: true,
+    dossier: dossier
+  };
+}
+
+function getActionMenuItems(dossier) {
+  const items = [];
+  
+  if (dossier.availableActions?.includes('send_to_commission')) {
+    items.push({
+      label: 'Envoyer à la Commission',
+      icon: 'pi pi-forward',
+      command: () => showActionDialog('sendToCommission', dossier)
     });
+  }
+  
+  if (dossier.availableActions?.includes('return_to_antenne')) {
+    items.push({
+      label: 'Retourner à l\'Antenne',
+      icon: 'pi pi-undo',
+      command: () => showActionDialog('returnToAntenne', dossier)
+    });
+  }
+  
+  if (dossier.availableActions?.includes('reject')) {
+    items.push({
+      label: 'Rejeter',
+      icon: 'pi pi-times-circle',
+      command: () => showActionDialog('reject', dossier)
+    });
+  }
+  
+  return items;
+}
+
+function getPrimaryActionLabel(dossier) {
+  if (dossier.availableActions?.includes('send_to_commission')) {
+    return 'Commission';
+  }
+  return 'Actions';
+}
+
+function handlePrimaryAction(dossier) {
+  if (dossier.availableActions?.includes('send_to_commission')) {
+    showActionDialog('sendToCommission', dossier);
+  }
+}
+
+function showActionDialog(action, dossier) {
+  actionDialogs.value[action] = {
+    visible: true,
+    dossier: dossier,
+    loading: false,
+    comment: '',
+    priority: 'NORMALE',
+    reasons: [],
+    definitive: false
+  };
+}
+
+async function handleActionConfirmed(actionData) {
+  try {
+    const { action, dossier, data } = actionData;
+    
+    let endpoint = '';
+    let payload = {};
+    
+    switch (action) {
+      case 'sendToGUC':
+        endpoint = `/dossiers/${dossier.id}/send-to-guc`;
+        payload = { commentaire: data.comment };
+        break;
+      case 'sendToCommission':
+        endpoint = `/dossiers/${dossier.id}/send-to-commission`;
+        payload = { 
+          commentaire: data.comment,
+          priorite: data.priority
+        };
+        break;
+      case 'returnToAntenne':
+        endpoint = `/dossiers/${dossier.id}/return-to-antenne`;
+        payload = { 
+          motif: 'Complétion requise',
+          commentaire: data.comment,
+          documentsManquants: data.reasons
+        };
+        break;
+      case 'reject':
+        endpoint = `/dossiers/${dossier.id}/reject`;
+        payload = { 
+          motif: 'Rejet du dossier',
+          commentaire: data.comment,
+          definitif: data.definitive
+        };
+        break;
+      case 'delete':
+        endpoint = `/dossiers/${dossier.id}`;
+        payload = { motif: data.comment };
+        break;
+    }
+    
+    const method = action === 'delete' ? 'delete' : 'post';
+    const response = await ApiService[method](endpoint, payload);
+    
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Succès',
+        detail: response.message,
+        life: 3000
+      });
+      
+      loadDossiers();
+    }
+    
+  } catch (error) {
+    console.error(`Erreur lors de l'action ${actionData.action}:`, error);
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: error.message || 'Une erreur est survenue',
+      life: 3000
+    });
+  }
+}
+
+function handleDialogClosed() {
+  // Reset all dialogs
+  Object.keys(actionDialogs.value).forEach(key => {
+    actionDialogs.value[key].visible = false;
+  });
+}
+
+async function handleNoteAdded() {
+  addNoteDialog.value.visible = false;
+  toast.add({
+    severity: 'success',
+    summary: 'Succès',
+    detail: 'Note ajoutée avec succès',
+    life: 3000
+  });
+  
+  // Reload dossiers to update notes count
+  await loadDossiers();
+}
+
+async function exportToExcel() {
+  try {
+    const response = await fetch('/api/dossiers/export', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${AuthService.getToken()}`
+      },
+      body: JSON.stringify(filters.value)
+    });
+    
+    if (!response.ok) throw new Error('Erreur d\'export');
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `dossiers_${new Date().toISOString().split('T')[0]}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
     
     toast.add({
       severity: 'success',
       summary: 'Succès',
-      detail: 'Dossier envoyé au GUC avec succès',
+      detail: 'Export Excel généré avec succès',
       life: 3000
     });
     
-    sendDialog.value.visible = false;
-    loadDossiers();
-    
   } catch (error) {
-    console.error('Erreur lors de l\'envoi:', error);
+    console.error('Erreur lors de l\'export:', error);
     toast.add({
       severity: 'error',
       summary: 'Erreur',
-      detail: 'Impossible d\'envoyer le dossier',
+      detail: 'Impossible d\'exporter les dossiers',
       life: 3000
     });
-  } finally {
-    sendDialog.value.loading = false;
   }
 }
 
+// Utility methods
 function getStatusSeverity(status) {
   const severityMap = {
     'DRAFT': 'secondary',
@@ -675,6 +877,15 @@ function getStatusSeverity(status) {
     'PENDING_CORRECTION': 'warning'
   };
   return severityMap[status] || 'info';
+}
+
+function getPrioritySeverity(priority) {
+  const severityMap = {
+    'HAUTE': 'danger',
+    'NORMALE': 'info',
+    'FAIBLE': 'secondary'
+  };
+  return severityMap[priority] || 'info';
 }
 
 function formatCurrency(amount) {
@@ -692,6 +903,8 @@ function formatDate(date) {
 </script>
 
 <style scoped>
+/* Copy all styles from the original DossierListView.vue and add some new ones */
+
 .dossier-list-container {
   max-width: 1400px;
   margin: 0 auto;
@@ -740,6 +953,48 @@ function formatDate(date) {
   gap: 0.75rem;
 }
 
+/* Statistics Section */
+.statistics-section {
+  margin-bottom: 1.5rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.stat-card {
+  background: var(--card-background);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius-md);
+  padding: 1.5rem;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.stat-card.warning {
+  border-color: var(--warning-color);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-bottom: 0.5rem;
+}
+
+.stat-card.warning .stat-value {
+  color: var(--warning-color);
+}
+
+.stat-label {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
 /* Primary Button Styles */
 :deep(.btn-primary) {
   background-color: var(--primary-color) !important;
@@ -777,6 +1032,11 @@ function formatDate(date) {
   gap: 1.25rem;
   align-items: end;
   padding: 1.5rem;
+}
+
+/* Adjust for GUC filters */
+.filters-grid:has(.filter-group:nth-child(5)) {
+  grid-template-columns: 1fr 150px 200px 150px 150px auto;
 }
 
 .filter-group {
@@ -1014,6 +1274,11 @@ function formatDate(date) {
   min-width: 200px;
 }
 
+.col-antenne {
+  width: 15%;
+  min-width: 150px;
+}
+
 .col-status {
   width: 12%;
   min-width: 120px;
@@ -1024,14 +1289,19 @@ function formatDate(date) {
   min-width: 150px;
 }
 
+.col-priority {
+  width: 10%;
+  min-width: 100px;
+}
+
 .col-details {
   width: 13%;
   min-width: 130px;
 }
 
 .col-actions {
-  width: 10%;
-  min-width: 120px;
+  width: 15%;
+  min-width: 180px;
 }
 
 /* Cell Content Styles */
@@ -1104,11 +1374,45 @@ function formatDate(date) {
   color: var(--success-color);
 }
 
+.antenne-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.antenne-name {
+  font-weight: 500;
+  color: var(--text-color);
+  font-size: 0.875rem;
+}
+
+.cda-name {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
 .status-tag {
   font-size: 0.75rem !important;
   font-weight: 600 !important;
   padding: 0.375rem 0.75rem !important;
   border-radius: var(--border-radius-sm) !important;
+}
+
+.priority-tag {
+  font-size: 0.7rem !important;
+  font-weight: 600 !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: var(--border-radius-sm) !important;
+  margin-bottom: 0.25rem !important;
+  display: block !important;
+}
+
+.notes-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--info-color);
 }
 
 .progress-cell {
@@ -1188,12 +1492,22 @@ function formatDate(date) {
   display: flex;
   gap: 0.375rem;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .action-btn {
   padding: 0.5rem !important;
   min-width: 2.5rem !important;
   height: 2.5rem !important;
+}
+
+.action-split-btn {
+  height: 2.5rem !important;
+}
+
+:deep(.action-split-btn .p-button) {
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.75rem !important;
 }
 
 /* Pagination */
@@ -1207,69 +1521,6 @@ function formatDate(date) {
   border-radius: var(--border-radius-md);
 }
 
-/* Dialog Styles */
-.delete-confirmation,
-.send-confirmation {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.warning-icon {
-  color: var(--warning-color);
-  font-size: 2rem;
-  margin-top: 0.25rem;
-}
-
-.confirmation-icon {
-  color: var(--primary-color);
-  font-size: 2rem;
-  margin-top: 0.25rem;
-}
-
-.confirmation-text {
-  flex: 1;
-}
-
-.dossier-summary {
-  background: var(--section-background);
-  padding: 1rem;
-  border-radius: var(--border-radius-sm);
-  border: 1px solid var(--card-border);
-  margin: 0.75rem 0;
-  font-size: 0.9rem;
-}
-
-.warning-text {
-  color: var(--danger-color);
-  font-weight: 600;
-  font-size: 0.9rem;
-  margin: 0;
-}
-
-.info-text {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  margin: 0;
-}
-
-.delete-comment,
-.send-comment {
-  margin-top: 1.5rem;
-}
-
-.delete-comment label,
-.send-comment label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: var(--text-color);
-  text-transform: uppercase;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-}
-
 /* Responsive Design */
 @media (max-width: 1200px) {
   .table-container {
@@ -1277,12 +1528,16 @@ function formatDate(date) {
   }
   
   .dossiers-table {
-    min-width: 1000px;
+    min-width: 1200px;
   }
   
   .filters-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
+  }
+  
+  .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
 }
 
@@ -1333,6 +1588,10 @@ function formatDate(date) {
 
   .empty-actions {
     flex-direction: column;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

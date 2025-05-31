@@ -6,8 +6,8 @@ import AuthService from '../services/AuthService'
 import RegisterView from '@/views/auth/RegisterView.vue'
 import LandingPage from '@/views/LandingPage.vue'
 import CreateDossierView from '@/views/agent_antenne/CreateDossierView.vue'
-import DossierListView from '@/views/agent_antenne/DossierListView.vue'
-import DossierDetailView from '@/views/agent_antenne/DossierDetailView.vue'
+import DossierListView from '@/views/common/DossierListView.vue'
+import DossierDetailView from '@/views/common/DossierDetailView.vue'
 import AdminDocumentRequisView from '@/views/admin/AdminDocumentRequisView.vue'
 import DocumentFillingView from '@/views/agent_antenne/DocumentFillingView.vue'
 
@@ -16,7 +16,7 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: '',
+      name: 'landing',  // ✅ Fixed: Added proper name
       component: LandingPage,
       meta: { guest: true }
     },
@@ -41,56 +41,62 @@ const router = createRouter({
 
     // Agent Antenne Routes
     {
-      path: '/agent_antenne',
-      meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE' },
-      children: [
-        {
-          path: 'dossiers',
-          name: 'dossiers-list',
-          component: DossierListView,
-          meta: { title: 'Mes Dossiers' }
-        },
-        {
-          path: 'dossiers/create',
-          name: 'create-dossier',
-          component: CreateDossierView,
-          meta: { title: 'Créer un Dossier' }
-        },
-        {
-          path: 'dossiers/:dossierId',
-          name: 'dossier-detail',
-          component: DossierDetailView,
-          meta: { title: 'Détails du Dossier' },
-          props: true
-        },
-        {
-          path: 'dossiers/:dossierId/forms',
-          name: 'dossier-forms',
-          component: DossierDetailView,
-          meta: { title: 'Formulaires du Dossier' },
-          props: true
-        }, {
-          path: 'dossiers/documents/:dossierId',
-          name: 'dossier-documents',
-          component: DocumentFillingView,
-          meta: { title: 'Documents du Dossier' },
-          props: true
-        }
-      ]
+      path: '/agent_antenne/dossiers',
+      name: 'agent-antenne-dossiers-list',
+      component: DossierListView,
+      meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE', title: 'Mes Dossiers' }
     },
+    {
+      path: '/agent_antenne/dossiers/create',
+      name: 'create-dossier',
+      component: CreateDossierView,
+      meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE', title: 'Créer un Dossier' }
+    },
+    {
+      path: '/agent_antenne/dossiers/:dossierId',
+      name: 'agent-antenne-dossier-detail',
+      component: DossierDetailView,
+      meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE', title: 'Détails du Dossier' },
+      props: true
+    },
+    {
+      path: '/agent_antenne/dossiers/:dossierId/forms',
+      name: 'agent-antenne-dossier-forms',
+      component: DossierDetailView,
+      meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE', title: 'Formulaires du Dossier' },
+      props: true
+    },
+    {
+      path: '/agent_antenne/dossiers/documents/:dossierId',
+      name: 'dossier-documents',
+      component: DocumentFillingView,
+      meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE', title: 'Documents du Dossier' },
+      props: true
+    },
+
     // Admin Routes
     {
-      path: '/admin',
-      meta: { requiresAuth: true, requiresRole: 'ADMIN' },
-      children: [
-        {
-          path: 'documents-requis',
-          name: 'admin-documents-requis',
-          component: AdminDocumentRequisView,
-          meta: { title: 'Gestion des Documents Requis' }
-        }
-      ]
+      path: '/admin/documents-requis',
+      name: 'admin-documents-requis',
+      component: AdminDocumentRequisView,
+      meta: { requiresAuth: true, requiresRole: 'ADMIN', title: 'Gestion des Documents Requis' }
     },
+
+    // Agent GUC Routes
+    {
+      path: '/agent_guc/dossiers',
+      name: 'agent-guc-dossiers-list',
+      component: DossierListView,
+      meta: { requiresAuth: true, requiresRole: 'AGENT_GUC', title: 'Dossiers - Guichet Unique Central' }
+    },
+    {
+      path: '/agent_guc/dossiers/:dossierId',
+      name: 'agent-guc-dossier-detail',
+      component: DossierDetailView,
+      meta: { requiresAuth: true, requiresRole: 'AGENT_GUC', title: 'Détails du Dossier' },
+      props: true
+    },
+
     // Catch-all route for 404
     {
       path: '/:pathMatch(.*)*',
@@ -100,8 +106,15 @@ const router = createRouter({
   ]
 })
 
-// Navigation guard to check authentication and role-based access
+// ✅ Fixed: Combined navigation guards into one
 router.beforeEach((to, from, next) => {
+  // Handle landing page class management
+  if (to.name === 'landing' || to.path === '/' || to.path === '/login' || to.path === '/register') {
+    document.body.classList.add('landing-page');
+  } else {
+    document.body.classList.remove('landing-page');
+  }
+
   // Check if the user is authenticated
   const isAuthenticated = AuthService.isAuthenticated();
   const currentUser = AuthService.getCurrentUser();
@@ -126,7 +139,7 @@ router.beforeEach((to, from, next) => {
   }
   // Handle routes for guests only
   else if (to.matched.some(record => record.meta.guest) && isAuthenticated) {
-    // Redirect authenticated users to their appropriate dashboard
+    // ✅ Fixed: Redirect authenticated users to valid routes
     const userRole = currentUser?.role;
     switch (userRole) {
       case 'AGENT_ANTENNE':
@@ -139,7 +152,7 @@ router.beforeEach((to, from, next) => {
         next({ path: '/agent_commission/dossiers' });
         break;
       case 'ADMIN':
-        next({ path: '/admin/dashboard' });
+        next({ path: '/admin/documents-requis' }); // ✅ Fixed: Valid admin route
         break;
       default:
         next({ name: 'dashboard' });
@@ -159,16 +172,6 @@ router.afterEach((to) => {
   } else {
     document.title = 'SADSA ORMVAT';
   }
-});
-
-// Add landing page class management
-router.beforeEach((to, from, next) => {
-  if (to.name === '' || to.path === '/' || to.path === '/login' || to.path === '/register') {
-    document.body.classList.add('landing-page');
-  } else {
-    document.body.classList.remove('landing-page');
-  }
-  next();
 });
 
 export default router

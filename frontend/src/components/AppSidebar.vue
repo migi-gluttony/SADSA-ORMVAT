@@ -248,9 +248,9 @@ const menuItems = computed(() => {
         );
     } else if (role === "AGENT_GUC") {
         items.push(
-            {
-                label: "Dossiers GUC",
-                icon: "pi pi-inbox",
+             {
+                label: "Mes Dossiers",
+                icon: "pi pi-folder-open",
                 command: () => router.push("/agent_guc/dossiers"),
                 route: "/agent_guc/dossiers",
             },

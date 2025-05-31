@@ -1,4 +1,4 @@
-package ormvat.sadsa.dto.agent_antenne;
+package ormvat.sadsa.dto.common;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,9 +24,11 @@ public class DossierManagementDTOs {
         private Integer currentPage;
         private Integer pageSize;
         private Integer totalPages;
+        private String currentUserRole;
         private String currentUserAntenne;
         private String currentUserCDA;
         private DossierStatisticsDTO statistics;
+        private List<AvailableActionDTO> availableActions;
     }
 
     @Data
@@ -67,10 +69,31 @@ public class DossierManagementDTOs {
         private Integer totalForms;
         private Double completionPercentage;
         
-        // Permissions
+        // Role-based permissions
+        private List<String> availableActions;
+        private DossierPermissionsDTO permissions;
+        
+        // GUC specific
+        private Integer notesCount;
+        private Boolean hasUnreadNotes;
+        private String priorite;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class DossierPermissionsDTO {
         private Boolean peutEtreModifie;
         private Boolean peutEtreEnvoye;
         private Boolean peutEtreSupprime;
+        private Boolean peutAjouterNotes;
+        private Boolean peutRetournerAntenne;
+        private Boolean peutEnvoyerCommission;
+        private Boolean peutRejeter;
+        private Boolean peutApprouver;
+        private Boolean peutVoirDocuments;
+        private Boolean peutTelechargerDocuments;
     }
 
     @Data
@@ -92,11 +115,27 @@ public class DossierManagementDTOs {
         private String etapeActuelle;
         private WorkflowInstance.EmplacementType emplacementActuel;
         
-        // Permissions
-        private Boolean peutEtreModifie;
-        private Boolean peutEtreEnvoye;
-        private Boolean peutEtreSupprime;
-        private Boolean peutAjouterNotes;
+        // Role-based permissions
+        private DossierPermissionsDTO permissions;
+        private List<AvailableActionDTO> availableActions;
+        
+        // User context
+        private String currentUserRole;
+        private String currentUserAntenne;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class AvailableActionDTO {
+        private String action;
+        private String label;
+        private String icon;
+        private String severity;
+        private Boolean requiresComment;
+        private Boolean requiresConfirmation;
+        private String description;
     }
 
     @Data
@@ -120,6 +159,10 @@ public class DossierManagementDTOs {
         private String antenneDesignation;
         private String cdaNom;
         private String utilisateurCreateurNom;
+        
+        // GUC specific
+        private String priorite;
+        private String commentaireGUC;
     }
 
     @Data
@@ -152,6 +195,7 @@ public class DossierManagementDTOs {
         private Boolean enRetard;
         private String utilisateurNom;
         private String commentaire;
+        private String action;
     }
 
     @Data
@@ -168,6 +212,7 @@ public class DossierManagementDTOs {
         private Map<String, Object> formConfig;
         private Map<String, Object> formData;
         private String documentType;
+        private Boolean isReadOnly;
     }
 
     @Data
@@ -186,6 +231,8 @@ public class DossierManagementDTOs {
         private Boolean isOriginalDocument;
         private Long tailleFichier;
         private String formatFichier;
+        private Boolean canDownload;
+        private Boolean canDelete;
     }
 
     @Data
@@ -203,6 +250,10 @@ public class DossierManagementDTOs {
         private String priorite;
         private String utilisateurExpediteurNom;
         private String utilisateurDestinataireNom;
+        private Boolean isRead;
+        private String statut;
+        private Boolean canReply;
+        private Boolean canEdit;
     }
 
     @Data
@@ -217,6 +268,8 @@ public class DossierManagementDTOs {
         private Long dossiersEnRetard;
         private Double tauxCompletion;
         private Long dossiersCeMois;
+        private Long dossiersAttenteTraitement;
+        private Long dossiersEnCommission;
     }
 
     @Data
@@ -231,10 +284,46 @@ public class DossierManagementDTOs {
         private LocalDateTime dateDebutCreation;
         private LocalDateTime dateFinCreation;
         private Boolean enRetard;
+        private String priorite;
+        private Long antenneId;
         private String sortBy;
         private String sortDirection;
         private Integer page;
         private Integer size;
+    }
+
+    // Action DTOs for different user roles
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class SendToCommissionRequest {
+        private Long dossierId;
+        private String commentaire;
+        private String priorite;
+        private LocalDateTime dateEcheance;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class ReturnToAntenneRequest {
+        private Long dossierId;
+        private String motif;
+        private String commentaire;
+        private List<String> documentsManquants;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class RejectDossierRequest {
+        private Long dossierId;
+        private String motif;
+        private String commentaire;
+        private Boolean definitif;
     }
 
     @Data
@@ -266,6 +355,7 @@ public class DossierManagementDTOs {
         private String typeNote;
         private String priorite;
         private Long utilisateurDestinataireId;
+        private Boolean requiresResponse;
     }
 
     @Data
@@ -277,5 +367,16 @@ public class DossierManagementDTOs {
         private String message;
         private String newStatut;
         private LocalDateTime dateAction;
+        private Map<String, Object> additionalData;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class UpdatePrioriteRequest {
+        private Long dossierId;
+        private String priorite;
+        private String justification;
     }
 }
