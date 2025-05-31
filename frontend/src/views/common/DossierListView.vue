@@ -15,6 +15,9 @@
           <span v-else-if="dossiersData.currentUserRole === 'AGENT_GUC'">
             - Tous les dossiers soumis
           </span>
+          <span v-else-if="dossiersData.currentUserRole === 'AGENT_COMMISSION'">
+            - Dossiers pour visite terrain
+          </span>
         </p>
       </div>
       <div class="header-actions">
@@ -56,6 +59,10 @@
         <div class="stat-card" v-if="userRole === 'AGENT_GUC'">
           <div class="stat-value">{{ dossiersData.statistics.dossiersAttenteTraitement }}</div>
           <div class="stat-label">En attente traitement</div>
+        </div>
+        <div class="stat-card" v-if="userRole === 'AGENT_COMMISSION'">
+          <div class="stat-value">{{ dossiersData.statistics.dossiersAttenteTraitement }}</div>
+          <div class="stat-label">Visites à programmer</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">{{ dossiersData.statistics.dossiersApprouves }}</div>
@@ -192,6 +199,7 @@
         <p v-if="hasActiveFilters">Aucun dossier ne correspond à vos critères de recherche et filtres.</p>
         <p v-else-if="userRole === 'AGENT_ANTENNE'">Vous n'avez pas encore créé de dossier.</p>
         <p v-else-if="userRole === 'AGENT_GUC'">Aucun dossier n'a encore été soumis au GUC.</p>
+        <p v-else-if="userRole === 'AGENT_COMMISSION'">Aucun dossier n'est en attente de visite terrain.</p>
         <div class="empty-actions">
           <Button 
             v-if="hasActiveFilters"
@@ -226,6 +234,7 @@
             </th>
             <th class="col-project">Type de Projet</th>
             <th v-if="userRole === 'AGENT_GUC'" class="col-antenne">Antenne</th>
+            <th v-if="userRole === 'AGENT_COMMISSION'" class="col-visite">Visite Terrain</th>
             <th class="col-status">
               Statut
               <i class="pi pi-sort-alt sort-icon"></i>
@@ -286,6 +295,25 @@
               <div class="antenne-cell">
                 <div class="antenne-name">{{ dossier.antenneDesignation }}</div>
                 <div class="cda-name">{{ dossier.cdaNom }}</div>
+              </div>
+            </td>
+
+            <!-- Visite Terrain Column (Commission only) -->
+            <td v-if="userRole === 'AGENT_COMMISSION'" class="col-visite">
+              <div class="visite-cell">
+                <div v-if="dossier.visiteTerrainStatus" class="visite-status">
+                  <Tag 
+                    :value="dossier.visiteTerrainStatus" 
+                    :severity="getVisiteSeverity(dossier.visiteTerrainStatus)"
+                  />
+                </div>
+                <div v-else class="visite-pending">
+                  <Tag value="À programmer" severity="warning" />
+                </div>
+                <div v-if="dossier.dateVisite" class="visite-date">
+                  <i class="pi pi-calendar"></i>
+                  {{ formatDate(dossier.dateVisite) }}
+                </div>
               </div>
             </td>
 
@@ -401,6 +429,32 @@
                   >
                     {{ getPrimaryActionLabel(dossier) }}
                   </SplitButton>
+                </template>
+
+                <!-- Agent Commission specific actions -->
+                <template v-if="userRole === 'AGENT_COMMISSION'">
+                  <Button 
+                    v-if="!dossier.visiteTerrainStatus || dossier.visiteTerrainStatus === 'À programmer'"
+                    icon="pi pi-calendar-plus" 
+                    @click="scheduleTerrainVisit(dossier)"
+                    class="p-button-info p-button-sm action-btn"
+                    v-tooltip.top="'Programmer visite terrain'"
+                  />
+
+                  <Button 
+                    v-if="dossier.visiteTerrainStatus === 'PROGRAMMEE'"
+                    icon="pi pi-check-square" 
+                    @click="completeTerrainVisit(dossier)"
+                    class="p-button-success p-button-sm action-btn"
+                    v-tooltip.top="'Compléter visite'"
+                  />
+
+                  <Button 
+                    icon="pi pi-comment" 
+                    @click="showAddNoteDialog(dossier)"
+                    class="p-button-outlined p-button-sm action-btn"
+                    v-tooltip.top="'Ajouter note'"
+                  />
                 </template>
               </div>
             </td>
@@ -538,6 +592,8 @@ function getPageTitle() {
       return 'Mes Dossiers';
     case 'AGENT_GUC':
       return 'Dossiers - Guichet Unique Central';
+    case 'AGENT_COMMISSION':
+      return 'Dossiers - Commission AHA-AF';
     case 'ADMIN':
       return 'Tous les Dossiers';
     default:
@@ -703,9 +759,20 @@ function navigateToCreate() {
 }
 
 function viewDossierDetail(dossierId) {
-  const route = userRole.value === 'AGENT_ANTENNE' 
-    ? `/agent_antenne/dossiers/${dossierId}`
-    : `/agent_guc/dossiers/${dossierId}`;
+  let route = '';
+  switch (userRole.value) {
+    case 'AGENT_ANTENNE':
+      route = `/agent_antenne/dossiers/${dossierId}`;
+      break;
+    case 'AGENT_GUC':
+      route = `/agent_guc/dossiers/${dossierId}`;
+      break;
+    case 'AGENT_COMMISSION':
+      route = `/agent_commission/dossiers/${dossierId}`;
+      break;
+    default:
+      route = `/dossiers/${dossierId}`;
+  }
   router.push(route);
 }
 
@@ -790,6 +857,28 @@ function showActionDialog(action, dossier) {
     reasons: [],
     definitive: false
   };
+}
+
+// Commission-specific action methods
+function scheduleTerrainVisit(dossier) {
+  // Navigate to dossier detail where scheduling can be done
+  viewDossierDetail(dossier.id);
+}
+
+function completeTerrainVisit(dossier) {
+  // Navigate to dossier detail where completion can be done
+  viewDossierDetail(dossier.id);
+}
+
+function getVisiteSeverity(status) {
+  const severityMap = {
+    'À programmer': 'warning',
+    'PROGRAMMEE': 'info',
+    'COMPLETEE': 'success',
+    'APPROUVEE': 'success',
+    'REJETEE': 'danger'
+  };
+  return severityMap[status] || 'secondary';
 }
 
 async function handleActionConfirmed(actionData) {
@@ -1344,6 +1433,11 @@ function formatDate(date) {
   min-width: 150px;
 }
 
+.col-visite {
+  width: 15%;
+  min-width: 150px;
+}
+
 .col-status {
   width: 12%;
   min-width: 120px;
@@ -1454,6 +1548,31 @@ function formatDate(date) {
 .cda-name {
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.visite-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.visite-status,
+.visite-pending {
+  display: flex;
+  justify-content: center;
+}
+
+.visite-date {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  justify-content: center;
+}
+
+.visite-date i {
+  color: var(--primary-color);
 }
 
 .status-tag {

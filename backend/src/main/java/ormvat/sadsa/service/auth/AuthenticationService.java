@@ -88,12 +88,12 @@ public class AuthenticationService {
                 .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé"));
         
         // Verify current password
-        if (!passwordEncoder.matches(request.getAncienMotDePasse(), utilisateur.getMotDePasse())) {
+        if (!passwordEncoder.matches(request.getOldPassword(), utilisateur.getMotDePasse())) {
             throw new RuntimeException("Mot de passe actuel incorrect");
         }
         
         // Update password
-        utilisateur.setMotDePasse(passwordEncoder.encode(request.getNouveauMotDePasse()));
+        utilisateur.setMotDePasse(passwordEncoder.encode(request.getNewPassword()));
         utilisateurRepository.save(utilisateur);
     }
 }

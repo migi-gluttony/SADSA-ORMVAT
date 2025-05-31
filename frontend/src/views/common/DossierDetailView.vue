@@ -70,6 +70,29 @@
               {{ getPrimaryGUCActionLabel() }}
             </SplitButton>
           </template>
+          <!-- Agent Commission Actions -->
+          <template v-if="userRole === 'AGENT_COMMISSION'">
+            <Button 
+              v-if="canScheduleTerrainVisit()"
+              label="Programmer Visite Terrain" 
+              icon="pi pi-calendar-plus" 
+              @click="showScheduleVisitDialog"
+              class="p-button-info"
+            />
+            <Button 
+              v-if="canCompleteTerrainVisit()"
+              label="Compléter Visite" 
+              icon="pi pi-check-square" 
+              @click="showCompleteVisitDialog"
+              class="p-button-success"
+            />
+            <Button 
+              label="Ajouter Note" 
+              icon="pi pi-comment" 
+              @click="showAddNoteDialog"
+              class="p-button-outlined"
+            />
+          </template>
         </div>
       </div>
 
@@ -457,6 +480,9 @@ import ApiService from '@/services/ApiService';
 import ActionDialogs from '@/components/dossiers/ActionDialogs.vue';
 import AddNoteDialog from '@/components/dossiers/AddNoteDialog.vue';
 import FormDataViewerDialog from '@/components/dossiers/FormDataViewerDialog.vue';
+import ScheduleTerrainVisitDialog from '@/components/agent_commission/ScheduleTerrainVisitDialog.vue';
+
+
 
 // PrimeVue components
 import Button from 'primevue/button';

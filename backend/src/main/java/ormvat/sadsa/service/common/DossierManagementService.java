@@ -420,6 +420,13 @@ public class DossierManagementService {
                         .filter(d -> !d.getStatus().equals(Dossier.DossierStatus.DRAFT))
                         .collect(Collectors.toList());
                 
+            case AGENT_COMMISSION:
+                // Agent Commission sees dossiers that need or have had terrain inspection
+                return dossierRepository.findAll().stream()
+                        .filter(d -> d.getStatus().equals(Dossier.DossierStatus.SUBMITTED) || 
+                                    d.getStatus().equals(Dossier.DossierStatus.IN_REVIEW))
+                        .collect(Collectors.toList());
+                
             case ADMIN:
                 // Admin sees all dossiers
                 return dossierRepository.findAll();

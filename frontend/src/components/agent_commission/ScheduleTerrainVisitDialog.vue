@@ -1,0 +1,485 @@
+<template>
+  <Dialog 
+    v-model:visible="dialogVisible" 
+    modal 
+    header="Programmer une Visite Terrain"
+    :style="{ width: '600px' }"
+    @hide="resetForm"
+  >
+    <div class="schedule-visit-form">
+      <div class="dossier-info">
+        <h4>Dossier: {{ dossier?.reference }}</h4>
+        <p>{{ getAgriculteurName() }} - {{ dossier?.sousRubriqueDesignation }}</p>
+        <p class="location-info">
+          <i class="pi pi-map-marker"></i>
+          {{ getLocationInfo() }}
+        </p>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="visitDate">Date de visite *</label>
+          <Calendar 
+            id="visitDate"
+            v-model="form.dateVisite" 
+            dateFormat="dd/mm/yy"
+            :minDate="minDate"
+            :maxDate="maxDate"
+            :class="{ 'p-invalid': errors.dateVisite }"
+            class="w-full"
+            showIcon
+            placeholder="Sélectionner une date"
+          />
+          <small v-if="errors.dateVisite" class="p-error">{{ errors.dateVisite }}</small>
+          <small class="help-text">La visite doit être programmée dans les 15 jours ouvrables</small>
+        </div>
+
+        <div class="form-group">
+          <label for="coordinates">Coordonnées GPS (optionnel)</label>
+          <InputText 
+            id="coordinates"
+            v-model="form.coordonneesGPS" 
+            placeholder="Ex: 32.3578, -6.3491"
+            class="w-full"
+          />
+          <small class="help-text">Format: latitude, longitude</small>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="observations">Observations initiales *</label>
+        <Textarea 
+          id="observations"
+          v-model="form.observations" 
+          rows="4" 
+          placeholder="Observations préliminaires, points à vérifier sur le terrain..."
+          :class="{ 'p-invalid': errors.observations }"
+          class="w-full"
+        />
+        <small v-if="errors.observations" class="p-error">{{ errors.observations }}</small>
+        <small class="char-count">{{ form.observations?.length || 0 }} / 500 caractères</small>
+      </div>
+
+      <div class="form-group">
+        <label for="recommendations">Recommandations préliminaires</label>
+        <Textarea 
+          id="recommendations"
+          v-model="form.recommandations" 
+          rows="3" 
+          placeholder="Recommandations pour la visite terrain..."
+          class="w-full"
+        />
+        <small class="char-count">{{ form.recommandations?.length || 0 }} / 300 caractères</small>
+      </div>
+
+      <!-- Planning Information -->
+      <div class="planning-info">
+        <h5>Informations de planification</h5>
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="label">Délai réglementaire:</span>
+            <span class="value">15 jours ouvrables</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Date limite:</span>
+            <span class="value warning">{{ formatDate(deadlineDate) }}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Jours restants:</span>
+            <span :class="getDaysRemainingClass()">{{ daysRemaining }} jours</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <template #footer>
+      <Button 
+        label="Annuler" 
+        icon="pi pi-times" 
+        @click="closeDialog"
+        class="p-button-outlined"
+      />
+      <Button 
+        label="Programmer la visite" 
+        icon="pi pi-calendar-plus" 
+        @click="submitSchedule"
+        class="p-button-success"
+        :loading="loading"
+        :disabled="!isFormValid"
+      />
+    </template>
+  </Dialog>
+</template>
+
+<script setup>
+import { ref, computed, watch } from 'vue';
+import { useToast } from 'primevue/usetoast';
+import ApiService from '@/services/ApiService';
+
+// PrimeVue components
+import Dialog from 'primevue/dialog';
+import Button from 'primevue/button';
+import InputText from 'primevue/inputtext';
+import Textarea from 'primevue/textarea';
+import Calendar from 'primevue/calendar';
+
+const toast = useToast();
+
+// Props & Emits
+const props = defineProps({
+  visible: {
+    type: Boolean,
+    default: false
+  },
+  dossier: {
+    type: Object,
+    default: null
+  }
+});
+
+const emit = defineEmits(['update:visible', 'visit-scheduled']);
+
+// State
+const loading = ref(false);
+const errors = ref({});
+
+const form = ref({
+  dateVisite: null,
+  observations: '',
+  coordonneesGPS: '',
+  recommandations: ''
+});
+
+// Computed
+const dialogVisible = computed({
+  get: () => props.visible,
+  set: (value) => emit('update:visible', value)
+});
+
+const minDate = computed(() => {
+  const today = new Date();
+  return today;
+});
+
+const maxDate = computed(() => {
+  const today = new Date();
+  const deadline = new Date(today);
+  // Add 15 working days (approximately 21 calendar days)
+  deadline.setDate(today.getDate() + 21);
+  return deadline;
+});
+
+const deadlineDate = computed(() => {
+  const today = new Date();
+  const deadline = new Date(today);
+  deadline.setDate(today.getDate() + 15); // 15 working days simplified
+  return deadline;
+});
+
+const daysRemaining = computed(() => {
+  const today = new Date();
+  const deadline = deadlineDate.value;
+  const diffTime = deadline - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return Math.max(0, diffDays);
+});
+
+const isFormValid = computed(() => {
+  return form.value.dateVisite && 
+         form.value.observations?.trim() && 
+         form.value.observations.length <= 500;
+});
+
+// Methods
+function getAgriculteurName() {
+  if (!props.dossier) return '';
+  return `${props.dossier.agriculteurPrenom || ''} ${props.dossier.agriculteurNom || ''}`.trim();
+}
+
+function getLocationInfo() {
+  if (!props.dossier) return '';
+  const parts = [];
+  if (props.dossier.agriculteurCommune) parts.push(props.dossier.agriculteurCommune);
+  if (props.dossier.agriculteurDouar) parts.push(props.dossier.agriculteurDouar);
+  if (props.dossier.antenneDesignation) parts.push(props.dossier.antenneDesignation);
+  return parts.join(' - ');
+}
+
+function getDaysRemainingClass() {
+  const days = daysRemaining.value;
+  if (days <= 3) return 'value danger';
+  if (days <= 7) return 'value warning';
+  return 'value success';
+}
+
+function formatDate(date) {
+  if (!date) return '';
+  return new Intl.DateTimeFormat('fr-FR').format(date);
+}
+
+function validateForm() {
+  errors.value = {};
+  
+  if (!form.value.dateVisite) {
+    errors.value.dateVisite = 'La date de visite est requise';
+  } else {
+    const selectedDate = new Date(form.value.dateVisite);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (selectedDate < today) {
+      errors.value.dateVisite = 'La date de visite ne peut pas être dans le passé';
+    } else if (selectedDate > maxDate.value) {
+      errors.value.dateVisite = 'La date de visite dépasse le délai réglementaire';
+    }
+  }
+  
+  if (!form.value.observations?.trim()) {
+    errors.value.observations = 'Les observations sont requises';
+  } else if (form.value.observations.length > 500) {
+    errors.value.observations = 'Les observations ne doivent pas dépasser 500 caractères';
+  }
+  
+  if (form.value.recommandations && form.value.recommandations.length > 300) {
+    errors.value.recommandations = 'Les recommandations ne doivent pas dépasser 300 caractères';
+  }
+  
+  return Object.keys(errors.value).length === 0;
+}
+
+async function submitSchedule() {
+  if (!validateForm()) return;
+  
+  try {
+    loading.value = true;
+    
+    const scheduleData = {
+      dossierId: props.dossier.id,
+      dateVisite: form.value.dateVisite,
+      observations: form.value.observations.trim(),
+      coordonneesGPS: form.value.coordonneesGPS?.trim() || null,
+      recommandations: form.value.recommandations?.trim() || null
+    };
+    
+    await ApiService.post('/agent_commission/terrain-visits/schedule', scheduleData);
+    
+    emit('visit-scheduled');
+    closeDialog();
+    
+  } catch (error) {
+    console.error('Erreur lors de la programmation de la visite:', error);
+    
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: error.message || 'Erreur lors de la programmation de la visite',
+      life: 4000
+    });
+  } finally {
+    loading.value = false;
+  }
+}
+
+function resetForm() {
+  form.value = {
+    dateVisite: null,
+    observations: '',
+    coordonneesGPS: '',
+    recommandations: ''
+  };
+  errors.value = {};
+}
+
+function closeDialog() {
+  emit('update:visible', false);
+}
+</script>
+
+<style scoped>
+.schedule-visit-form {
+  padding: 0;
+}
+
+.dossier-info {
+  background: var(--section-background);
+  padding: 1rem;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--card-border);
+  margin-bottom: 1.5rem;
+}
+
+.dossier-info h4 {
+  margin: 0 0 0.5rem 0;
+  color: var(--primary-color);
+  font-size: 1rem;
+}
+
+.dossier-info p {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.location-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.location-info i {
+  color: var(--primary-color);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--text-color);
+  font-size: 0.9rem;
+}
+
+.form-group .w-full {
+  width: 100%;
+}
+
+.help-text {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.char-count {
+  display: block;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.planning-info {
+  background: var(--section-background);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius-sm);
+  padding: 1rem;
+  margin-top: 1.5rem;
+}
+
+.planning-info h5 {
+  margin: 0 0 1rem 0;
+  color: var(--text-color);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.info-item .label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.info-item .value {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.value.success {
+  color: var(--success-color);
+}
+
+.value.warning {
+  color: var(--warning-color);
+}
+
+.value.danger {
+  color: var(--danger-color);
+}
+
+/* Validation styles */
+:deep(.p-invalid) {
+  border-color: var(--danger-color) !important;
+}
+
+:deep(.p-invalid:focus) {
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2) !important;
+}
+
+.p-error {
+  color: var(--danger-color);
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+/* Dialog styling */
+:deep(.p-dialog-content) {
+  padding: 1.5rem;
+}
+
+:deep(.p-dialog-footer) {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--card-border);
+  background: var(--section-background);
+}
+
+:deep(.p-dialog-footer .p-button) {
+  margin-left: 0.5rem;
+}
+
+:deep(.p-dialog-footer .p-button:first-child) {
+  margin-left: 0;
+}
+
+/* Calendar styling */
+:deep(.p-calendar .p-inputtext) {
+  width: 100%;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+}
+
+/* Dark mode adjustments */
+.dark-mode .dossier-info {
+  background: var(--clr-surface-a20);
+  border-color: var(--clr-surface-a30);
+}
+
+.dark-mode .planning-info {
+  background: var(--clr-surface-a20);
+  border-color: var(--clr-surface-a30);
+}
+</style>

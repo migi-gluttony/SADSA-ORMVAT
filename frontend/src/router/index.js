@@ -88,7 +88,7 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresRole: 'ADMIN', title: 'Gestion des Documents Requis' }
     },
 
-    // Agent GUC Routes
+   // Agent GUC Routes
     {
       path: '/agent_guc/dossiers',
       name: 'agent-guc-dossiers-list',
@@ -100,6 +100,21 @@ const router = createRouter({
       name: 'agent-guc-dossier-detail',
       component: DossierDetailView,
       meta: { requiresAuth: true, requiresRole: 'AGENT_GUC', title: 'Détails du Dossier' },
+      props: true
+    },
+
+    // Agent Commission Routes
+    {
+      path: '/agent_commission/dossiers',
+      name: 'agent-commission-dossiers-list',
+      component: DossierListView,
+      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION', title: 'Dossiers - Commission AHA-AF' }
+    },
+    {
+      path: '/agent_commission/dossiers/:dossierId',
+      name: 'agent-commission-dossier-detail',
+      component: DossierDetailView,
+      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION', title: 'Détails du Dossier' },
       props: true
     },
 
