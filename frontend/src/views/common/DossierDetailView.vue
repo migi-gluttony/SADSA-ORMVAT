@@ -70,6 +70,7 @@
               {{ getPrimaryGUCActionLabel() }}
             </SplitButton>
           </template>
+
           <!-- Agent Commission Actions -->
           <template v-if="userRole === 'AGENT_COMMISSION'">
             <Button 
@@ -465,6 +466,13 @@
       :dossier="dossierDetail?.dossier"
     />
 
+    <!-- Schedule Terrain Visit Dialog (Commission) -->
+    <ScheduleTerrainVisitDialog 
+      v-model:visible="scheduleVisitDialog.visible"
+      :dossier="scheduleVisitDialog.dossier"
+      @visit-scheduled="handleVisitScheduled"
+    />
+
     <Toast />
   </div>
 </template>
@@ -481,8 +489,6 @@ import ActionDialogs from '@/components/dossiers/ActionDialogs.vue';
 import AddNoteDialog from '@/components/dossiers/AddNoteDialog.vue';
 import FormDataViewerDialog from '@/components/dossiers/FormDataViewerDialog.vue';
 import ScheduleTerrainVisitDialog from '@/components/agent_commission/ScheduleTerrainVisitDialog.vue';
-
-
 
 // PrimeVue components
 import Button from 'primevue/button';
@@ -523,6 +529,11 @@ const addNoteDialog = ref({
 const formDataDialog = ref({
   visible: false,
   form: null
+});
+
+const scheduleVisitDialog = ref({
+  visible: false,
+  dossier: null
 });
 
 // Computed properties
@@ -567,6 +578,18 @@ function hasGUCActions() {
   if (userRole.value !== 'AGENT_GUC') return false;
   const status = dossierDetail.value?.dossier?.statut;
   return status === 'SUBMITTED' || status === 'Soumis au GUC' || status === 'IN_REVIEW' || status === 'En cours d\'examen';
+}
+
+function canScheduleTerrainVisit() {
+  if (userRole.value !== 'AGENT_COMMISSION') return false;
+  const status = dossierDetail.value?.dossier?.statut;
+  return status === 'SUBMITTED' || status === 'Soumis au GUC' || status === 'IN_REVIEW' || status === 'En cours d\'examen';
+}
+
+function canCompleteTerrainVisit() {
+  if (userRole.value !== 'AGENT_COMMISSION') return false;
+  // Check if there's an existing terrain visit that can be completed
+  return dossierDetail.value?.visitesTerrain?.some(v => v.dateVisite && !v.dateConstat);
 }
 
 function getGUCActionMenuItems() {
@@ -646,6 +669,8 @@ function getBreadcrumbRoot() {
       return 'Mes Dossiers';
     case 'AGENT_GUC':
       return 'Dossiers GUC';
+    case 'AGENT_COMMISSION':
+      return 'Dossiers Commission';
     case 'ADMIN':
       return 'Tous les Dossiers';
     default:
@@ -654,10 +679,19 @@ function getBreadcrumbRoot() {
 }
 
 function goBack() {
-  const route = userRole.value === 'AGENT_ANTENNE' 
-    ? '/agent_antenne/dossiers'
-    : '/agent_guc/dossiers';
-  router.push(route);
+  switch (userRole.value) {
+    case 'AGENT_ANTENNE':
+      router.push('/agent_antenne/dossiers');
+      break;
+    case 'AGENT_GUC':
+      router.push('/agent_guc/dossiers');
+      break;
+    case 'AGENT_COMMISSION':
+      router.push('/agent_commission/dossiers');
+      break;
+    default:
+      router.push('/');
+  }
 }
 
 function goToDocumentFilling() {
@@ -724,6 +758,24 @@ function showActionDialog(action) {
     reasons: [],
     definitive: false
   };
+}
+
+function showScheduleVisitDialog() {
+  scheduleVisitDialog.value = {
+    visible: true,
+    dossier: dossierDetail.value?.dossier
+  };
+}
+
+function showCompleteVisitDialog() {
+  // Navigate to terrain visit completion - would need separate dialog
+  console.log('Complete terrain visit for dossier:', dossierDetail.value?.dossier?.id);
+  toast.add({
+    severity: 'info',
+    summary: 'Info',
+    detail: 'Fonctionnalité de complétion en cours de développement',
+    life: 3000
+  });
 }
 
 async function handleActionConfirmed(actionData) {
@@ -813,6 +865,18 @@ async function handleNoteAdded() {
     summary: 'Succès',
     detail: 'Note ajoutée avec succès',
     life: 3000
+  });
+  
+  await loadDossierDetail();
+}
+
+async function handleVisitScheduled() {
+  scheduleVisitDialog.value.visible = false;
+  toast.add({
+    severity: 'success',
+    summary: 'Succès',
+    detail: 'Visite terrain programmée avec succès',
+    life: 4000
   });
   
   await loadDossierDetail();
@@ -1050,6 +1114,15 @@ function formatFileSize(bytes) {
 .header-actions {
   display: flex;
   gap: 0.75rem;
+}
+
+/* Component Card */
+.component-card {
+  background: var(--background-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
 }
 
 /* Dossier Summary */

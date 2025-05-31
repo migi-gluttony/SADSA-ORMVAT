@@ -48,7 +48,7 @@ public class DossierManagementService {
             String sortBy = filterRequest.getSortBy() != null ? filterRequest.getSortBy() : "dateCreation";
             String sortDirection = filterRequest.getSortDirection() != null ? filterRequest.getSortDirection() : "DESC";
             Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
-            
+
             int page = filterRequest.getPage() != null ? filterRequest.getPage() : 0;
             int size = filterRequest.getSize() != null ? filterRequest.getSize() : 20;
             Pageable pageable = PageRequest.of(page, size, sort);
@@ -63,7 +63,7 @@ public class DossierManagementService {
             int totalElements = filteredDossiers.size();
             int startIndex = page * size;
             int endIndex = Math.min(startIndex + size, totalElements);
-            
+
             List<Dossier> paginatedDossiers = filteredDossiers.subList(startIndex, endIndex);
 
             // Convert to DTOs with role-specific permissions
@@ -84,9 +84,11 @@ public class DossierManagementService {
                     .pageSize(size)
                     .totalPages((int) Math.ceil((double) totalElements / size))
                     .currentUserRole(utilisateur.getRole().name())
-                    .currentUserAntenne(utilisateur.getAntenne() != null ? utilisateur.getAntenne().getDesignation() : "N/A")
-                    .currentUserCDA(utilisateur.getAntenne() != null && utilisateur.getAntenne().getCda() != null ? 
-                            utilisateur.getAntenne().getCda().getDescription() : "N/A")
+                    .currentUserAntenne(
+                            utilisateur.getAntenne() != null ? utilisateur.getAntenne().getDesignation() : "N/A")
+                    .currentUserCDA(utilisateur.getAntenne() != null && utilisateur.getAntenne().getCda() != null
+                            ? utilisateur.getAntenne().getCda().getDescription()
+                            : "N/A")
                     .statistics(statistics)
                     .availableActions(availableActions)
                     .build();
@@ -129,7 +131,8 @@ public class DossierManagementService {
             List<Note> notes = noteRepository.findByDossierId(dossierId);
 
             // Get available forms for this sous-rubrique
-            List<AvailableFormDTO> availableForms = getAvailableForms(dossier.getSousRubrique().getId(), pieceJointes, utilisateur);
+            List<AvailableFormDTO> availableForms = getAvailableForms(dossier.getSousRubrique().getId(), pieceJointes,
+                    utilisateur);
 
             // Calculate permissions based on role
             DossierPermissionsDTO permissions = calculatePermissions(dossier, utilisateur);
@@ -155,7 +158,8 @@ public class DossierManagementService {
                     .permissions(permissions)
                     .availableActions(availableActions)
                     .currentUserRole(utilisateur.getRole().name())
-                    .currentUserAntenne(utilisateur.getAntenne() != null ? utilisateur.getAntenne().getDesignation() : null)
+                    .currentUserAntenne(
+                            utilisateur.getAntenne() != null ? utilisateur.getAntenne().getDesignation() : null)
                     .build();
 
         } catch (Exception e) {
@@ -413,24 +417,25 @@ public class DossierManagementService {
                     return dossierRepository.findByAntenneId(utilisateur.getAntenne().getId());
                 }
                 return List.of();
-                
+
             case AGENT_GUC:
                 // Agent GUC sees all dossiers that have been submitted to GUC
                 return dossierRepository.findAll().stream()
                         .filter(d -> !d.getStatus().equals(Dossier.DossierStatus.DRAFT))
                         .collect(Collectors.toList());
-                
+
             case AGENT_COMMISSION:
-                // Agent Commission sees dossiers that need or have had terrain inspection
                 return dossierRepository.findAll().stream()
-                        .filter(d -> d.getStatus().equals(Dossier.DossierStatus.SUBMITTED) || 
-                                    d.getStatus().equals(Dossier.DossierStatus.IN_REVIEW))
+                        .filter(d -> d.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
+                                d.getStatus().equals(Dossier.DossierStatus.IN_REVIEW) ||
+                                d.getStatus().equals(Dossier.DossierStatus.APPROVED) ||
+                                d.getStatus().equals(Dossier.DossierStatus.REJECTED))
                         .collect(Collectors.toList());
-                
+
             case ADMIN:
                 // Admin sees all dossiers
                 return dossierRepository.findAll();
-                
+
             default:
                 return List.of();
         }
@@ -441,10 +446,16 @@ public class DossierManagementService {
             case ADMIN:
                 return true;
             case AGENT_ANTENNE:
-                return utilisateur.getAntenne() != null && 
-                       dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId());
+                return utilisateur.getAntenne() != null &&
+                        dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId());
             case AGENT_GUC:
                 return !dossier.getStatus().equals(Dossier.DossierStatus.DRAFT);
+            case AGENT_COMMISSION:
+                // Commission can access submitted dossiers and those in review
+                return dossier.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
+                        dossier.getStatus().equals(Dossier.DossierStatus.IN_REVIEW) ||
+                        dossier.getStatus().equals(Dossier.DossierStatus.APPROVED) ||
+                        dossier.getStatus().equals(Dossier.DossierStatus.REJECTED);
             default:
                 return false;
         }
@@ -455,10 +466,10 @@ public class DossierManagementService {
         boolean isReturnedForCompletion = dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
         boolean isSubmitted = dossier.getStatus() == Dossier.DossierStatus.SUBMITTED;
         boolean isInReview = dossier.getStatus() == Dossier.DossierStatus.IN_REVIEW;
-        
+
         // Agent Antenne can edit if it's DRAFT or RETURNED_FOR_COMPLETION
         boolean canEditAtAntenne = isDraft || isReturnedForCompletion;
-        
+
         switch (utilisateur.getRole()) {
             case AGENT_ANTENNE:
                 return DossierPermissionsDTO.builder()
@@ -473,7 +484,7 @@ public class DossierManagementService {
                         .peutVoirDocuments(true)
                         .peutTelechargerDocuments(true)
                         .build();
-                        
+
             case AGENT_GUC:
                 return DossierPermissionsDTO.builder()
                         .peutEtreModifie(false)
@@ -487,7 +498,7 @@ public class DossierManagementService {
                         .peutVoirDocuments(true)
                         .peutTelechargerDocuments(true)
                         .build();
-                        
+
             case ADMIN:
                 return DossierPermissionsDTO.builder()
                         .peutEtreModifie(true)
@@ -501,7 +512,7 @@ public class DossierManagementService {
                         .peutVoirDocuments(true)
                         .peutTelechargerDocuments(true)
                         .build();
-                        
+
             default:
                 return DossierPermissionsDTO.builder()
                         .peutEtreModifie(false)
@@ -520,7 +531,7 @@ public class DossierManagementService {
 
     private List<AvailableActionDTO> getAvailableActionsForRole(Utilisateur.UserRole role) {
         List<AvailableActionDTO> actions = new ArrayList<>();
-        
+
         switch (role) {
             case AGENT_ANTENNE:
                 actions.add(AvailableActionDTO.builder()
@@ -533,7 +544,7 @@ public class DossierManagementService {
                         .description("Envoyer le dossier au Guichet Unique Central pour traitement")
                         .build());
                 break;
-                
+
             case AGENT_GUC:
                 actions.add(AvailableActionDTO.builder()
                         .action("send_to_commission")
@@ -544,7 +555,7 @@ public class DossierManagementService {
                         .requiresConfirmation(true)
                         .description("Envoyer le dossier à la Commission AHA-AF pour visite terrain")
                         .build());
-                        
+
                 actions.add(AvailableActionDTO.builder()
                         .action("return_to_antenne")
                         .label("Retourner à l'Antenne")
@@ -554,7 +565,7 @@ public class DossierManagementService {
                         .requiresConfirmation(true)
                         .description("Retourner le dossier à l'antenne pour complétion")
                         .build());
-                        
+
                 actions.add(AvailableActionDTO.builder()
                         .action("reject")
                         .label("Rejeter")
@@ -566,14 +577,14 @@ public class DossierManagementService {
                         .build());
                 break;
         }
-        
+
         return actions;
     }
 
     private List<AvailableActionDTO> getAvailableActionsForDossier(Dossier dossier, Utilisateur utilisateur) {
         List<AvailableActionDTO> allActions = getAvailableActionsForRole(utilisateur.getRole());
         DossierPermissionsDTO permissions = calculatePermissions(dossier, utilisateur);
-        
+
         return allActions.stream()
                 .filter(action -> {
                     switch (action.getAction()) {
@@ -592,20 +603,21 @@ public class DossierManagementService {
                 .collect(Collectors.toList());
     }
 
-    // Add other existing helper methods here with appropriate updates for role handling
+    // Add other existing helper methods here with appropriate updates for role
+    // handling
     private List<Dossier> applyFilters(List<Dossier> dossiers, DossierFilterRequest filter) {
         return dossiers.stream()
-                .filter(d -> filter.getSearchTerm() == null || 
+                .filter(d -> filter.getSearchTerm() == null ||
                         containsSearchTerm(d, filter.getSearchTerm()))
-                .filter(d -> filter.getStatut() == null || 
+                .filter(d -> filter.getStatut() == null ||
                         d.getStatus().name().equals(filter.getStatut()))
-                .filter(d -> filter.getSousRubriqueId() == null || 
+                .filter(d -> filter.getSousRubriqueId() == null ||
                         d.getSousRubrique().getId().equals(filter.getSousRubriqueId()))
-                .filter(d -> filter.getDateDebutCreation() == null || 
+                .filter(d -> filter.getDateDebutCreation() == null ||
                         d.getDateCreation().isAfter(filter.getDateDebutCreation()))
-                .filter(d -> filter.getDateFinCreation() == null || 
+                .filter(d -> filter.getDateFinCreation() == null ||
                         d.getDateCreation().isBefore(filter.getDateFinCreation()))
-                .filter(d -> filter.getAntenneId() == null || 
+                .filter(d -> filter.getAntenneId() == null ||
                         d.getAntenne().getId().equals(filter.getAntenneId()))
                 .collect(Collectors.toList());
     }
@@ -614,9 +626,14 @@ public class DossierManagementService {
         String term = searchTerm.toLowerCase();
         return (dossier.getSaba() != null && dossier.getSaba().toLowerCase().contains(term)) ||
                 (dossier.getReference() != null && dossier.getReference().toLowerCase().contains(term)) ||
-                (dossier.getAgriculteur().getCin() != null && dossier.getAgriculteur().getCin().toLowerCase().contains(term)) ||
-                (dossier.getAgriculteur().getNom() != null && dossier.getAgriculteur().getNom().toLowerCase().contains(term)) ||
-                (dossier.getAgriculteur().getPrenom() != null && dossier.getAgriculteur().getPrenom().toLowerCase().contains(term));
+                (dossier.getAgriculteur().getCin() != null
+                        && dossier.getAgriculteur().getCin().toLowerCase().contains(term))
+                ||
+                (dossier.getAgriculteur().getNom() != null
+                        && dossier.getAgriculteur().getNom().toLowerCase().contains(term))
+                ||
+                (dossier.getAgriculteur().getPrenom() != null
+                        && dossier.getAgriculteur().getPrenom().toLowerCase().contains(term));
     }
 
     private DossierSummaryDTO mapToDossierSummaryDTO(Dossier dossier, Utilisateur currentUser) {
@@ -626,7 +643,8 @@ public class DossierManagementService {
 
         // Get piece jointes count for completion calculation
         List<PieceJointe> pieceJointes = pieceJointeRepository.findByDossierId(dossier.getId());
-        List<DocumentRequis> documentsRequis = documentRequisRepository.findBySousRubriqueId(dossier.getSousRubrique().getId());
+        List<DocumentRequis> documentsRequis = documentRequisRepository
+                .findBySousRubriqueId(dossier.getSousRubrique().getId());
 
         // Calculate completion
         double completionPercentage = calculateCompletionPercentage(pieceJointes, documentsRequis);
@@ -668,7 +686,8 @@ public class DossierManagementService {
                 .joursRestants((Integer) workflowInfo.get("joursRestants"))
                 .enRetard((Boolean) workflowInfo.get("enRetard"))
                 .dateLimite(currentWorkflow != null ? currentWorkflow.getDateLimite() : null)
-                .formsCompleted((int) pieceJointes.stream().filter(pj -> pj.getStatus() == PieceJointe.DocumentStatus.COMPLETE).count())
+                .formsCompleted((int) pieceJointes.stream()
+                        .filter(pj -> pj.getStatus() == PieceJointe.DocumentStatus.COMPLETE).count())
                 .totalForms(documentsRequis.size())
                 .completionPercentage(completionPercentage)
                 .availableActions(availableActions)
@@ -684,32 +703,41 @@ public class DossierManagementService {
         if (workflow != null && workflow.getEtapeDesignation() != null) {
             return workflow.getEtapeDesignation();
         }
-        
+
         switch (status) {
-            case DRAFT: return "Brouillon";
-            case SUBMITTED: return "Soumis au GUC";
-            case IN_REVIEW: return "En cours d'examen";
-            case APPROVED: return "Approuvé";
-            case REJECTED: return "Rejeté";
-            case COMPLETED: return "Terminé";
-            case RETURNED_FOR_COMPLETION: return "Retourné pour complétion";
-            default: return status.name();
+            case DRAFT:
+                return "Brouillon";
+            case SUBMITTED:
+                return "Soumis au GUC";
+            case IN_REVIEW:
+                return "En cours d'examen";
+            case APPROVED:
+                return "Approuvé";
+            case REJECTED:
+                return "Rejeté";
+            case COMPLETED:
+                return "Terminé";
+            case RETURNED_FOR_COMPLETION:
+                return "Retourné pour complétion";
+            default:
+                return status.name();
         }
     }
 
     private double calculateCompletionPercentage(List<PieceJointe> pieceJointes, List<DocumentRequis> documentsRequis) {
-        if (documentsRequis.isEmpty()) return 100.0;
-        
+        if (documentsRequis.isEmpty())
+            return 100.0;
+
         long completedDocs = pieceJointes.stream()
                 .filter(pj -> pj.getStatus() == PieceJointe.DocumentStatus.COMPLETE)
                 .count();
-        
+
         return (double) completedDocs / documentsRequis.size() * 100.0;
     }
 
     private Map<String, Object> calculateWorkflowInfo(WorkflowInstance workflow) {
         Map<String, Object> info = new HashMap<>();
-        
+
         if (workflow != null) {
             info.put("etapeActuelle", workflow.getEtapeDesignation());
             info.put("emplacementActuel", workflow.getEmplacementActuel());
@@ -721,7 +749,7 @@ public class DossierManagementService {
             info.put("joursRestants", 3);
             info.put("enRetard", false);
         }
-        
+
         return info;
     }
 
@@ -730,8 +758,9 @@ public class DossierManagementService {
         long enCours = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.IN_REVIEW).count();
         long approuves = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.APPROVED).count();
         long rejetes = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.REJECTED).count();
-        long attenteTraitement = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.SUBMITTED).count();
-        
+        long attenteTraitement = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.SUBMITTED)
+                .count();
+
         LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
         long ceMois = dossiers.stream().filter(d -> d.getDateCreation().isAfter(startOfMonth)).count();
 
@@ -752,8 +781,8 @@ public class DossierManagementService {
 
     // Add other missing methods with proper implementations for role-based access
     private boolean canSendToGUC(Dossier dossier, Utilisateur utilisateur) {
-        boolean canEdit = dossier.getStatus() == Dossier.DossierStatus.DRAFT || 
-                         dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
+        boolean canEdit = dossier.getStatus() == Dossier.DossierStatus.DRAFT ||
+                dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
         return canEdit && utilisateur.getRole() == Utilisateur.UserRole.AGENT_ANTENNE;
     }
 
@@ -768,7 +797,7 @@ public class DossierManagementService {
     private void updateWorkflowForGUC(Dossier dossier, Utilisateur utilisateur, String commentaire) {
         // Implementation for workflow update
         List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
-        
+
         if (!workflows.isEmpty()) {
             WorkflowInstance current = workflows.get(0);
             current.setEtapeDesignation("Phase GUC");
@@ -788,9 +817,10 @@ public class DossierManagementService {
         historiqueWorkflowRepository.save(history);
     }
 
-    private void updateWorkflowForCommission(Dossier dossier, Utilisateur utilisateur, SendToCommissionRequest request) {
+    private void updateWorkflowForCommission(Dossier dossier, Utilisateur utilisateur,
+            SendToCommissionRequest request) {
         List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
-        
+
         if (!workflows.isEmpty()) {
             WorkflowInstance current = workflows.get(0);
             current.setEtapeDesignation("Commission AHA-AF");
@@ -811,7 +841,7 @@ public class DossierManagementService {
 
     private void updateWorkflowBackToAntenne(Dossier dossier, Utilisateur utilisateur, ReturnToAntenneRequest request) {
         List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
-        
+
         if (!workflows.isEmpty()) {
             WorkflowInstance current = workflows.get(0);
             current.setEtapeDesignation("Phase Antenne - Complétion");
@@ -832,7 +862,7 @@ public class DossierManagementService {
 
     private void updateWorkflowForRejection(Dossier dossier, Utilisateur utilisateur, RejectDossierRequest request) {
         List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
-        
+
         if (!workflows.isEmpty()) {
             WorkflowInstance current = workflows.get(0);
             current.setEtapeDesignation("Rejeté");
@@ -878,7 +908,8 @@ public class DossierManagementService {
                 .sousRubriqueDesignation(dossier.getSousRubrique().getDesignation())
                 .antenneDesignation(dossier.getAntenne().getDesignation())
                 .cdaNom(dossier.getAntenne().getCda() != null ? dossier.getAntenne().getCda().getDescription() : "N/A")
-                .utilisateurCreateurNom(dossier.getUtilisateurCreateur().getPrenom() + " " + dossier.getUtilisateurCreateur().getNom())
+                .utilisateurCreateurNom(
+                        dossier.getUtilisateurCreateur().getPrenom() + " " + dossier.getUtilisateurCreateur().getNom())
                 .priorite("NORMALE")
                 .commentaireGUC("")
                 .build();
@@ -891,13 +922,16 @@ public class DossierManagementService {
                 .prenom(agriculteur.getPrenom())
                 .cin(agriculteur.getCin())
                 .telephone(agriculteur.getTelephone())
-                .communeRurale(agriculteur.getCommuneRurale() != null ? agriculteur.getCommuneRurale().getDesignation() : null)
+                .communeRurale(
+                        agriculteur.getCommuneRurale() != null ? agriculteur.getCommuneRurale().getDesignation() : null)
                 .douar(agriculteur.getDouar() != null ? agriculteur.getDouar().getDesignation() : null)
-                .province(agriculteur.getCommuneRurale() != null && agriculteur.getCommuneRurale().getCercle() != null 
-                        && agriculteur.getCommuneRurale().getCercle().getProvince() != null ? 
-                        agriculteur.getCommuneRurale().getCercle().getProvince().getDesignation() : null)
-                .cercle(agriculteur.getCommuneRurale() != null && agriculteur.getCommuneRurale().getCercle() != null ? 
-                        agriculteur.getCommuneRurale().getCercle().getDesignation() : null)
+                .province(agriculteur.getCommuneRurale() != null && agriculteur.getCommuneRurale().getCercle() != null
+                        && agriculteur.getCommuneRurale().getCercle().getProvince() != null
+                                ? agriculteur.getCommuneRurale().getCercle().getProvince().getDesignation()
+                                : null)
+                .cercle(agriculteur.getCommuneRurale() != null && agriculteur.getCommuneRurale().getCercle() != null
+                        ? agriculteur.getCommuneRurale().getCercle().getDesignation()
+                        : null)
                 .build();
     }
 
@@ -911,7 +945,9 @@ public class DossierManagementService {
                         .dateSortie(h.getDateSortie())
                         .dureeJours(h.getDureeJours())
                         .enRetard(h.getEnRetard())
-                        .utilisateurNom(h.getUtilisateur() != null ? h.getUtilisateur().getPrenom() + " " + h.getUtilisateur().getNom() : null)
+                        .utilisateurNom(h.getUtilisateur() != null
+                                ? h.getUtilisateur().getPrenom() + " " + h.getUtilisateur().getNom()
+                                : null)
                         .commentaire(h.getCommentaire())
                         .action("action") // To be implemented
                         .build())
@@ -927,12 +963,14 @@ public class DossierManagementService {
                         .typeDocument(pj.getTypeDocument())
                         .status(pj.getStatus().name())
                         .dateUpload(pj.getDateUpload())
-                        .utilisateurNom(pj.getUtilisateur() != null ? pj.getUtilisateur().getPrenom() + " " + pj.getUtilisateur().getNom() : null)
+                        .utilisateurNom(pj.getUtilisateur() != null
+                                ? pj.getUtilisateur().getPrenom() + " " + pj.getUtilisateur().getNom()
+                                : null)
                         .customTitle(pj.getNomFichier())
                         .isOriginalDocument(true)
                         .canDownload(true)
-                        .canDelete(currentUser.getRole() == Utilisateur.UserRole.ADMIN || 
-                                  currentUser.getRole() == Utilisateur.UserRole.AGENT_ANTENNE)
+                        .canDelete(currentUser.getRole() == Utilisateur.UserRole.ADMIN ||
+                                currentUser.getRole() == Utilisateur.UserRole.AGENT_ANTENNE)
                         .build())
                 .collect(Collectors.toList());
     }
@@ -948,36 +986,42 @@ public class DossierManagementService {
                         .dateReponse(n.getDateReponse())
                         .typeNote(n.getTypeNote())
                         .priorite(n.getPriorite())
-                        .utilisateurExpediteurNom(n.getUtilisateurExpediteur() != null ? 
-                                n.getUtilisateurExpediteur().getPrenom() + " " + n.getUtilisateurExpediteur().getNom() : null)
-                        .utilisateurDestinataireNom(n.getUtilisateurDestinataire() != null ? 
-                                n.getUtilisateurDestinataire().getPrenom() + " " + n.getUtilisateurDestinataire().getNom() : null)
+                        .utilisateurExpediteurNom(n.getUtilisateurExpediteur() != null
+                                ? n.getUtilisateurExpediteur().getPrenom() + " " + n.getUtilisateurExpediteur().getNom()
+                                : null)
+                        .utilisateurDestinataireNom(
+                                n.getUtilisateurDestinataire() != null
+                                        ? n.getUtilisateurDestinataire().getPrenom() + " "
+                                                + n.getUtilisateurDestinataire().getNom()
+                                        : null)
                         .isRead(true) // To be implemented
                         .statut("ACTIVE") // To be implemented
                         .canReply(true)
-                        .canEdit(n.getUtilisateurExpediteur() != null && 
+                        .canEdit(n.getUtilisateurExpediteur() != null &&
                                 n.getUtilisateurExpediteur().getId().equals(currentUser.getId()))
                         .build())
                 .collect(Collectors.toList());
     }
 
-    private List<AvailableFormDTO> getAvailableForms(Long sousRubriqueId, List<PieceJointe> pieceJointes, Utilisateur currentUser) {
+    private List<AvailableFormDTO> getAvailableForms(Long sousRubriqueId, List<PieceJointe> pieceJointes,
+            Utilisateur currentUser) {
         List<DocumentRequis> documentsRequis = documentRequisRepository.findBySousRubriqueId(sousRubriqueId);
-        
+
         return documentsRequis.stream()
                 .map(doc -> {
                     Optional<PieceJointe> relatedPieceJointe = pieceJointes.stream()
-                            .filter(pj -> pj.getDocumentRequis() != null && pj.getDocumentRequis().getId().equals(doc.getId()))
+                            .filter(pj -> pj.getDocumentRequis() != null
+                                    && pj.getDocumentRequis().getId().equals(doc.getId()))
                             .findFirst();
-                    
+
                     boolean isReadOnly = currentUser.getRole() != Utilisateur.UserRole.AGENT_ANTENNE &&
-                                        currentUser.getRole() != Utilisateur.UserRole.ADMIN;
-                    
+                            currentUser.getRole() != Utilisateur.UserRole.ADMIN;
+
                     return AvailableFormDTO.builder()
                             .formId(doc.getId().toString())
                             .title(doc.getNomDocument())
                             .description(doc.getDescription())
-                            .isCompleted(relatedPieceJointe.isPresent() && 
+                            .isCompleted(relatedPieceJointe.isPresent() &&
                                     relatedPieceJointe.get().getStatus() == PieceJointe.DocumentStatus.COMPLETE)
                             .lastModified(relatedPieceJointe.map(PieceJointe::getDateUpload).orElse(null))
                             .requiredDocuments(List.of(doc.getNomDocument()))
