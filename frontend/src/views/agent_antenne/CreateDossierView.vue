@@ -1,11 +1,7 @@
 <template>
   <div class="create-dossier-container">
-    <UserInfoHeader 
-      search-placeholder="Rechercher un agriculteur..."
-      @search="handleSearch"
-    />
-
-    <div class="stepper-container">
+    <!-- Stepper -->
+    <div class="component-card stepper-container">
       <div class="stepper">
         <div 
           v-for="(step, index) in steps" 
@@ -114,61 +110,73 @@
 
           <div class="form-group">
             <label for="province" class="required">Province</label>
-            <Dropdown 
+            <Select 
+              :key="`province-${refreshKey}`"
               id="province" 
               v-model="selectedProvince" 
               :options="provinces"
-              option-label="designation"
-              option-value="id"
-              placeholder="Province"
+              optionLabel="designation"
+              optionValue="id"
+              placeholder="Sélectionner une province"
               @change="onProvinceChange"
+              @update:modelValue="triggerAutoSave"
               :class="{ 'p-invalid': validationErrors.province }"
+              class="w-full"
             />
             <small class="p-error">{{ validationErrors.province }}</small>
           </div>
 
           <div class="form-group">
             <label for="cercle" class="required">Cercle</label>
-            <Dropdown 
+            <Select 
+              :key="`cercle-${refreshKey}`"
               id="cercle" 
               v-model="selectedCercle" 
               :options="cercles"
-              option-label="designation"
-              option-value="id"
+              optionLabel="designation"
+              optionValue="id"
               placeholder="Sélectionner un cercle"
               :disabled="!selectedProvince"
               @change="onCercleChange"
+              @update:modelValue="triggerAutoSave"
               :class="{ 'p-invalid': validationErrors.cercle }"
+              class="w-full"
             />
             <small class="p-error">{{ validationErrors.cercle }}</small>
           </div>
 
           <div class="form-group">
             <label for="commune" class="required">Commune Rurale</label>
-            <Dropdown 
+            <Select 
+              :key="`commune-${refreshKey}`"
               id="commune" 
               v-model="formData.agriculteur.communeRuraleId" 
               :options="communesRurales"
-              option-label="designation"
-              option-value="id"
+              optionLabel="designation"
+              optionValue="id"
               placeholder="Sélectionner une commune rurale"
               :disabled="!selectedCercle"
               @change="onCommuneChange"
+              @update:modelValue="triggerAutoSave"
               :class="{ 'p-invalid': validationErrors.communeRuraleId }"
+              class="w-full"
             />
             <small class="p-error">{{ validationErrors.communeRuraleId }}</small>
           </div>
 
           <div class="form-group">
             <label for="douar">Douar</label>
-            <Dropdown 
+            <Select 
+              :key="`douar-${refreshKey}`"
               id="douar" 
               v-model="formData.agriculteur.douarId" 
               :options="douars"
-              option-label="designation"
-              option-value="id"
+              optionLabel="designation"
+              optionValue="id"
               placeholder="Sélectionner un douar"
               :disabled="!formData.agriculteur.communeRuraleId"
+              @update:modelValue="triggerAutoSave"
+              class="w-full"
             />
           </div>
         </div>
@@ -192,28 +200,24 @@
 
           <div class="form-group">
             <label for="antenne" class="required">Antenne</label>
-            <Dropdown 
+            <InputText 
               id="antenne" 
-              v-model="formData.dossier.antenneId" 
-              :options="antennes"
-              option-label="designation"
-              option-value="id"
-              placeholder="Sélectionner une antenne"
-              :class="{ 'p-invalid': validationErrors.antenneId }"
+              :value="userAntenne?.designation || 'Chargement...'" 
+              readonly
+              class="w-full"
             />
-            <small class="form-help">Votre antenne par défaut: {{ userAntenne?.designation }}</small>
-            <small class="p-error">{{ validationErrors.antenneId }}</small>
+            <small class="form-help">Votre antenne par défaut</small>
           </div>
 
           <div class="form-group">
             <label for="dateDepot" class="required">Date de dépôt</label>
-            <Calendar 
+            <InputText 
               id="dateDepot" 
-              v-model="formData.dossier.dateDepot" 
-              date-format="dd/mm/yy"
-              :class="{ 'p-invalid': validationErrors.dateDepot }"
+              :value="formatDate(formData.dossier.dateDepot)"
+              readonly
+              class="w-full"
             />
-            <small class="p-error">{{ validationErrors.dateDepot }}</small>
+            <small class="form-help">Date du jour</small>
           </div>
 
           <div class="form-group">
@@ -234,6 +238,17 @@
               <h4>Projet sélectionné:</h4>
               <p><strong>{{ selectedSousRubrique?.designation }}</strong></p>
               <small>{{ selectedSousRubrique?.documentsRequis?.length || 0 }} document(s) requis</small>
+              
+              <!-- Documents requis list -->
+              <div v-if="selectedSousRubrique?.documentsRequis?.length > 0" class="documents-required-list">
+                <h5>Documents requis:</h5>
+                <ul>
+                  <li v-for="document in selectedSousRubrique.documentsRequis" :key="document">
+                    <i class="pi pi-file"></i>
+                    <span>{{ document }}</span>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
@@ -318,17 +333,17 @@
             label="Créer le dossier" 
             icon="pi pi-check" 
             @click="createDossier"
-            class="p-button-success"
+            class="p-button-success btn-primary"
             :loading="loading.create"
           />
         </div>
       </div>
     </div>
 
-    <!-- Auto-save indicator -->
-    <div v-if="autoSaving" class="auto-save-indicator">
-      <i class="pi pi-save"></i>
-      Sauvegarde automatique...
+    <!-- Save notification for important events only -->
+    <div v-if="saveNotification.show" class="save-notification" :class="saveNotification.type">
+      <i :class="saveNotification.icon"></i>
+      <span>{{ saveNotification.message }}</span>
     </div>
 
     <!-- Printable Receipt Component (hidden, only for printing) -->
@@ -390,9 +405,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed, watch, onBeforeUnmount, nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import UserInfoHeader from '@/components/UserInfoHeader.vue';
 import PrintableReceipt from '@/components/agent_antenne/PrintableReceipt.vue';
 import ApiService from '@/services/ApiService';
 
@@ -400,8 +414,7 @@ import ApiService from '@/services/ApiService';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
-import Dropdown from 'primevue/dropdown';
-import Calendar from 'primevue/calendar';
+import Select from 'primevue/select';
 import Dialog from 'primevue/dialog';
 import Toast from 'primevue/toast';
 
@@ -409,7 +422,8 @@ const toast = useToast();
 
 // Constants
 const STORAGE_KEY = 'dossier-creation-draft';
-const AUTO_SAVE_DELAY = 1000;
+const AUTO_SAVE_DELAY = 2000; // Increased delay for better UX
+const SAVE_NOTIFICATION_DURATION = 3000;
 
 // État des étapes
 const currentStep = ref(1);
@@ -450,8 +464,18 @@ const loading = ref({
   geographic: false
 });
 
-const autoSaving = ref(false);
+// Save notification system for important events only
+const saveNotification = ref({
+  show: false,
+  type: 'success', // 'success', 'error', 'warning'
+  message: '',
+  icon: ''
+});
+
+const isRestoring = ref(false); // Flag to prevent conflicts during restoration
+const refreshKey = ref(0); // Key to force component refresh
 let autoSaveTimeout = null;
+let saveNotificationTimeout = null;
 
 // Données
 const rubriques = ref([]);
@@ -477,7 +501,6 @@ const isBasicInfoValid = computed(() => {
          formData.value.agriculteur.telephone &&
          formData.value.agriculteur.communeRuraleId &&
          formData.value.dossier.saba &&
-         formData.value.dossier.antenneId &&
          formData.value.dossier.montantDemande &&
          selectedSousRubrique.value;
 });
@@ -490,37 +513,129 @@ const selectedDouarName = computed(() => {
   return douars.value.find(d => d.id === formData.value.agriculteur.douarId)?.designation;
 });
 
-// Auto-save functionality
-const loadSavedData = () => {
+// Enhanced Auto-save functionality
+const loadSavedData = async () => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     try {
+      isRestoring.value = true; // Prevent auto-save during restoration
       const parsedData = JSON.parse(saved);
+      console.log('Loading saved data:', parsedData); // Debug log
+      
+      // Check if saved data is not too old (24 hours)
+      const saveAge = Date.now() - (parsedData.timestamp || 0);
+      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+      
+      if (saveAge > maxAge) {
+        localStorage.removeItem(STORAGE_KEY);
+        showSaveNotification('Brouillon expiré supprimé', 'warning', 'pi pi-exclamation-triangle');
+        isRestoring.value = false;
+        return;
+      }
+      
+      // Restore form data first
       formData.value = { ...formData.value, ...parsedData.formData };
       
-      // Restore selections
-      if (parsedData.selectedProvince) selectedProvince.value = parsedData.selectedProvince;
-      if (parsedData.selectedCercle) selectedCercle.value = parsedData.selectedCercle;
-      if (parsedData.selectedSousRubrique) selectedSousRubrique.value = parsedData.selectedSousRubrique;
+      // Restore step
       if (parsedData.currentStep) currentStep.value = parsedData.currentStep;
       
-      // Restore dependent dropdowns
-      if (parsedData.selectedProvince) loadCercles(parsedData.selectedProvince);
-      if (parsedData.selectedCercle) loadCommunes(parsedData.selectedCercle);
-      if (parsedData.formData?.agriculteur?.communeRuraleId) loadDouars(parsedData.formData.agriculteur.communeRuraleId);
+      // Restore sous-rubrique selection
+      if (parsedData.selectedSousRubrique) {
+        selectedSousRubrique.value = parsedData.selectedSousRubrique;
+      }
+      
+      // Restore geographic cascade step by step
+      await restoreGeographicSelections(parsedData);
+      
+      console.log('Data restoration completed'); // Debug log
+      
+      // Force refresh of Select components
+      refreshKey.value++;
+      
+      showSaveNotification('Brouillon restauré', 'success', 'pi pi-check');
       
     } catch (e) {
       console.warn('Failed to load saved data:', e);
+      localStorage.removeItem(STORAGE_KEY);
+      showSaveNotification('Erreur lors de la restauration', 'error', 'pi pi-times');
+    } finally {
+      isRestoring.value = false; // Re-enable auto-save
+    }
+  }
+};
+
+const restoreGeographicSelections = async (parsedData) => {
+  // Step 1: Restore province
+  if (parsedData.selectedProvince && provinces.value.length > 0) {
+    console.log('Restoring province:', parsedData.selectedProvince);
+    
+    // Load cercles for this province
+    await loadCercles(parsedData.selectedProvince);
+    
+    // Wait for options to be available, then set province
+    let attempts = 0;
+    while (cercles.value.length === 0 && attempts < 10) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      attempts++;
+    }
+    
+    selectedProvince.value = parsedData.selectedProvince;
+    console.log('Province restored to:', selectedProvince.value);
+    
+    // Step 2: Restore cercle
+    if (parsedData.selectedCercle) {
+      console.log('Restoring cercle:', parsedData.selectedCercle);
+      
+      // Verify cercle exists in loaded options
+      const cercleExists = cercles.value.some(c => c.id === parsedData.selectedCercle);
+      if (cercleExists) {
+        selectedCercle.value = parsedData.selectedCercle;
+        console.log('Cercle restored to:', selectedCercle.value);
+        
+        // Load communes for this cercle
+        await loadCommunes(parsedData.selectedCercle);
+        
+        // Wait for communes to be available
+        attempts = 0;
+        while (communesRurales.value.length === 0 && attempts < 10) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+        
+        // Step 3: Verify and restore commune (should already be set via formData)
+        if (parsedData.formData?.agriculteur?.communeRuraleId) {
+          console.log('Loading douars for commune:', parsedData.formData.agriculteur.communeRuraleId);
+          
+          // Verify commune exists in loaded options
+          const communeExists = communesRurales.value.some(c => c.id === parsedData.formData.agriculteur.communeRuraleId);
+          if (communeExists) {
+            // Load douars for this commune
+            await loadDouars(parsedData.formData.agriculteur.communeRuraleId);
+            
+            console.log('Final values:');
+            console.log('- Province:', selectedProvince.value);
+            console.log('- Cercle:', selectedCercle.value);
+            console.log('- Commune:', formData.value.agriculteur.communeRuraleId);
+            console.log('- Douar:', formData.value.agriculteur.douarId);
+          } else {
+            console.warn('Commune not found in loaded options:', parsedData.formData.agriculteur.communeRuraleId);
+          }
+        }
+      } else {
+        console.warn('Cercle not found in loaded options:', parsedData.selectedCercle);
+      }
     }
   }
 };
 
 const autoSave = () => {
+  // Don't auto-save during restoration
+  if (isRestoring.value) return;
+  
   if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
   
   autoSaveTimeout = setTimeout(() => {
     try {
-      autoSaving.value = true;
       const dataToSave = {
         formData: formData.value,
         selectedProvince: selectedProvince.value,
@@ -530,16 +645,39 @@ const autoSave = () => {
         timestamp: Date.now()
       };
       
+      console.log('Saving data:', dataToSave); // Debug log
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
       
-      setTimeout(() => {
-        autoSaving.value = false;
-      }, 500);
     } catch (e) {
       console.warn('Failed to auto-save:', e);
-      autoSaving.value = false;
+      showSaveNotification('Erreur de sauvegarde automatique', 'error', 'pi pi-times');
     }
   }, AUTO_SAVE_DELAY);
+};
+
+const triggerAutoSave = () => {
+  // Force trigger auto-save immediately for Select changes
+  autoSave();
+};
+
+const showSaveNotification = (message, type = 'success', icon = 'pi pi-check') => {
+  if (saveNotificationTimeout) clearTimeout(saveNotificationTimeout);
+  
+  saveNotification.value = {
+    show: true,
+    type,
+    message,
+    icon
+  };
+  
+  saveNotificationTimeout = setTimeout(() => {
+    saveNotification.value.show = false;
+  }, SAVE_NOTIFICATION_DURATION);
+};
+
+const clearSavedData = () => {
+  localStorage.removeItem(STORAGE_KEY);
+  showSaveNotification('Brouillon supprimé', 'success', 'pi pi-trash');
 };
 
 // Watch for changes to auto-save
@@ -548,8 +686,13 @@ watch([selectedProvince, selectedCercle, selectedSousRubrique, currentStep], aut
 
 // Méthodes du cycle de vie
 onMounted(async () => {
-  loadSavedData();
   await loadInitializationData();
+  await loadSavedData();
+});
+
+onBeforeUnmount(() => {
+  if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
+  if (saveNotificationTimeout) clearTimeout(saveNotificationTimeout);
 });
 
 // API Methods
@@ -600,12 +743,14 @@ async function loadCercles(provinceId) {
     const response = await ApiService.get(`/agent_antenne/dossiers/cercles/${provinceId}`);
     cercles.value = response || [];
     
-    // Reset dependent selections
-    selectedCercle.value = null;
-    communesRurales.value = [];
-    douars.value = [];
-    formData.value.agriculteur.communeRuraleId = null;
-    formData.value.agriculteur.douarId = null;
+    // Only reset dependent selections if we're not restoring saved data
+    if (!isRestoring.value) {
+      selectedCercle.value = null;
+      communesRurales.value = [];
+      douars.value = [];
+      formData.value.agriculteur.communeRuraleId = null;
+      formData.value.agriculteur.douarId = null;
+    }
   } catch (error) {
     console.error('Erreur lors du chargement des cercles:', error);
     toast.add({
@@ -627,10 +772,12 @@ async function loadCommunes(cercleId) {
     const response = await ApiService.get(`/agent_antenne/dossiers/communes/${cercleId}`);
     communesRurales.value = response || [];
     
-    // Reset dependent selections
-    douars.value = [];
-    formData.value.agriculteur.communeRuraleId = null;
-    formData.value.agriculteur.douarId = null;
+    // Only reset dependent selections if we're not restoring saved data
+    if (!isRestoring.value) {
+      douars.value = [];
+      formData.value.agriculteur.communeRuraleId = null;
+      formData.value.agriculteur.douarId = null;
+    }
   } catch (error) {
     console.error('Erreur lors du chargement des communes:', error);
     toast.add({
@@ -652,8 +799,10 @@ async function loadDouars(communeId) {
     const response = await ApiService.get(`/agent_antenne/dossiers/douars/${communeId}`);
     douars.value = response || [];
     
-    // Reset douar selection
-    formData.value.agriculteur.douarId = null;
+    // Only reset douar selection if we're not restoring saved data
+    if (!isRestoring.value && !formData.value.agriculteur.douarId) {
+      formData.value.agriculteur.douarId = null;
+    }
   } catch (error) {
     console.error('Erreur lors du chargement des douars:', error);
     toast.add({
@@ -669,19 +818,19 @@ async function loadDouars(communeId) {
 
 // Event handlers
 async function onProvinceChange() {
-  if (selectedProvince.value) {
+  if (selectedProvince.value && !isRestoring.value) {
     await loadCercles(selectedProvince.value);
   }
 }
 
 async function onCercleChange() {
-  if (selectedCercle.value) {
+  if (selectedCercle.value && !isRestoring.value) {
     await loadCommunes(selectedCercle.value);
   }
 }
 
 async function onCommuneChange() {
-  if (formData.value.agriculteur.communeRuraleId) {
+  if (formData.value.agriculteur.communeRuraleId && !isRestoring.value) {
     await loadDouars(formData.value.agriculteur.communeRuraleId);
   }
 }
@@ -759,10 +908,6 @@ function validateBasicInfo() {
     errors.saba = 'SABA requis';
   }
   
-  if (!formData.value.dossier.antenneId) {
-    errors.antenneId = 'Antenne requise';
-  }
-  
   if (!formData.value.dossier.montantDemande) {
     errors.montantDemande = 'Montant requis';
   }
@@ -805,7 +950,7 @@ async function createDossier() {
     });
     
     // Clear saved data after successful creation
-    localStorage.removeItem(STORAGE_KEY);
+    clearSavedData();
     
     // Afficher le récépissé
     recepisse.value = response.recepisse;
@@ -918,7 +1063,7 @@ async function resetForm() {
   validationErrors.value = {};
   
   // Clear saved data
-  localStorage.removeItem(STORAGE_KEY);
+  clearSavedData();
   
   // Reload initialization data to get new SABA
   await loadInitializationData();
@@ -942,38 +1087,64 @@ function formatCurrency(amount) {
 }
 
 function formatDate(date) {
-  if (!date) return '';
+  if (!date) return new Intl.DateTimeFormat('fr-FR').format(new Date());
   return new Intl.DateTimeFormat('fr-FR').format(new Date(date));
 }
 </script>
 
 <style scoped>
 .create-dossier-container {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 0;
+  background: var(--background-color);
+  min-height: 100vh;
 }
 
-/* Auto-save indicator */
-.auto-save-indicator {
+/* Save notification for important events */
+.save-notification {
   position: fixed;
-  bottom: 1rem;
-  left: 1rem;
-  background: var(--primary-color);
+  top: 1rem;
+  right: 1rem;
   color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--border-radius-lg);
   font-size: 0.875rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  z-index: 1000;
-  animation: fadeInOut 2s ease-in-out;
+  z-index: 1001;
+  animation: slideInRight 0.3s ease-out;
+  box-shadow: var(--shadow-lg);
 }
 
-@keyframes fadeInOut {
-  0%, 100% { opacity: 0; }
-  50% { opacity: 1; }
+.save-notification.success {
+  background: var(--success-color);
+}
+
+.save-notification.error {
+  background: var(--danger-color);
+}
+
+.save-notification.warning {
+  background: var(--warning-color);
+}
+
+@keyframes slideInRight {
+  0% { transform: translateX(100%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+/* Primary Button Styles */
+:deep(.btn-primary) {
+  background-color: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
+  color: var(--text-on-primary) !important;
+}
+
+:deep(.btn-primary:hover) {
+  background-color: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
 }
 
 /* Stepper */
@@ -985,10 +1156,7 @@ function formatDate(date) {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: var(--background-color);
-  padding: 1.5rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: var(--component-spacing);
   gap: 2rem;
 }
 
@@ -1005,7 +1173,7 @@ function formatDate(date) {
   right: -1.5rem;
   width: 2rem;
   height: 2px;
-  background: #e5e7eb;
+  background: var(--border-color);
   z-index: 1;
 }
 
@@ -1018,8 +1186,8 @@ function formatDate(date) {
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
-  background: #e5e7eb;
-  color: #6b7280;
+  background: var(--border-color);
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1031,17 +1199,17 @@ function formatDate(date) {
 
 .step.active .step-number {
   background: var(--primary-color);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .step.completed .step-number {
-  background: #10b981;
-  color: white;
+  background: var(--success-color);
+  color: var(--text-on-primary);
 }
 
 .step-label {
   font-weight: 500;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.875rem;
   margin-right: 1rem;
 }
@@ -1059,9 +1227,9 @@ function formatDate(date) {
 }
 
 .rubrique-card {
-  background: #f8f9fa;
-  border-radius: 12px;
-  padding: 1.5rem;
+  background: var(--section-background);
+  border-radius: var(--border-radius-lg);
+  padding: var(--component-spacing);
   border: 1px solid var(--border-color);
 }
 
@@ -1072,11 +1240,12 @@ function formatDate(date) {
   margin-bottom: 0.5rem;
   padding-bottom: 0.5rem;
   border-bottom: 2px solid var(--primary-color);
+  font-family: 'Poppins', sans-serif;
 }
 
 .rubrique-description {
   font-size: 0.9rem;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin-bottom: 1rem;
   font-style: italic;
 }
@@ -1088,9 +1257,9 @@ function formatDate(date) {
 }
 
 .project-type {
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
+  background: var(--card-background);
+  border: 2px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
   padding: 1rem;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -1101,12 +1270,12 @@ function formatDate(date) {
 
 .project-type:hover {
   border-color: var(--primary-color);
-  box-shadow: 0 4px 12px rgba(1, 114, 62, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .project-type.selected {
   border-color: var(--primary-color);
-  background: rgba(1, 114, 62, 0.05);
+  background: var(--clr-surface-tonal-a0);
 }
 
 .project-icon {
@@ -1120,13 +1289,14 @@ function formatDate(date) {
 .project-info h4 {
   font-size: 1rem;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-color);
   margin-bottom: 0.25rem;
+  font-family: 'Poppins', sans-serif;
 }
 
 .project-info p {
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin: 0 0 0.5rem 0;
 }
 
@@ -1135,7 +1305,7 @@ function formatDate(date) {
 }
 
 .documents-list small {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.75rem;
 }
 
@@ -1147,7 +1317,7 @@ function formatDate(date) {
 
 .documents-list li {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin: 0.125rem 0;
 }
 
@@ -1168,47 +1338,89 @@ function formatDate(date) {
 }
 
 .form-group label {
-  font-weight: 500;
-  color: #374151;
+  font-weight: 600;
+  color: var(--text-color);
   margin-bottom: 0.5rem;
   font-size: 0.875rem;
 }
 
 .form-group label.required::after {
   content: ' *';
-  color: #dc2626;
+  color: var(--danger-color);
 }
 
 .form-help {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin-top: 0.25rem;
 }
 
 .selected-project-info {
-  background: rgba(1, 114, 62, 0.05);
-  border: 1px solid rgba(1, 114, 62, 0.2);
-  border-radius: 8px;
+  background: var(--clr-surface-tonal-a0);
+  border: 1px solid var(--clr-primary-a20);
+  border-radius: var(--border-radius-lg);
   padding: 1rem;
 }
 
 .selected-project-info h4 {
   color: var(--primary-color);
   margin-bottom: 0.5rem;
+  font-family: 'Poppins', sans-serif;
+}
+
+.documents-required-list {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--clr-primary-a20);
+}
+
+.documents-required-list h5 {
+  color: var(--primary-color);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem 0;
+  font-family: 'Poppins', sans-serif;
+}
+
+.documents-required-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.documents-required-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  font-size: 0.875rem;
+  color: var(--text-color);
+  border-bottom: 1px solid var(--clr-surface-tonal-a10);
+}
+
+.documents-required-list li:last-child {
+  border-bottom: none;
+}
+
+.documents-required-list li i {
+  color: var(--primary-color);
+  font-size: 0.875rem;
+  width: 16px;
+  text-align: center;
 }
 
 /* Summary */
 .summary-sections {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--component-spacing);
 }
 
 .summary-section {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 1.5rem;
-  border: 1px solid #e5e7eb;
+  background: var(--section-background);
+  border-radius: var(--border-radius-lg);
+  padding: var(--component-spacing);
+  border: 1px solid var(--border-color);
 }
 
 .summary-section h3 {
@@ -1217,7 +1429,8 @@ function formatDate(date) {
   font-weight: 600;
   margin-bottom: 1rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-color);
+  font-family: 'Poppins', sans-serif;
 }
 
 .info-grid {
@@ -1228,7 +1441,7 @@ function formatDate(date) {
 
 .info-grid > div {
   font-size: 0.875rem;
-  color: #374151;
+  color: var(--text-color);
 }
 
 .documents-summary {
@@ -1242,7 +1455,7 @@ function formatDate(date) {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
-  color: #374151;
+  color: var(--text-color);
 }
 
 .document-item i {
@@ -1255,19 +1468,13 @@ function formatDate(date) {
   justify-content: space-between;
   align-items: center;
   margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid #e5e7eb;
+  padding-top: var(--component-spacing);
+  border-top: 1px solid var(--border-color);
 }
 
 .action-group {
   display: flex;
   gap: 0.75rem;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
-  border: none;
-  color: white;
 }
 
 /* Récépissé */
@@ -1276,7 +1483,7 @@ function formatDate(date) {
 }
 
 .recepisse-header {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--component-spacing);
   padding-bottom: 1rem;
   border-bottom: 2px solid var(--primary-color);
 }
@@ -1286,17 +1493,31 @@ function formatDate(date) {
   font-size: 1.25rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
+  font-family: 'Poppins', sans-serif;
 }
 
 .recepisse-body {
   text-align: left;
 }
 
+.recepisse-section {
+  margin-bottom: var(--component-spacing);
+}
+
+.recepisse-section h4 {
+  color: var(--primary-color);
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  font-family: 'Poppins', sans-serif;
+}
+
 .recepisse-row {
   display: flex;
   justify-content: space-between;
   padding: 0.5rem 0;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--clr-surface-tonal-a10);
+  font-size: 0.875rem;
 }
 
 .recepisse-row:last-child {
@@ -1331,25 +1552,22 @@ function formatDate(date) {
     width: 100%;
     justify-content: center;
   }
+
+  .save-notification {
+    left: 0.5rem;
+    right: 0.5rem;
+    width: auto;
+  }
 }
 
-/* Dark mode support */
-.dark-mode .stepper,
-.dark-mode .component-card,
-.dark-mode .project-type,
-.dark-mode .summary-section,
-.dark-mode .rubrique-card {
-  background-color: #1f2937;
-  border-color: #374151;
-}
-
-.dark-mode .step-number {
-  background-color: #374151;
-  color: #9ca3af;
-}
-
-.dark-mode .step.active .step-number {
-  background-color: var(--primary-color);
-  color: white;
+/* Additional responsive breakpoints */
+@media (max-width: 480px) {
+  .create-dossier-container {
+    padding: 0.5rem;
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

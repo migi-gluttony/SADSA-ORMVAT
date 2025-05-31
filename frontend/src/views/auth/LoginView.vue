@@ -221,11 +221,11 @@ const handleLogin = async () => {
 
 .auth-left {
   flex: 1;
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 50%, var(--secondary-color) 100%);
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 190%);
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
+  position: relative; 
   overflow: hidden;
 }
 
@@ -423,7 +423,7 @@ const handleLogin = async () => {
   font-size: 1rem;
   font-weight: 600;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+  background: var(--primary-color);
   border: none;
   color: white;
   cursor: pointer;

@@ -1,10 +1,5 @@
 <template>
   <div class="dossier-list-container">
-    <UserInfoHeader 
-      search-placeholder="Rechercher par SABA, CIN, nom..."
-      @search="handleSearch"
-    />
-
     <!-- Header with actions -->
     <div class="list-header">
       <div class="header-info">
@@ -16,7 +11,7 @@
           label="Nouveau Dossier" 
           icon="pi pi-plus" 
           @click="navigateToCreate"
-          class="p-button-success"
+          class="p-button-success btn-primary"
         />
         <Button 
           label="Actualiser" 
@@ -28,180 +23,257 @@
       </div>
     </div>
 
-    <!-- Filters -->
-    <div class="filters-section component-card">
+    <!-- Filters with Search -->
+    <div class="filters-section">
       <div class="filters-grid">
+        <!-- Search Input -->
+        <div class="filter-group search-group">
+          <label>RECHERCHE</label>
+          <div class="search-input-wrapper">
+            <i class="pi pi-search search-icon"></i>
+            <InputText 
+              v-model="searchTerm" 
+              placeholder="Rechercher par SABA, CIN, nom..."
+              class="search-input"
+              @input="handleSearch"
+            />
+            <button 
+              v-if="searchTerm" 
+              class="clear-search-btn" 
+              @click="clearSearch"
+              title="Effacer la recherche"
+            >
+              <i class="pi pi-times"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Status Filter -->
         <div class="filter-group">
-          <label>Statut</label>
-          <Dropdown 
+          <label>STATUT</label>
+          <Select 
             v-model="filters.statut" 
             :options="statutOptions"
-            option-label="label"
-            option-value="value"
+            optionLabel="label"
+            optionValue="value"
             placeholder="Tous les statuts"
             @change="applyFilters"
+            class="filter-select"
+            :clearable="true"
           />
         </div>
+
+        <!-- Project Type Filter -->
         <div class="filter-group">
-          <label>Type de projet</label>
-          <Dropdown 
+          <label>TYPE DE PROJET</label>
+          <Select 
             v-model="filters.sousRubriqueId" 
             :options="sousRubriqueOptions"
-            option-label="designation"
-            option-value="id"
+            optionLabel="designation"
+            optionValue="id"
             placeholder="Tous les types"
             @change="applyFilters"
+            class="filter-select"
+            :clearable="true"
           />
         </div>
-        <div class="filter-group">
-          <label>Période</label>
-          <Calendar 
-            v-model="filters.dateRange" 
-            selection-mode="range"
-            date-format="dd/mm/yy"
-            placeholder="Sélectionner une période"
-            @date-select="applyFilters"
-          />
-        </div>
+
+
+
+        <!-- Clear Filters -->
         <div class="filter-actions">
           <Button 
             label="Effacer" 
             icon="pi pi-times" 
             @click="clearFilters"
-            class="p-button-text"
+            class="p-button-text btn-clear"
           />
         </div>
       </div>
     </div>
 
-    <!-- Dossiers List -->
+    <!-- Loading State -->
     <div v-if="loading" class="loading-container">
       <ProgressSpinner size="50px" />
       <span>Chargement des dossiers...</span>
     </div>
 
+    <!-- Empty State -->
     <div v-else-if="dossiers.length === 0" class="empty-state">
       <div class="empty-content">
         <i class="pi pi-folder-open empty-icon"></i>
         <h3>Aucun dossier trouvé</h3>
-        <p>Vous n'avez pas encore créé de dossier ou aucun dossier ne correspond à vos critères de recherche.</p>
-        <Button 
-          label="Créer mon premier dossier" 
-          icon="pi pi-plus" 
-          @click="navigateToCreate"
-          class="p-button-success"
-        />
+        <p v-if="hasActiveFilters">Aucun dossier ne correspond à vos critères de recherche et filtres.</p>
+        <p v-else>Vous n'avez pas encore créé de dossier.</p>
+        <div class="empty-actions">
+          <Button 
+            v-if="hasActiveFilters"
+            label="Effacer les filtres" 
+            icon="pi pi-filter-slash" 
+            @click="clearFilters"
+            class="p-button-outlined"
+          />
+          <Button 
+            label="Créer mon premier dossier" 
+            icon="pi pi-plus" 
+            @click="navigateToCreate"
+            class="p-button-success btn-primary"
+          />
+        </div>
       </div>
     </div>
 
-    <div v-else class="dossiers-grid">
-      <div 
-        v-for="dossier in dossiers" 
-        :key="dossier.id"
-        class="dossier-card"
-        :class="{ 
-          'urgent': dossier.joursRestants <= 1,
-          'warning': dossier.joursRestants <= 2 && dossier.joursRestants > 1
-        }"
-      >
-        <!-- Card Header -->
-        <div class="card-header">
-          <div class="dossier-meta">
-            <span class="dossier-reference">{{ dossier.reference }}</span>
-            <span class="dossier-saba">SABA: {{ dossier.saba }}</span>
-          </div>
-          <div class="dossier-status">
-            <Tag 
-              :value="dossier.statut" 
-              :severity="getStatusSeverity(dossier.statut)"
-            />
-          </div>
-        </div>
+    <!-- Dossiers Table -->
+    <div v-else class="table-container">
+      <table class="dossiers-table">
+        <thead>
+          <tr>
+            <th class="col-reference">
+              Référence
+              <i class="pi pi-sort-alt sort-icon"></i>
+            </th>
+            <th class="col-agriculteur">
+              Agriculteur
+              <i class="pi pi-sort-alt sort-icon"></i>
+            </th>
+            <th class="col-project">Type de Projet</th>
+            <th class="col-status">
+              Statut
+              <i class="pi pi-sort-alt sort-icon"></i>
+            </th>
+            <th class="col-progress">
+              Avancement
+              <i class="pi pi-sort-alt sort-icon"></i>
+            </th>
+            <th class="col-details">Délais</th>
+            <th class="col-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr 
+            v-for="dossier in dossiers" 
+            :key="dossier.id"
+            class="dossier-row"
+            :class="{ 
+              'urgent': dossier.joursRestants <= 1,
+              'warning': dossier.joursRestants <= 2 && dossier.joursRestants > 1
+            }"
+          >
+            <!-- Reference Column -->
+            <td class="col-reference">
+              <div class="reference-cell">
+                <div class="reference-info">
+                  <span class="reference-number">{{ dossier.reference }}</span>
+                  <span class="saba-number">SABA: {{ dossier.saba }}</span>
+                </div>
+              </div>
+            </td>
 
-        <!-- Card Content -->
-        <div class="card-content">
-          <div class="agriculteur-info">
-            <h3>{{ dossier.agriculteurPrenom }} {{ dossier.agriculteurNom }}</h3>
-            <p><i class="pi pi-id-card"></i> {{ dossier.agriculteurCin }}</p>
-          </div>
+            <!-- Agriculteur Column -->
+            <td class="col-agriculteur">
+              <div class="agriculteur-cell">
+                <div class="agriculteur-name">{{ dossier.agriculteurPrenom }} {{ dossier.agriculteurNom }}</div>
+                <div class="agriculteur-cin">
+                  <i class="pi pi-id-card"></i>
+                  {{ dossier.agriculteurCin }}
+                </div>
+              </div>
+            </td>
 
-          <div class="project-info">
-            <p class="project-type">
-              <i class="pi pi-tags"></i>
-              {{ dossier.sousRubriqueDesignation }}
-            </p>
-            <p class="project-amount" v-if="dossier.montantDemande">
-              <i class="pi pi-money-bill"></i>
-              {{ formatCurrency(dossier.montantDemande) }}
-            </p>
-          </div>
+            <!-- Project Type Column -->
+            <td class="col-project">
+              <div class="project-cell">
+                <div class="project-type">{{ dossier.sousRubriqueDesignation }}</div>
+                <div class="project-amount" v-if="dossier.montantDemande">
+                  <i class="pi pi-money-bill"></i>
+                  {{ formatCurrency(dossier.montantDemande) }}
+                </div>
+              </div>
+            </td>
 
-          <!-- Progress Section -->
-          <div class="progress-section">
-            <div class="progress-header">
-              <span>Complété: {{ dossier.formsCompleted }}/{{ dossier.totalForms }} formulaires</span>
-              <span class="percentage">{{ dossier.completionPercentage }}%</span>
-            </div>
-            <ProgressBar 
-              :value="dossier.completionPercentage" 
-              :show-value="false"
-              :class="{
-                'progress-complete': dossier.completionPercentage === 100,
-                'progress-medium': dossier.completionPercentage >= 50 && dossier.completionPercentage < 100,
-                'progress-low': dossier.completionPercentage < 50
-              }"
-            />
-          </div>
+            <!-- Status Column -->
+            <td class="col-status">
+              <Tag 
+                :value="dossier.statut" 
+                :severity="getStatusSeverity(dossier.statut)"
+                class="status-tag"
+              />
+            </td>
 
-          <!-- Time Section -->
-          <div class="time-section">
-            <div class="time-info">
-              <i class="pi pi-clock"></i>
-              <span v-if="dossier.joursRestants > 0" class="time-remaining">
-                {{ dossier.joursRestants }} jour(s) restant(s)
-              </span>
-              <span v-else class="time-expired">Délai dépassé</span>
-            </div>
-            <div class="creation-date">
-              Créé le {{ formatDate(dossier.dateCreation) }}
-            </div>
-          </div>
-        </div>
+            <!-- Progress Column -->
+            <td class="col-progress">
+              <div class="progress-cell">
+                <div class="progress-info">
+                  <span class="progress-text">{{ dossier.formsCompleted }}/{{ dossier.totalForms }} formulaires</span>
+                  <span class="progress-percentage">{{ dossier.completionPercentage }}%</span>
+                </div>
+                <ProgressBar 
+                  :value="dossier.completionPercentage" 
+                  :show-value="false"
+                  class="progress-bar"
+                  :class="{
+                    'progress-complete': dossier.completionPercentage === 100,
+                    'progress-medium': dossier.completionPercentage >= 50 && dossier.completionPercentage < 100,
+                    'progress-low': dossier.completionPercentage < 50
+                  }"
+                />
+              </div>
+            </td>
 
-        <!-- Card Actions -->
-        <div class="card-actions">
-          <Button 
-            label="Voir détails" 
-            icon="pi pi-eye" 
-            @click="viewDossierDetail(dossier.id)"
-            class="p-button-outlined p-button-sm"
-          />
-          
-          <Button 
-            v-if="dossier.peutEtreModifie && dossier.completionPercentage < 100" 
-            label="Continuer" 
-            icon="pi pi-pencil" 
-            @click="continueDossier(dossier.id)"
-            class="p-button-sm"
-          />
+            <!-- Details Column -->
+            <td class="col-details">
+              <div class="details-cell">
+                <div class="time-info">
+                  <i class="pi pi-clock"></i>
+                  <span v-if="dossier.joursRestants > 0" class="time-remaining">
+                    {{ dossier.joursRestants }} jour(s)
+                  </span>
+                  <span v-else class="time-expired">Délai dépassé</span>
+                </div>
+                <div class="creation-date">
+                  Créé le {{ formatDate(dossier.dateCreation) }}
+                </div>
+              </div>
+            </td>
 
-          <Button 
-            v-if="dossier.peutEtreEnvoye" 
-            label="Envoyer au GUC" 
-            icon="pi pi-send" 
-            @click="confirmSendToGUC(dossier)"
-            class="p-button-success p-button-sm"
-          />
+            <!-- Actions Column -->
+            <td class="col-actions">
+              <div class="actions-cell">
+                <Button 
+                  icon="pi pi-eye" 
+                  @click="viewDossierDetail(dossier.id)"
+                  class="p-button-outlined p-button-sm action-btn"
+                  v-tooltip.top="'Voir détails'"
+                />
+                
+                <Button 
+                  v-if="dossier.peutEtreModifie && dossier.completionPercentage < 100" 
+                  icon="pi pi-pencil" 
+                  @click="continueDossier(dossier.id)"
+                  class="p-button-sm action-btn btn-edit"
+                  v-tooltip.top="'Continuer'"
+                />
 
-          <Button 
-            v-if="dossier.peutEtreSupprime" 
-            icon="pi pi-trash" 
-            @click="confirmDeleteDossier(dossier)"
-            class="p-button-danger p-button-outlined p-button-sm"
-            v-tooltip.top="'Supprimer'"
-          />
-        </div>
-      </div>
+                <Button 
+                  v-if="dossier.peutEtreEnvoye" 
+                  icon="pi pi-send" 
+                  @click="confirmSendToGUC(dossier)"
+                  class="p-button-success p-button-sm action-btn"
+                  v-tooltip.top="'Envoyer au GUC'"
+                />
+
+                <Button 
+                  v-if="dossier.peutEtreSupprime" 
+                  icon="pi pi-trash" 
+                  @click="confirmDeleteDossier(dossier)"
+                  class="p-button-danger p-button-outlined p-button-sm action-btn"
+                  v-tooltip.top="'Supprimer'"
+                />
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <!-- Pagination -->
@@ -235,7 +307,7 @@
       </div>
       
       <div class="delete-comment">
-        <label for="deleteComment">Commentaire (optionnel)</label>
+        <label for="deleteComment">COMMENTAIRE (OPTIONNEL)</label>
         <Textarea 
           id="deleteComment"
           v-model="deleteDialog.comment" 
@@ -282,7 +354,7 @@
       </div>
       
       <div class="send-comment">
-        <label for="sendComment">Commentaire (optionnel)</label>
+        <label for="sendComment">COMMENTAIRE (OPTIONNEL)</label>
         <Textarea 
           id="sendComment"
           v-model="sendDialog.comment" 
@@ -302,7 +374,7 @@
           label="Envoyer" 
           icon="pi pi-send" 
           @click="sendDossierToGUC"
-          class="p-button-success"
+          class="p-button-success btn-primary"
           :loading="sendDialog.loading"
         />
       </template>
@@ -316,13 +388,12 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
-import UserInfoHeader from '@/components/UserInfoHeader.vue';
 import ApiService from '@/services/ApiService';
 
 // PrimeVue components
 import Button from 'primevue/button';
-import Dropdown from 'primevue/dropdown';
-import Calendar from 'primevue/calendar';
+import InputText from 'primevue/inputtext';
+import Select from 'primevue/select';
 import ProgressSpinner from 'primevue/progressspinner';
 import ProgressBar from 'primevue/progressbar';
 import Tag from 'primevue/tag';
@@ -348,18 +419,31 @@ const totalRecords = computed(() => dossiersData.value?.totalCount || 0);
 // Filters
 const filters = ref({
   statut: null,
-  sousRubriqueId: null,
-  dateRange: null
+  sousRubriqueId: null
 });
 
 const statutOptions = ref([
-  { label: 'Phase Antenne', value: 'Phase Antenne' },
-  { label: 'Phase GUC', value: 'Phase GUC' },
-  { label: 'Commission Technique', value: 'Commission Technique' },
-  { label: 'Réalisation', value: 'Réalisation' }
+  { label: 'Brouillon', value: 'DRAFT' },
+  { label: 'Soumis', value: 'SUBMITTED' },
+  { label: 'En révision', value: 'IN_REVIEW' },
+  { label: 'Approuvé', value: 'APPROVED' },
+  { label: 'Rejeté', value: 'REJECTED' },
+  { label: 'Terminé', value: 'COMPLETED' },
+  { label: 'Annulé', value: 'CANCELLED' },
+  { label: 'Retourné pour complétion', value: 'RETURNED_FOR_COMPLETION' },
+  { label: 'En attente de correction', value: 'PENDING_CORRECTION' }
 ]);
 
 const sousRubriqueOptions = ref([]);
+
+// Computed for checking if there are active filters
+const hasActiveFilters = computed(() => {
+  const hasSearch = searchTerm.value && searchTerm.value.trim();
+  const hasStatus = filters.value.statut;
+  const hasSubRubrique = filters.value.sousRubriqueId;
+  
+  return hasSearch || hasStatus || hasSubRubrique;
+});
 
 // Dialogs
 const deleteDialog = ref({
@@ -392,9 +476,22 @@ async function loadDossiers() {
       sortDirection: 'DESC'
     };
 
-    if (searchTerm.value) params.searchTerm = searchTerm.value;
-    if (filters.value.statut) params.statut = filters.value.statut;
-    if (filters.value.sousRubriqueId) params.sousRubriqueId = filters.value.sousRubriqueId;
+    // Add search term if provided
+    if (searchTerm.value && searchTerm.value.trim()) {
+      params.searchTerm = searchTerm.value.trim();
+    }
+
+    // Add status filter if provided
+    if (filters.value.statut) {
+      params.statut = filters.value.statut;
+    }
+
+    // Add project type filter if provided
+    if (filters.value.sousRubriqueId) {
+      params.sousRubriqueId = filters.value.sousRubriqueId;
+    }
+
+    console.log('Loading dossiers with params:', params);
 
     const response = await ApiService.get('/agent_antenne/dossiers', params);
     
@@ -419,7 +516,6 @@ async function loadDossiers() {
   }
 }
 
-
 async function loadSousRubriques() {
   try {
     const response = await ApiService.get('/agent_antenne/dossiers/initialization-data');
@@ -442,24 +538,29 @@ async function loadSousRubriques() {
 
 
 
-function handleSearch(query) {
-  searchTerm.value = query;
+function handleSearch() {
   currentPage.value = 0;
   loadDossiers();
 }
 
+function clearSearch() {
+  searchTerm.value = '';
+  handleSearch();
+}
+
 function applyFilters() {
   currentPage.value = 0;
+  console.log('Applying filters:', filters.value);
   loadDossiers();
 }
 
 function clearFilters() {
   filters.value = {
     statut: null,
-    sousRubriqueId: null,
-    dateRange: null
+    sousRubriqueId: null
   };
   searchTerm.value = '';
+  console.log('Filters cleared');
   applyFilters();
 }
 
@@ -563,10 +664,15 @@ async function sendDossierToGUC() {
 
 function getStatusSeverity(status) {
   const severityMap = {
-    'Phase Antenne': 'info',
-    'Phase GUC': 'warning',
-    'Commission Technique': 'secondary',
-    'Réalisation': 'success'
+    'DRAFT': 'secondary',
+    'SUBMITTED': 'info',
+    'IN_REVIEW': 'warning', 
+    'APPROVED': 'success',
+    'REJECTED': 'danger',
+    'COMPLETED': 'success',
+    'CANCELLED': 'danger',
+    'RETURNED_FOR_COMPLETION': 'warning',
+    'PENDING_CORRECTION': 'warning'
   };
   return severityMap[status] || 'info';
 }
@@ -587,36 +693,46 @@ function formatDate(date) {
 
 <style scoped>
 .dossier-list-container {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 0;
+  background: var(--background-color);
+  min-height: 100vh;
 }
 
-/* Header */
+/* Header Section */
 .list-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
-  padding: 1.5rem;
-  background: var(--background-color);
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  background: var(--header-background);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .header-info h1 {
   color: var(--primary-color);
   margin: 0 0 0.5rem 0;
-  font-size: 1.5rem;
+  font-size: 1.75rem;
+  font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  letter-spacing: -0.025em;
+}
+
+.header-info h1 i {
+  font-size: 1.5rem;
 }
 
 .header-info p {
   margin: 0;
-  color: #6b7280;
-  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  font-weight: 500;
 }
 
 .header-actions {
@@ -624,16 +740,43 @@ function formatDate(date) {
   gap: 0.75rem;
 }
 
-/* Filters */
+/* Primary Button Styles */
+:deep(.btn-primary) {
+  background-color: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
+  color: var(--text-on-primary) !important;
+}
+
+:deep(.btn-primary:hover) {
+  background-color: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
+}
+
+:deep(.btn-edit) {
+  background-color: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
+  color: var(--text-on-primary) !important;
+}
+
+:deep(.btn-clear) {
+  color: var(--primary-color) !important;
+}
+
+/* Filters Section */
 .filters-section {
   margin-bottom: 1.5rem;
+  background: var(--card-background);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  grid-template-columns: 1fr 200px 250px auto;
+  gap: 1.25rem;
   align-items: end;
+  padding: 1.5rem;
 }
 
 .filter-group {
@@ -643,9 +786,89 @@ function formatDate(date) {
 }
 
 .filter-group label {
-  font-weight: 500;
-  color: #374151;
+  font-weight: 600;
+  color: var(--text-color);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Search Input Styling */
+.search-group {
+  grid-column: 1;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--text-secondary);
   font-size: 0.875rem;
+  z-index: 2;
+  transition: color 0.3s ease;
+}
+
+.search-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 2.5rem 0 2.25rem;
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius-md);
+  background: var(--background-color);
+  color: var(--text-color);
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  background: var(--card-background);
+  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.1);
+}
+
+.search-input:focus + .search-icon {
+  color: var(--primary-color);
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.75rem;
+  transition: all 0.2s ease;
+  z-index: 2;
+}
+
+.clear-search-btn:hover {
+  color: var(--text-color);
+  background: var(--clr-surface-tonal-a10);
+}
+
+/* Filter Components */
+.filter-select {
+  height: 36px;
+}
+
+:deep(.filter-select .p-select) {
+  height: 36px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius-md);
 }
 
 .filter-actions {
@@ -659,207 +882,329 @@ function formatDate(date) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem;
-  gap: 1rem;
-  color: #6b7280;
+  padding: 4rem;
+  gap: 1.5rem;
+  color: var(--text-secondary);
+  background: var(--card-background);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius-md);
 }
 
 .empty-state {
   display: flex;
   justify-content: center;
-  padding: 3rem;
+  padding: 4rem;
+  background: var(--card-background);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius-md);
 }
 
 .empty-content {
   text-align: center;
-  max-width: 400px;
+  max-width: 450px;
 }
 
 .empty-icon {
   font-size: 4rem;
-  color: #d1d5db;
-  margin-bottom: 1rem;
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
 }
 
 .empty-content h3 {
-  color: #374151;
-  margin-bottom: 0.5rem;
+  color: var(--text-color);
+  margin-bottom: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
 }
 
 .empty-content p {
-  color: #6b7280;
-  margin-bottom: 1.5rem;
-  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-bottom: 2rem;
+  line-height: 1.6;
+  font-size: 1rem;
 }
 
-/* Dossiers Grid */
-.dossiers-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-  gap: 1.5rem;
+.empty-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Table Container */
+.table-container {
+  background: var(--card-background);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
   margin-bottom: 2rem;
 }
 
-.dossier-card {
-  background: var(--background-color);
-  border-radius: 12px;
-  border: 2px solid #e5e7eb;
-  padding: 1.5rem;
-  transition: all 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+/* Table Styles */
+.dossiers-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
 }
 
-.dossier-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-color: var(--primary-color);
+.dossiers-table thead {
+  background: var(--section-background);
+  border-bottom: 2px solid var(--card-border);
 }
 
-.dossier-card.urgent {
-  border-color: #dc2626;
-  background: rgba(220, 38, 38, 0.02);
+.dossiers-table th {
+  padding: 1rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-color);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  position: relative;
 }
 
-.dossier-card.warning {
-  border-color: #f59e0b;
-  background: rgba(245, 158, 11, 0.02);
+.dossiers-table th:hover {
+  background: var(--clr-surface-tonal-a10);
+  cursor: pointer;
 }
 
-/* Card Header */
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
+.sort-icon {
+  margin-left: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
 }
 
-.dossier-meta {
+.dossiers-table tbody tr {
+  border-bottom: 1px solid var(--card-border);
+  transition: background-color 0.2s ease;
+}
+
+.dossiers-table tbody tr:hover {
+  background: var(--section-background);
+}
+
+.dossier-row.urgent {
+  border-left: 4px solid var(--danger-color);
+}
+
+.dossier-row.warning {
+  border-left: 4px solid var(--warning-color);
+}
+
+.dossiers-table td {
+  padding: 1rem 0.75rem;
+  vertical-align: top;
+}
+
+/* Column Specific Styles */
+.col-reference {
+  width: 12%;
+  min-width: 150px;
+}
+
+.col-agriculteur {
+  width: 18%;
+  min-width: 180px;
+}
+
+.col-project {
+  width: 20%;
+  min-width: 200px;
+}
+
+.col-status {
+  width: 12%;
+  min-width: 120px;
+}
+
+.col-progress {
+  width: 15%;
+  min-width: 150px;
+}
+
+.col-details {
+  width: 13%;
+  min-width: 130px;
+}
+
+.col-actions {
+  width: 10%;
+  min-width: 120px;
+}
+
+/* Cell Content Styles */
+.reference-cell {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
-.dossier-reference {
-  font-weight: 600;
+.reference-number {
+  font-weight: 700;
   color: var(--primary-color);
   font-size: 0.9rem;
+  letter-spacing: 0.025em;
 }
 
-.dossier-saba {
-  font-size: 0.8rem;
-  color: #6b7280;
+.saba-number {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
-/* Card Content */
-.agriculteur-info h3 {
-  margin: 0 0 0.5rem 0;
-  color: #374151;
-  font-size: 1.1rem;
-}
-
-.agriculteur-info p {
-  margin: 0;
-  color: #6b7280;
-  font-size: 0.875rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.project-info {
+.agriculteur-cell {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
 }
 
-.project-type,
-.project-amount {
-  margin: 0;
+.agriculteur-name {
+  font-weight: 600;
+  color: var(--text-color);
   font-size: 0.875rem;
-  color: #6b7280;
+  line-height: 1.3;
+}
+
+.agriculteur-cin {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
 }
 
-.project-type i,
-.project-amount i {
+.agriculteur-cin i {
   color: var(--primary-color);
 }
 
-/* Progress Section */
-.progress-section {
+.project-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.project-type {
+  font-weight: 500;
+  color: var(--text-color);
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+
+.project-amount {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.project-amount i {
+  color: var(--success-color);
+}
+
+.status-tag {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  padding: 0.375rem 0.75rem !important;
+  border-radius: var(--border-radius-sm) !important;
+}
+
+.progress-cell {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.progress-header {
+.progress-info {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
 }
 
-.percentage {
-  font-weight: 600;
+.progress-text {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.progress-percentage {
+  font-weight: 700;
   color: var(--primary-color);
+}
+
+:deep(.progress-bar .p-progressbar) {
+  height: 6px;
+  border-radius: var(--border-radius-sm);
+  background: var(--card-border);
 }
 
 :deep(.progress-complete .p-progressbar-value) {
-  background: #10b981;
+  background: var(--success-color);
 }
 
 :deep(.progress-medium .p-progressbar-value) {
-  background: #f59e0b;
+  background: var(--warning-color);
 }
 
 :deep(.progress-low .p-progressbar-value) {
-  background: #dc2626;
+  background: var(--danger-color);
 }
 
-/* Time Section */
-.time-section {
+.details-cell {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.8rem;
+  flex-direction: column;
+  gap: 0.375rem;
 }
 
 .time-info {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+}
+
+.time-info i {
+  color: var(--primary-color);
 }
 
 .time-remaining {
-  color: #10b981;
-  font-weight: 500;
+  color: var(--success-color);
+  font-weight: 600;
 }
 
 .time-expired {
-  color: #dc2626;
-  font-weight: 500;
+  color: var(--danger-color);
+  font-weight: 600;
 }
 
 .creation-date {
-  color: #6b7280;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
 }
 
-/* Card Actions */
-.card-actions {
+.actions-cell {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.375rem;
   flex-wrap: wrap;
-  margin-top: auto;
+}
+
+.action-btn {
+  padding: 0.5rem !important;
+  min-width: 2.5rem !important;
+  height: 2.5rem !important;
 }
 
 /* Pagination */
 .pagination-section {
   display: flex;
   justify-content: center;
-  margin-top: 2rem;
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: var(--card-background);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius-md);
 }
 
 /* Dialog Styles */
@@ -868,11 +1213,11 @@ function formatDate(date) {
   display: flex;
   align-items: flex-start;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .warning-icon {
-  color: #f59e0b;
+  color: var(--warning-color);
   font-size: 2rem;
   margin-top: 0.25rem;
 }
@@ -888,81 +1233,106 @@ function formatDate(date) {
 }
 
 .dossier-summary {
-  background: #f3f4f6;
-  padding: 0.75rem;
-  border-radius: 6px;
+  background: var(--section-background);
+  padding: 1rem;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--card-border);
   margin: 0.75rem 0;
   font-size: 0.9rem;
 }
 
 .warning-text {
-  color: #dc2626;
-  font-weight: 500;
+  color: var(--danger-color);
+  font-weight: 600;
   font-size: 0.9rem;
   margin: 0;
 }
 
 .info-text {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   margin: 0;
 }
 
 .delete-comment,
 .send-comment {
-  margin-top: 1rem;
+  margin-top: 1.5rem;
 }
 
 .delete-comment label,
 .send-comment label {
   display: block;
-  font-weight: 500;
+  font-weight: 600;
   margin-bottom: 0.5rem;
-  color: #374151;
+  color: var(--text-color);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
 }
 
-/* Dark Mode */
-.dark-mode .list-header,
-.dark-mode .filters-section,
-.dark-mode .dossier-card {
-  background-color: #1f2937;
-  border-color: #374151;
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .table-container {
+    overflow-x: auto;
+  }
+  
+  .dossiers-table {
+    min-width: 1000px;
+  }
+  
+  .filters-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
 }
 
-.dark-mode .dossier-card.urgent {
-  background: rgba(220, 38, 38, 0.1);
-}
-
-.dark-mode .dossier-card.warning {
-  background: rgba(245, 158, 11, 0.1);
-}
-
-.dark-mode .dossier-summary {
-  background: #374151;
-}
-
-/* Responsive */
 @media (max-width: 768px) {
   .list-header {
     flex-direction: column;
-    gap: 1rem;
+    gap: 1.5rem;
     align-items: stretch;
+    padding: 1.5rem;
   }
 
   .header-actions {
     justify-content: center;
   }
 
-  .dossiers-grid {
+  .filters-grid {
     grid-template-columns: 1fr;
+    padding: 1rem;
   }
 
-  .card-actions {
-    justify-content: center;
+  .header-info h1 {
+    font-size: 1.5rem;
+  }
+
+  .dossiers-table th,
+  .dossiers-table td {
+    padding: 0.75rem 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .dossier-list-container {
+    padding: 0.5rem;
   }
 
   .filters-grid {
-    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .actions-cell {
+    flex-direction: column;
+  }
+
+  .action-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-actions {
+    flex-direction: column;
   }
 }
 </style>

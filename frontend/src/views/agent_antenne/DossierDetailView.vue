@@ -38,7 +38,7 @@
         </div>
         <div class="header-actions">
           <Button 
-            v-if="dossierDetail.peutEtreEnvoye"
+            v-if="dossierDetail.peutEtreEnvoye && canSendToGUC()"
             label="Envoyer au GUC" 
             icon="pi pi-send" 
             @click="confirmSendToGUC"
@@ -98,7 +98,7 @@
                   'time-warning': dossierDetail.joursRestants <= 2 && dossierDetail.joursRestants > 1,
                   'time-ok': dossierDetail.joursRestants > 2
                 }">
-                  {{ dossierDetail.joursRestants }} jour(s)
+                  {{ dossierDetail.joursRestants > 0 ? `${dossierDetail.joursRestants} jour(s)` : 'Dépassé' }}
                 </span>
               </div>
               <div><strong>Modifiable:</strong> {{ dossierDetail.peutEtreModifie ? 'Oui' : 'Non' }}</div>
@@ -110,50 +110,42 @@
       <!-- Forms Section -->
       <div class="forms-section">
         <div class="section-header">
-          <h2><i class="pi pi-file-edit"></i> Formulaires à remplir</h2>
-          <p>Complétez tous les formulaires requis pour ce type de projet</p>
+          <h2><i class="pi pi-file-edit"></i> Documents et Formulaires</h2>
+          <p>Complétez tous les documents requis pour ce type de projet</p>
         </div>
 
-        <div v-if="dossierDetail.availableForms.length === 0" class="no-forms">
-          <i class="pi pi-info-circle"></i>
-          <p>Aucun formulaire configuré pour ce type de projet.</p>
+        <div class="forms-actions">
+          <Button 
+            label="Remplir les Documents" 
+            icon="pi pi-file-edit" 
+            @click="goToDocumentFilling"
+            class="p-button-success p-button-lg"
+            :disabled="!dossierDetail.peutEtreModifie"
+          />
+          <p class="forms-help">
+            Cliquez pour accéder à l'interface de remplissage des documents et formulaires requis.
+          </p>
         </div>
 
-        <div v-else class="forms-grid">
-          <div 
-            v-for="form in dossierDetail.availableForms" 
-            :key="form.formId"
-            class="form-card"
-            :class="{ 'form-completed': form.isCompleted }"
-          >
-            <div class="form-header">
-              <div class="form-title">
-                <h3>{{ form.title }}</h3>
+        <!-- Quick Forms Overview -->
+        <div v-if="dossierDetail.availableForms && dossierDetail.availableForms.length > 0" class="forms-overview">
+          <h3>Aperçu des formulaires ({{ dossierDetail.availableForms.length }})</h3>
+          <div class="forms-grid">
+            <div 
+              v-for="form in dossierDetail.availableForms" 
+              :key="form.formId"
+              class="form-card"
+              :class="{ 'form-completed': form.isCompleted }"
+            >
+              <div class="form-info">
+                <h4>{{ form.title }}</h4>
                 <Tag v-if="form.isCompleted" value="Complété" severity="success" />
                 <Tag v-else value="En attente" severity="warning" />
               </div>
-              <Button 
-                :label="form.isCompleted ? 'Modifier' : 'Remplir'" 
-                :icon="form.isCompleted ? 'pi pi-pencil' : 'pi pi-plus'" 
-                @click="openFormDialog(form)"
-                :disabled="!dossierDetail.peutEtreModifie"
-                class="p-button-sm"
-              />
-            </div>
-            
-            <div class="form-description">
-              <p>{{ form.description }}</p>
-            </div>
-
-            <div v-if="form.requiredDocuments && form.requiredDocuments.length > 0" class="required-docs">
-              <h5>Documents requis:</h5>
-              <ul>
-                <li v-for="doc in form.requiredDocuments" :key="doc">{{ doc }}</li>
-              </ul>
-            </div>
-
-            <div v-if="form.lastModified" class="form-meta">
-              <small>Dernière modification: {{ formatDate(form.lastModified) }}</small>
+              <p v-if="form.description" class="form-description">{{ form.description }}</p>
+              <div v-if="form.lastModified" class="form-meta">
+                <small>Dernière modification: {{ formatDate(form.lastModified) }}</small>
+              </div>
             </div>
           </div>
         </div>
@@ -164,9 +156,9 @@
         <div class="section-header">
           <h3><i class="pi pi-file"></i> Documents téléchargés</h3>
           <Button 
-            label="Télécharger un document" 
-            icon="pi pi-upload" 
-            @click="showUploadDialog = true"
+            label="Gérer les documents" 
+            icon="pi pi-external-link" 
+            @click="goToDocumentFilling"
             :disabled="!dossierDetail.peutEtreModifie"
             class="p-button-outlined p-button-sm"
           />
@@ -188,9 +180,9 @@
                 <i class="pi pi-file-pdf"></i>
               </div>
               <div class="file-details">
-                <div class="file-name">{{ file.customTitle || file.fileName }}</div>
+                <div class="file-name">{{ file.customTitle || file.nomFichier }}</div>
                 <div class="file-meta">
-                  <span>{{ file.documentType }}</span>
+                  <span>{{ file.typeDocument }}</span>
                   <span>•</span>
                   <span>{{ formatDate(file.dateUpload) }}</span>
                   <Tag v-if="file.isOriginalDocument" value="Original" severity="info" />
@@ -204,20 +196,37 @@
                 class="p-button-outlined p-button-sm"
                 v-tooltip.top="'Télécharger'"
               />
-              <Button 
-                v-if="dossierDetail.peutEtreModifie"
-                icon="pi pi-trash" 
-                @click="confirmDeleteFile(file)"
-                class="p-button-danger p-button-outlined p-button-sm"
-                v-tooltip.top="'Supprimer'"
-              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Workflow History -->
+      <div v-if="dossierDetail.historiqueWorkflow && dossierDetail.historiqueWorkflow.length > 0" 
+           class="workflow-history component-card">
+        <h3><i class="pi pi-history"></i> Historique du traitement</h3>
+        <div class="history-timeline">
+          <div 
+            v-for="step in dossierDetail.historiqueWorkflow" 
+            :key="step.id"
+            class="history-step"
+          >
+            <div class="step-indicator"></div>
+            <div class="step-content">
+              <h4>{{ step.etapeDesignation }}</h4>
+              <div class="step-meta">
+                <span>{{ formatDate(step.dateEntree) }}</span>
+                <span v-if="step.utilisateurNom">par {{ step.utilisateurNom }}</span>
+              </div>
+              <p v-if="step.commentaire" class="step-comment">{{ step.commentaire }}</p>
             </div>
           </div>
         </div>
       </div>
 
       <!-- Validation Errors -->
-      <div v-if="dossierDetail.validationErrors.length > 0" class="validation-errors component-card">
+      <div v-if="dossierDetail.validationErrors && dossierDetail.validationErrors.length > 0" 
+           class="validation-errors component-card">
         <h3><i class="pi pi-exclamation-triangle"></i> Problèmes à résoudre</h3>
         <ul class="error-list">
           <li v-for="error in dossierDetail.validationErrors" :key="error">{{ error }}</li>
@@ -225,168 +234,92 @@
       </div>
     </div>
 
-    <!-- Form Dialog -->
+    <!-- Send to GUC Confirmation Dialog -->
     <Dialog 
-      v-model:visible="formDialog.visible" 
+      v-model:visible="sendDialog.visible" 
       modal 
-      :header="formDialog.form?.title"
-      :style="{ width: '90vw', maxWidth: '800px' }"
-      :dismissable-mask="false"
-    >
-      <div v-if="formDialog.form" class="form-dialog-content">
-        <DynamicForm 
-          ref="dynamicFormRef"
-          :config-path="`data:application/json,${encodeURIComponent(JSON.stringify(formDialog.form.formConfig))}`"
-          v-model="formDialog.formData"
-          @change="onFormDataChange"
-        />
-
-        <!-- File Upload Section -->
-        <div class="file-upload-section">
-          <h4>Documents à joindre</h4>
-          <div class="upload-area">
-            <FileUpload
-              ref="fileUploadRef"
-              mode="advanced"
-              multiple
-              accept="*"
-              :max-file-size="10000000"
-              :auto="false"
-              choose-label="Choisir des fichiers"
-              upload-label="Télécharger"
-              cancel-label="Annuler"
-              @select="onFilesSelect"
-              @remove="onFileRemove"
-            />
-          </div>
-
-          <!-- File Titles -->
-          <div v-if="formDialog.selectedFiles.length > 0" class="file-titles">
-            <h5>Titres des documents:</h5>
-            <div 
-              v-for="(file, index) in formDialog.selectedFiles" 
-              :key="index"
-              class="file-title-input"
-            >
-              <div class="file-name">{{ file.name }}</div>
-              <InputText 
-                v-model="formDialog.fileTitles[index]" 
-                placeholder="Titre du document..."
-                class="title-input"
-              />
-              <div class="file-options">
-                <Checkbox 
-                  v-model="formDialog.originalFlags[index]" 
-                  :binary="true"
-                  input-id="original_${index}"
-                />
-                <label :for="`original_${index}`">Document original</label>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <template #footer>
-        <Button 
-          label="Annuler" 
-          icon="pi pi-times" 
-          @click="closeFormDialog"
-          class="p-button-outlined"
-        />
-        <Button 
-          label="Sauvegarder" 
-          icon="pi pi-check" 
-          @click="submitForm"
-          :loading="formDialog.submitting"
-          :disabled="!isFormValid"
-        />
-      </template>
-    </Dialog>
-
-    <!-- File Upload Dialog -->
-    <Dialog 
-      v-model:visible="showUploadDialog" 
-      modal 
-      header="Télécharger un document"
+      header="Envoyer au GUC"
       :style="{ width: '500px' }"
     >
-      <div class="upload-dialog-content">
-        <FileUpload
-          ref="standaloneUploadRef"
-          mode="advanced"
-          multiple
-          accept="*"
-          :max-file-size="10000000"
-          :auto="false"
-          choose-label="Choisir des fichiers"
-          @select="onStandaloneFilesSelect"
-        />
-
-        <div v-if="standaloneFiles.length > 0" class="file-titles">
-          <h5>Titres des documents:</h5>
-          <div 
-            v-for="(file, index) in standaloneFiles" 
-            :key="index"
-            class="file-title-input"
-          >
-            <div class="file-name">{{ file.name }}</div>
-            <InputText 
-              v-model="standaloneFileTitles[index]" 
-              placeholder="Titre du document..."
-              class="title-input"
-            />
-            <div class="file-options">
-              <Checkbox 
-                v-model="standaloneOriginalFlags[index]" 
-                :binary="true"
-                :input-id="`standalone_original_${index}`"
-              />
-              <label :for="`standalone_original_${index}`">Document original</label>
-            </div>
+      <div class="send-confirmation">
+        <i class="pi pi-send confirmation-icon"></i>
+        <div class="confirmation-text">
+          <p>Confirmer l'envoi de ce dossier au Guichet Unique Central ?</p>
+          <div class="dossier-summary">
+            <strong>{{ dossierDetail?.dossier?.reference }}</strong><br>
+            {{ dossierDetail?.agriculteur?.prenom }} {{ dossierDetail?.agriculteur?.nom }}<br>
+            <small>Type: {{ dossierDetail?.dossier?.sousRubriqueDesignation }}</small>
           </div>
+          <p class="info-text">Une fois envoyé, le dossier ne pourra plus être modifié à l'antenne et sera traité par le GUC.</p>
         </div>
+      </div>
+      
+      <div class="send-comment">
+        <label for="sendComment">Commentaire pour le GUC (optionnel)</label>
+        <Textarea 
+          id="sendComment"
+          v-model="sendDialog.comment" 
+          rows="3" 
+          placeholder="Commentaires ou instructions pour le GUC..."
+        />
       </div>
 
       <template #footer>
         <Button 
           label="Annuler" 
           icon="pi pi-times" 
-          @click="closeUploadDialog"
+          @click="sendDialog.visible = false"
           class="p-button-outlined"
         />
         <Button 
-          label="Télécharger" 
-          icon="pi pi-upload" 
-          @click="uploadStandaloneFiles"
-          :loading="uploadingStandalone"
-          :disabled="standaloneFiles.length === 0"
+          label="Envoyer au GUC" 
+          icon="pi pi-send" 
+          @click="sendDossierToGUC"
+          class="p-button-success"
+          :loading="sendDialog.loading"
         />
       </template>
     </Dialog>
 
-    <!-- Confirmation Dialogs -->
+    <!-- Delete Confirmation Dialog -->
     <Dialog 
       v-model:visible="deleteConfirmDialog.visible" 
       modal 
       header="Confirmer la suppression"
       :style="{ width: '450px' }"
     >
-      <div class="confirmation-content">
+      <div class="delete-confirmation">
         <i class="pi pi-exclamation-triangle warning-icon"></i>
-        <div>
+        <div class="confirmation-text">
           <p>Êtes-vous sûr de vouloir supprimer ce dossier ?</p>
+          <div class="dossier-summary">
+            <strong>{{ dossierDetail?.dossier?.reference }}</strong><br>
+            {{ dossierDetail?.agriculteur?.prenom }} {{ dossierDetail?.agriculteur?.nom }}
+          </div>
           <p class="warning-text">Cette action est irréversible.</p>
         </div>
       </div>
+      
+      <div class="delete-comment">
+        <label for="deleteComment">Motif de suppression (optionnel)</label>
+        <Textarea 
+          id="deleteComment"
+          v-model="deleteConfirmDialog.comment" 
+          rows="3" 
+          placeholder="Raison de la suppression..."
+        />
+      </div>
+
       <template #footer>
         <Button 
           label="Annuler" 
+          icon="pi pi-times" 
           @click="deleteConfirmDialog.visible = false"
           class="p-button-outlined"
         />
         <Button 
           label="Supprimer" 
+          icon="pi pi-trash" 
           @click="deleteDossier"
           class="p-button-danger"
           :loading="deleteConfirmDialog.loading"
@@ -403,16 +336,13 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import UserInfoHeader from '@/components/UserInfoHeader.vue';
-import DynamicForm from '@/components/agent_antenne/dossier_details/DynamicForm.vue';
 import ApiService from '@/services/ApiService';
 
 // PrimeVue components
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 import Dialog from 'primevue/dialog';
-import FileUpload from 'primevue/fileupload';
-import InputText from 'primevue/inputtext';
-import Checkbox from 'primevue/checkbox';
+import Textarea from 'primevue/textarea';
 import ProgressSpinner from 'primevue/progressspinner';
 import Toast from 'primevue/toast';
 
@@ -428,38 +358,18 @@ const loading = ref(true);
 const error = ref(null);
 const dossierDetail = ref(null);
 
-// Form Dialog
-const formDialog = ref({
+// Send to GUC Dialog
+const sendDialog = ref({
   visible: false,
-  form: null,
-  formData: {},
-  selectedFiles: [],
-  fileTitles: [],
-  originalFlags: [],
-  submitting: false
-});
-
-// Standalone file upload
-const showUploadDialog = ref(false);
-const standaloneFiles = ref([]);
-const standaloneFileTitles = ref([]);
-const standaloneOriginalFlags = ref([]);
-const uploadingStandalone = ref(false);
-
-// Confirmation dialogs
-const deleteConfirmDialog = ref({
-  visible: false,
+  comment: '',
   loading: false
 });
 
-// Refs
-const dynamicFormRef = ref(null);
-const fileUploadRef = ref(null);
-const standaloneUploadRef = ref(null);
-
-// Computed
-const isFormValid = computed(() => {
-  return formDialog.value.formData && Object.keys(formDialog.value.formData).length > 0;
+// Delete Confirmation Dialog
+const deleteConfirmDialog = ref({
+  visible: false,
+  comment: '',
+  loading: false
 });
 
 // Methods
@@ -493,174 +403,80 @@ function goBack() {
   router.push('/agent_antenne/dossiers');
 }
 
-function openFormDialog(form) {
-  formDialog.value = {
-    visible: true,
-    form: form,
-    formData: form.formData || {},
-    selectedFiles: [],
-    fileTitles: [],
-    originalFlags: [],
-    submitting: false
-  };
+function goToDocumentFilling() {
+  router.push(`/agent_antenne/dossiers/documents/${dossierId.value}`);
 }
 
-function closeFormDialog() {
-  formDialog.value.visible = false;
-  formDialog.value.form = null;
-  formDialog.value.formData = {};
-  formDialog.value.selectedFiles = [];
-  formDialog.value.fileTitles = [];
-  formDialog.value.originalFlags = [];
-}
-
-function onFormDataChange(data) {
-  formDialog.value.formData = data;
-}
-
-function onFilesSelect(event) {
-  formDialog.value.selectedFiles = event.files;
-  // Initialize arrays for titles and flags
-  formDialog.value.fileTitles = event.files.map(file => file.name);
-  formDialog.value.originalFlags = event.files.map(() => false);
-}
-
-function onFileRemove(event) {
-  // Remove corresponding title and flag
-  const index = formDialog.value.selectedFiles.indexOf(event.file);
-  if (index > -1) {
-    formDialog.value.fileTitles.splice(index, 1);
-    formDialog.value.originalFlags.splice(index, 1);
-  }
-}
-
-async function submitForm() {
-  try {
-    formDialog.value.submitting = true;
-    
-    const formData = new FormData();
-    formData.append('formId', formDialog.value.form.formId);
-    formData.append('formDataJson', JSON.stringify(formDialog.value.formData));
-    
-    // Add files
-    formDialog.value.selectedFiles.forEach((file, index) => {
-      formData.append('files', file);
-    });
-    
-    // Add file titles and flags
-    formDialog.value.fileTitles.forEach((title, index) => {
-      formData.append('fileTitles', title);
-    });
-    
-    formDialog.value.originalFlags.forEach((flag, index) => {
-      formData.append('originalFlags', flag);
-    });
-
-    await ApiService.post(`/agent_antenne/dossiers/${dossierId.value}/forms`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
-    
-    toast.add({
-      severity: 'success',
-      summary: 'Succès',
-      detail: 'Formulaire soumis avec succès',
-      life: 3000
-    });
-    
-    closeFormDialog();
-    loadDossierDetail();
-    
-  } catch (err) {
-    console.error('Error submitting form:', err);
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: 'Impossible de soumettre le formulaire',
-      life: 3000
-    });
-  } finally {
-    formDialog.value.submitting = false;
-  }
-}
-
-function onStandaloneFilesSelect(event) {
-  standaloneFiles.value = event.files;
-  standaloneFileTitles.value = event.files.map(file => file.name);
-  standaloneOriginalFlags.value = event.files.map(() => false);
-}
-
-function closeUploadDialog() {
-  showUploadDialog.value = false;
-  standaloneFiles.value = [];
-  standaloneFileTitles.value = [];
-  standaloneOriginalFlags.value = [];
-}
-
-async function uploadStandaloneFiles() {
-  try {
-    uploadingStandalone.value = true;
-    
-    const formData = new FormData();
-    formData.append('formId', 'standalone_upload');
-    
-    standaloneFiles.value.forEach(file => {
-      formData.append('files', file);
-    });
-    
-    standaloneFileTitles.value.forEach(title => {
-      formData.append('fileTitles', title);
-    });
-    
-    standaloneOriginalFlags.value.forEach(flag => {
-      formData.append('originalFlags', flag);
-    });
-
-    await ApiService.post(`/agent_antenne/dossiers/${dossierId.value}/forms`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
-    
-    toast.add({
-      severity: 'success',
-      summary: 'Succès',
-      detail: 'Documents téléchargés avec succès',
-      life: 3000
-    });
-    
-    closeUploadDialog();
-    loadDossierDetail();
-    
-  } catch (err) {
-    console.error('Error uploading files:', err);
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: 'Impossible de télécharger les documents',
-      life: 3000
-    });
-  } finally {
-    uploadingStandalone.value = false;
-  }
+function canSendToGUC() {
+  if (!dossierDetail.value) return false;
+  
+  // Check if dossier can be sent to GUC
+  // Must be in appropriate status and meet minimum requirements
+  return dossierDetail.value.peutEtreEnvoye && 
+         (dossierDetail.value.dossier.statut === 'Phase Antenne' || 
+          dossierDetail.value.dossier.statut === 'DRAFT');
 }
 
 function confirmSendToGUC() {
-  // Implement send to GUC confirmation
-  toast.add({
-    severity: 'info',
-    summary: 'Info',
-    detail: 'Fonctionnalité à implémenter',
-    life: 3000
-  });
+  sendDialog.value = {
+    visible: true,
+    comment: '',
+    loading: false
+  };
+}
+
+async function sendDossierToGUC() {
+  try {
+    sendDialog.value.loading = true;
+    
+    const response = await ApiService.post(`/agent_antenne/dossiers/${dossierId.value}/send-to-guc`, {
+      commentaire: sendDialog.value.comment
+    });
+    
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Succès',
+        detail: response.message || 'Dossier envoyé au GUC avec succès',
+        life: 4000
+      });
+      
+      sendDialog.value.visible = false;
+      
+      // Reload dossier detail to get updated status
+      await loadDossierDetail();
+    } else {
+      throw new Error(response.message || 'Erreur lors de l\'envoi');
+    }
+    
+  } catch (err) {
+    console.error('Erreur lors de l\'envoi au GUC:', err);
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: err.message || 'Impossible d\'envoyer le dossier au GUC',
+      life: 4000
+    });
+  } finally {
+    sendDialog.value.loading = false;
+  }
 }
 
 function confirmDelete() {
-  deleteConfirmDialog.value.visible = true;
+  deleteConfirmDialog.value = {
+    visible: true,
+    comment: '',
+    loading: false
+  };
 }
 
 async function deleteDossier() {
   try {
     deleteConfirmDialog.value.loading = true;
     
-    await ApiService.delete(`/agent_antenne/dossiers/${dossierId.value}`);
+    const response = await ApiService.delete(`/agent_antenne/dossiers/${dossierId.value}`, {
+      motif: deleteConfirmDialog.value.comment
+    });
     
     toast.add({
       severity: 'success',
@@ -669,6 +485,7 @@ async function deleteDossier() {
       life: 3000
     });
     
+    // Navigate back to list
     goBack();
     
   } catch (err) {
@@ -676,8 +493,8 @@ async function deleteDossier() {
     toast.add({
       severity: 'error',
       summary: 'Erreur',
-      detail: 'Impossible de supprimer le dossier',
-      life: 3000
+      detail: err.message || 'Impossible de supprimer le dossier',
+      life: 4000
     });
   } finally {
     deleteConfirmDialog.value.loading = false;
@@ -685,24 +502,45 @@ async function deleteDossier() {
   }
 }
 
-function downloadFile(file) {
-  // Implement file download
-  toast.add({
-    severity: 'info',
-    summary: 'Info',
-    detail: 'Téléchargement à implémenter',
-    life: 3000
-  });
-}
-
-function confirmDeleteFile(file) {
-  // Implement file deletion confirmation
-  toast.add({
-    severity: 'info',
-    summary: 'Info',
-    detail: 'Suppression de fichier à implémenter',
-    life: 3000
-  });
+async function downloadFile(file) {
+  try {
+    const response = await fetch(`/api/agent_antenne/dossiers/${dossierId.value}/documents/piece-jointe/${file.id}/download`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Erreur de téléchargement');
+    }
+    
+    // Create download link
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', file.nomFichier);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    
+    toast.add({
+      severity: 'success',
+      summary: 'Succès',
+      detail: 'Fichier téléchargé avec succès',
+      life: 3000
+    });
+    
+  } catch (err) {
+    console.error('Erreur téléchargement:', err);
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: err.message || 'Impossible de télécharger le fichier',
+      life: 3000
+    });
+  }
 }
 
 function handleSearch(query) {
@@ -714,14 +552,26 @@ function getStatusSeverity(status) {
     'Phase Antenne': 'info',
     'Phase GUC': 'warning',
     'Commission Technique': 'secondary',
-    'Réalisation': 'success'
+    'Réalisation': 'success',
+    'DRAFT': 'secondary',
+    'SUBMITTED': 'info',
+    'IN_REVIEW': 'warning',
+    'APPROVED': 'success',
+    'REJECTED': 'danger',
+    'COMPLETED': 'success'
   };
   return severityMap[status] || 'info';
 }
 
 function formatDate(date) {
   if (!date) return '';
-  return new Intl.DateTimeFormat('fr-FR').format(new Date(date));
+  return new Intl.DateTimeFormat('fr-FR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(date));
 }
 </script>
 
@@ -870,89 +720,82 @@ function formatDate(date) {
   margin: 0;
 }
 
-.no-forms {
+.forms-actions {
   text-align: center;
   padding: 2rem;
-  color: #6b7280;
-  background: #f9fafb;
-  border-radius: 8px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 2px dashed var(--primary-color);
+  margin-bottom: 2rem;
 }
 
-.no-forms i {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-  display: block;
+.forms-actions .p-button-lg {
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+}
+
+.forms-help {
+  margin-top: 1rem;
+  color: #6b7280;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.forms-overview {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.forms-overview h3 {
+  color: var(--primary-color);
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
 }
 
 .forms-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
 }
 
 .form-card {
-  background: var(--background-color);
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1.5rem;
+  background: #f8f9fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
   transition: all 0.3s ease;
-}
-
-.form-card:hover {
-  border-color: var(--primary-color);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .form-card.form-completed {
   border-color: #10b981;
-  background: rgba(16, 185, 129, 0.02);
+  background: rgba(16, 185, 129, 0.05);
 }
 
-.form-header {
+.form-info {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 1rem;
-  gap: 1rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
 }
 
-.form-title {
-  flex: 1;
-}
-
-.form-title h3 {
-  margin: 0 0 0.5rem 0;
-  color: #374151;
-  font-size: 1.1rem;
-}
-
-.form-description p {
-  color: #6b7280;
-  font-size: 0.9rem;
-  margin: 0 0 1rem 0;
-  line-height: 1.4;
-}
-
-.required-docs {
-  margin-bottom: 1rem;
-}
-
-.required-docs h5 {
-  color: #374151;
-  font-size: 0.9rem;
-  margin: 0 0 0.5rem 0;
-}
-
-.required-docs ul {
+.form-info h4 {
   margin: 0;
-  padding-left: 1.5rem;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.form-description {
   color: #6b7280;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.4;
 }
 
 .form-meta {
   color: #6b7280;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
 }
 
 /* Files Section */
@@ -1035,6 +878,63 @@ function formatDate(date) {
   gap: 0.5rem;
 }
 
+/* Workflow History */
+.workflow-history {
+  margin-bottom: 2rem;
+}
+
+.workflow-history h3 {
+  color: var(--primary-color);
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.history-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.history-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.step-indicator {
+  width: 12px;
+  height: 12px;
+  background: var(--primary-color);
+  border-radius: 50%;
+  margin-top: 0.25rem;
+  flex-shrink: 0;
+}
+
+.step-content {
+  flex: 1;
+}
+
+.step-content h4 {
+  margin: 0 0 0.5rem 0;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.step-meta {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+
+.step-comment {
+  font-size: 0.85rem;
+  color: #374151;
+  margin: 0;
+  font-style: italic;
+}
+
 /* Validation Errors */
 .validation-errors {
   border-left: 4px solid #dc2626;
@@ -1060,87 +960,72 @@ function formatDate(date) {
 }
 
 /* Dialog Styles */
-.form-dialog-content {
+.send-confirmation,
+.delete-confirmation {
   display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.file-upload-section h4 {
-  color: var(--primary-color);
-  margin-bottom: 1rem;
-}
-
-.upload-area {
-  margin-bottom: 1rem;
-}
-
-.file-titles h5 {
-  color: #374151;
-  margin-bottom: 1rem;
-}
-
-.file-title-input {
-  display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 1rem;
   margin-bottom: 1rem;
-  padding: 1rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-}
-
-.file-name {
-  font-weight: 500;
-  color: #374151;
-  min-width: 150px;
-}
-
-.title-input {
-  flex: 1;
-}
-
-.file-options {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 150px;
-}
-
-.file-options label {
-  font-size: 0.9rem;
-  color: #6b7280;
-}
-
-.upload-dialog-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.confirmation-content {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
 }
 
 .warning-icon {
   color: #f59e0b;
   font-size: 2rem;
+  margin-top: 0.25rem;
+}
+
+.confirmation-icon {
+  color: var(--primary-color);
+  font-size: 2rem;
+  margin-top: 0.25rem;
+}
+
+.confirmation-text {
+  flex: 1;
+}
+
+.dossier-summary {
+  background: #f3f4f6;
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
 }
 
 .warning-text {
   color: #dc2626;
   font-weight: 500;
-  margin: 0.5rem 0 0 0;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.info-text {
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.send-comment,
+.delete-comment {
+  margin-top: 1rem;
+}
+
+.send-comment label,
+.delete-comment label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: #374151;
 }
 
 /* Dark Mode */
 .dark-mode .detail-header,
 .dark-mode .dossier-summary,
-.dark-mode .form-card,
+.dark-mode .forms-overview,
 .dark-mode .file-item,
-.dark-mode .files-section {
+.dark-mode .files-section,
+.dark-mode .workflow-history,
+.dark-mode .validation-errors {
   background-color: #1f2937;
   border-color: #374151;
 }
@@ -1149,9 +1034,21 @@ function formatDate(date) {
   border-bottom-color: #374151;
 }
 
-.dark-mode .no-forms,
 .dark-mode .no-files {
   background-color: #374151;
+}
+
+.dark-mode .forms-actions {
+  background-color: #374151;
+}
+
+.dark-mode .form-card {
+  background-color: #374151;
+  border-color: #4b5563;
+}
+
+.dark-mode .dossier-summary {
+  background: #374151;
 }
 
 /* Responsive */
@@ -1188,10 +1085,10 @@ function formatDate(date) {
     justify-content: center;
   }
 
-  .file-title-input {
+  .files-section .section-header {
     flex-direction: column;
+    gap: 1rem;
     align-items: stretch;
-    gap: 0.5rem;
   }
 }
 </style>

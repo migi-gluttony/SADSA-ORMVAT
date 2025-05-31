@@ -6,26 +6,136 @@
 }
 
 /* Variables for theme support - SADSA Colors from cahier des charges */
+/* Base colors */
 :root {
-  --text-color: #213547;
-  --background-color: #ffffff;
-  --primary-color: #01723e;
-  --primary-color-rgb: rgb(1, 114, 62);
-  --secondary-color: #efb157;
-  --accent-color: #2e7145;
-  --border-color: #e5e7eb;
+  --clr-dark-a0: #000000;
+  --clr-light-a0: #ffffff;
+  
+  /* Component spacing */
   --component-spacing: 1.5rem;
+  
+  /* Border radius */
+  --border-radius-sm: 0.125rem;
+  --border-radius-md: 0.375rem;
+  --border-radius-lg: 0.5rem;
+  
+  /* Shadow and elevation */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 }
 
-/* Dark mode variables - SADSA Dark Mode Colors */
+/* Light Theme Colors */
+:root {
+  /* Theme primary colors */
+  --clr-primary-a0: #01733e;
+  --clr-primary-a10: #217545;
+  --clr-primary-a20: #33774d;
+  --clr-primary-a30: #407854;
+  --clr-primary-a40: #4c7a5b;
+  --clr-primary-a50: #587b62;
+  
+  /* Theme surface colors */
+  --clr-surface-a0: #ffffff;
+  --clr-surface-a10: #f0f0f0;
+  --clr-surface-a20: #e1e1e1;
+  --clr-surface-a30: #d3d3d3;
+  --clr-surface-a40: #c5c5c5;
+  --clr-surface-a50: #b6b6b6;
+  
+  /* Theme tonal surface colors */
+  --clr-surface-tonal-a0: #e8f1ea;
+  --clr-surface-tonal-a10: #dce4de;
+  --clr-surface-tonal-a20: #d0d7d1;
+  --clr-surface-tonal-a30: #c4cac5;
+  --clr-surface-tonal-a40: #b8bdb9;
+  --clr-surface-tonal-a50: #adb1ae;
+  
+  /* Application Variables - Light Mode */
+  --text-color: #213547;
+  --background-color: var(--clr-surface-a10);
+  --primary-color: var(--clr-primary-a0);
+  --primary-color-rgb: rgb(1, 115, 62);
+  --secondary-color: #efb157;
+  --accent-color: var(--clr-primary-a20);
+  --border-color: var(--clr-surface-a20);
+  
+  /* Card and surface colors */
+  --card-background: var(--clr-surface-a0);
+  --card-border: var(--clr-surface-a20);
+  --surface-background: var(--clr-surface-a10);
+  --header-background: var(--clr-surface-a0);
+  --section-background: var(--clr-surface-tonal-a0);
+  
+  /* Text variations */
+  --text-secondary: var(--clr-surface-a50);
+  --text-muted: var(--clr-surface-a40);
+  --text-on-primary: var(--clr-light-a0);
+  
+  /* Status colors */
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --danger-color: #ef4444;
+  --info-color: #3b82f6;
+}
+
+/* Dark Theme Colors */
 .dark-mode {
+  /* Theme primary colors */
+  --clr-primary-a0: #01874b;
+  --clr-primary-a10: #36945e;
+  --clr-primary-a20: #53a270;
+  --clr-primary-a30: #6daf84;
+  --clr-primary-a40: #86bc97;
+  --clr-primary-a50: #9ecaab;
+  
+  /* Theme surface colors */
+  --clr-surface-a0: #121212;
+  --clr-surface-a10: #282828;
+  --clr-surface-a20: #3f3f3f;
+  --clr-surface-a30: #575757;
+  --clr-surface-a40: #717171;
+  --clr-surface-a50: #8b8b8b;
+  
+  /* Theme tonal surface colors */
+  --clr-surface-tonal-a0: #161d18;
+  --clr-surface-tonal-a10: #2b322d;
+  --clr-surface-tonal-a20: #424844;
+  --clr-surface-tonal-a30: #5a605b;
+  --clr-surface-tonal-a40: #737874;
+  --clr-surface-tonal-a50: #8e928f;
+  
+  /* Application Variables - Dark Mode */
   --text-color: #e5e7eb;
-  --background-color: #1e1e1e;
-  --primary-color: #01864a;
-  --primary-color-rgb: rgb(1, 134, 74);
+  --background-color: var(--clr-surface-a0);
+  --primary-color: var(--clr-primary-a0);
+  --primary-color-rgb: rgb(1, 135, 75);
   --secondary-color: #d7983f;
-  --accent-color: #3a8757;
-  --border-color: #4b5563;
+  --accent-color: var(--clr-primary-a20);
+  --border-color: var(--clr-surface-a20);
+  
+  /* Card and surface colors */
+  --card-background: var(--clr-surface-a10);
+  --card-border: var(--clr-surface-a20);
+  --surface-background: var(--clr-surface-a0);
+  --header-background: var(--clr-surface-a10);
+  --section-background: var(--clr-surface-tonal-a10);
+  
+  /* Text variations */
+  --text-secondary: var(--clr-surface-a50);
+  --text-muted: var(--clr-surface-a40);
+  --text-on-primary: var(--clr-light-a0);
+  
+  /* Status colors */
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --danger-color: #ef4444;
+  --info-color: #3b82f6;
+  
+  /* Shadow and elevation - adjusted for dark mode */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
 }
 
 /* Base styles */

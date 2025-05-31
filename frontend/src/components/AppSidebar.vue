@@ -2,57 +2,108 @@
     <aside v-if="isAuthenticated" class="app-sidebar" :class="{ collapsed: collapsed }">
         <div class="sidebar-content">
             <!-- Logo section with collapse toggle -->
-            <div class="sidebar-logo">
-                <!-- Full logo (visible when expanded) -->
-                <template v-if="!collapsed">
-                    <router-link to="/" class="logo-link">
-                        <img v-if="isDarkMode" src="@/assets/logo/sadsa.svg" alt="sadsa" />
-                        <img v-else src="@/assets/logo/sadsa.svg" alt="sadsa" />
-                    </router-link>
-                    <button class="collapse-btn" @click="toggleSidebar">
-                        <i class="pi pi-angle-double-left"></i>
-                    </button>
-                </template>
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <!-- Full logo (visible when expanded) -->
+                    <template v-if="!collapsed">
+                        <router-link to="/" class="logo-link">
+                            <div class="logo-container">
+                                <div class="logo-icon">
+                                    <img src="@/assets/logo/sadsa.svg" alt="sadsa" />
+                                </div>
+                                <div class="logo-text">
+                                    <span class="logo-title">SADSA</span>
+                                    <span class="logo-subtitle">ORMVAT</span>
+                                </div>
+                            </div>
+                        </router-link>
+                        <button class="collapse-btn" @click="toggleSidebar" title="Réduire le menu">
+                            <i class="pi pi-angle-double-left"></i>
+                        </button>
+                    </template>
 
-                <!-- Small logo (visible when collapsed) -->
-                <template v-else>
-                    <router-link to="/" class="logo-link">
-                        <img v-if="isDarkMode" src="@/assets/logo/sadsa.svg" alt="sadsa" />
-                        <img v-else src="@/assets/logo/sadsa.svg" alt="sadsa" />
-                    </router-link>
-                </template>
+                    <!-- Small logo (visible when collapsed) -->
+                    <template v-else>
+                        <router-link to="/" class="logo-link collapsed-logo">
+                            <div class="logo-icon-small">
+                                <img src="@/assets/logo/sadsa.svg" alt="sadsa" />
+                            </div>
+                        </router-link>
+                    </template>
+                </div>
+
+                <!-- Expand button (only visible when collapsed) -->
+                <div v-if="collapsed" class="expand-btn-container">
+                    <button class="expand-btn" @click="toggleSidebar" title="Étendre le menu">
+                        <i class="pi pi-angle-double-right"></i>
+                    </button>
+                </div>
             </div>
 
-            <!-- Expand button (only visible when collapsed) -->
-            <div v-if="collapsed" class="expand-btn-container">
-                <button class="expand-btn" @click="toggleSidebar">
-                    <i class="pi pi-angle-double-right"></i>
-                </button>
+            <!-- User info section (when expanded) -->
+            <div v-if="!collapsed && user" class="user-info">
+                <div class="user-avatar">
+                    <span class="user-initials">{{ getUserInitials(user) }}</span>
+                </div>
+                <div class="user-details">
+                    <span class="user-name">{{ user.prenom }} {{ user.nom }}</span>
+                    <span class="user-role">{{ getRoleDisplayName(user.role) }}</span>
+                </div>
+                <div class="user-status">
+                    <div class="status-indicator"></div>
+                </div>
             </div>
 
             <!-- Menu items -->
-            <div class="sidebar-menu">
-                <div v-for="(item, index) in menuItems" :key="index" class="menu-item"
-                    :class="{ active: isActiveRoute(item.route) }" @click="navigateTo(item.command)"
-                    :title="collapsed ? item.label : ''">
-                    <i :class="item.icon"></i>
-                    <span v-if="!collapsed">{{ item.label }}</span>
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div v-for="(item, index) in menuItems" :key="index" 
+                         class="nav-item"
+                         :class="{ active: isActiveRoute(item.route) }" 
+                         @click="navigateTo(item.command)"
+                         :title="collapsed ? item.label : ''">
+                        <div class="nav-item-content">
+                            <div class="nav-icon">
+                                <i :class="item.icon"></i>
+                            </div>
+                            <span v-if="!collapsed" class="nav-label">{{ item.label }}</span>
+                            <div v-if="item.badge && !collapsed" class="nav-badge">{{ item.badge }}</div>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            </nav>
 
-            <!-- Logout button -->
+            <!-- Footer section -->
             <div class="sidebar-footer">
-                <div class="menu-item" @click="router.push('/profile')" :class="{ active: isActiveRoute('/profile') }"
-                    :title="collapsed ? 'Profil' : ''">
-                    <i class="pi pi-user-edit"></i>
-                    <span v-if="!collapsed">Mon Profil</span>
-                </div>
-                <div class="menu-item logout-item" @click="logout" :title="collapsed ? 'Déconnexion' : ''">
-                    <i class="pi pi-sign-out"></i>
-                    <span v-if="!collapsed">Déconnexion</span>
+                <div class="footer-actions">
+                    <div class="nav-item profile-item" 
+                         @click="router.push('/profile')" 
+                         :class="{ active: isActiveRoute('/profile') }"
+                         :title="collapsed ? 'Mon Profil' : ''">
+                        <div class="nav-item-content">
+                            <div class="nav-icon">
+                                <i class="pi pi-user-edit"></i>
+                            </div>
+                            <span v-if="!collapsed" class="nav-label">Mon Profil</span>
+                        </div>
+                    </div>
+                    
+                    <div class="nav-item logout-item" 
+                         @click="logout" 
+                         :title="collapsed ? 'Déconnexion' : ''">
+                        <div class="nav-item-content">
+                            <div class="nav-icon">
+                                <i class="pi pi-sign-out"></i>
+                            </div>
+                            <span v-if="!collapsed" class="nav-label">Déconnexion</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+        
+        <!-- Sidebar backdrop for mobile -->
+        <div v-if="!collapsed" class="sidebar-backdrop" @click="toggleSidebar"></div>
     </aside>
 </template>
 
@@ -115,10 +166,27 @@ onUnmounted(() => {
     window.removeEventListener("auth-state-changed", updateUser);
 });
 
+// Get user initials
+const getUserInitials = (user) => {
+    if (!user || !user.prenom || !user.nom) return 'U';
+    return `${user.prenom.charAt(0)}${user.nom.charAt(0)}`.toUpperCase();
+};
+
+// Get role display name
+const getRoleDisplayName = (role) => {
+    const roleNames = {
+        'AGENT_ANTENNE': 'Agent Antenne',
+        'AGENT_GUC': 'Agent GUC',
+        'AGENT_COMMISSION': 'Commission AHA-AF',
+        'SERVICE_TECHNIQUE': 'Service Technique',
+        'ADMIN': 'Administrateur'
+    };
+    return roleNames[role] || role;
+};
+
 // Logout function
 const logout = () => {
     AuthService.logout();
-    // Emit a custom event that components can listen to
     window.dispatchEvent(new CustomEvent("auth-state-changed"));
     router.push("/");
 };
@@ -126,7 +194,20 @@ const logout = () => {
 // Navigation helper functions
 const isActiveRoute = (routePath) => {
     if (!routePath) return false;
-    return route.path === routePath || route.path.startsWith(routePath + "/");
+    
+    if (routePath === route.path) return true;
+    
+    if (routePath === '/agent_antenne/dossiers/create') {
+        return route.path === '/agent_antenne/dossiers/create' || route.path.startsWith('/agent_antenne/dossiers/create/');
+    }
+    
+    if (routePath === '/agent_antenne/dossiers') {
+        return route.path === '/agent_antenne/dossiers' || 
+               (route.path.startsWith('/agent_antenne/dossiers/') && 
+                !route.path.startsWith('/agent_antenne/dossiers/create'));
+    }
+    
+    return route.path.startsWith(routePath + "/");
 };
 
 const navigateTo = (commandFn) => {
@@ -139,7 +220,6 @@ const navigateTo = (commandFn) => {
 const menuItems = computed(() => {
     const role = user.value?.role;
 
-    // Default menu items for all users
     const items = [
         {
             label: "Tableau de bord",
@@ -149,7 +229,6 @@ const menuItems = computed(() => {
         },
     ];
 
-    // Role-specific menu items
     if (role === "AGENT_ANTENNE") {
         items.push(
             {
@@ -236,259 +315,389 @@ const menuItems = computed(() => {
 
 <style scoped>
 .app-sidebar {
-    width: 250px;
-    background-color: #ffffff;
-    border-right: 1px solid #f0f0f0;
-    box-shadow: 0 0 15px rgba(0, 0, 0, 0.05);
+    width: 280px;
+    background: var(--card-background);
+    border-right: 1px solid var(--card-border);
+    box-shadow: var(--shadow-sm);
     height: 100vh;
     position: fixed;
     left: 0;
     top: 0;
-    z-index: 990;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: 0;
-    transition: width 0.3s ease;
+    z-index: 1000;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .app-sidebar.collapsed {
-    width: 60px;
-}
-
-.dark-mode .app-sidebar {
-    background-color: #1a1a1a;
-    border-right: 1px solid #2c2c2c;
-    box-shadow: 0 0 15px rgba(0, 0, 0, 0.15);
+    width: 70px;
 }
 
 .sidebar-content {
-    padding: 0;
-    position: relative;
+    height: 100%;
     display: flex;
     flex-direction: column;
-    height: 100%;
+    position: relative;
+    overflow: hidden;
 }
 
-/* Logo section styles */
+/* Header section */
+.sidebar-header {
+    padding: var(--component-spacing);
+    background: var(--clr-primary-a0);
+    position: relative;
+    border-bottom: 1px solid var(--clr-primary-a10);
+}
+
 .sidebar-logo {
-    padding: 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    position: relative;
 }
 
 .collapsed .sidebar-logo {
     justify-content: center;
-    padding: 16px 10px;
 }
 
-.logo-link {
-    display: inline-block;
-    transition: opacity 0.2s ease;
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
-.logo-link:hover {
-    opacity: 0.8;
+.logo-icon {
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: var(--border-radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
 }
 
-.sidebar-logo img {
-    height: auto;
-    width: 100%;
-    transition: all 0.3s ease;
-    display: block;
+.logo-icon img {
+    width: 24px;
+    height: 24px;
+    filter: brightness(0) invert(1);
 }
 
-.collapsed .sidebar-logo img {
-    width: 30px;
-    height: 30px;
+.logo-icon-small {
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: var(--border-radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
 }
 
-.collapse-btn {
-    background: transparent;
-    border: none;
-    color: #666;
+.logo-icon-small img {
+    width: 20px;
+    height: 20px;
+    filter: brightness(0) invert(1);
+}
+
+.logo-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.logo-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--clr-light-a0);
+    letter-spacing: 0.5px;
+    font-family: 'Poppins', sans-serif;
+    line-height: 1;
+}
+
+.logo-subtitle {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 500;
+    margin-top: 2px;
+}
+
+.collapse-btn,
+.expand-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: var(--clr-light-a0);
     cursor: pointer;
-    font-size: 18px;
-    padding: 10px;
-    margin-left: 5px;
-    border-radius: 50%;
+    font-size: 0.875rem;
+    padding: 0.5rem;
+    border-radius: var(--border-radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
 }
 
-.collapse-btn:hover {
-    background-color: #f5f5f5;
-    color: var(--primary-color);
+.collapse-btn:hover,
+.expand-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 
-.dark-mode .collapse-btn:hover {
-    background-color: #2a2a2a;
-}
-
-/* Expand button (visible when collapsed) */
 .expand-btn-container {
     display: flex;
     justify-content: center;
+    margin-top: 0.75rem;
 }
 
-.expand-btn {
-    background: transparent;
-    border: none;
-    color: #666;
-    cursor: pointer;
-    font-size: 18px;
-    padding: 10px;
+/* User info section */
+.user-info {
+    padding: var(--component-spacing);
+    border-bottom: 1px solid var(--card-border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--section-background);
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
+    background: var(--clr-primary-a0);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    color: var(--clr-light-a0);
+    font-size: 0.875rem;
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
 }
 
-.expand-btn:hover {
-    background-color: #f5f5f5;
-    color: var(--primary-color);
+.user-initials {
+    font-family: 'Poppins', sans-serif;
 }
 
-.dark-mode .expand-btn:hover {
-    background-color: #2a2a2a;
-}
-
-/* Menu styles */
-.sidebar-menu {
-    padding: 10px 0;
+.user-details {
+    display: flex;
+    flex-direction: column;
     flex: 1;
 }
 
-.menu-item {
+.user-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-color);
+    font-family: 'Poppins', sans-serif;
+    line-height: 1.2;
+}
+
+.user-role {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.user-status {
     display: flex;
     align-items: center;
-    padding: 12px 20px;
-    cursor: pointer;
-    color: #666;
-    font-size: 14px;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success-color);
+    box-shadow: 0 0 0 2px var(--card-background);
+}
+
+/* Navigation */
+.sidebar-nav {
+    flex: 1;
+    padding: var(--component-spacing) 0.75rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: var(--border-radius-sm);
+}
+
+.nav-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.nav-item {
     position: relative;
+    border-radius: var(--border-radius-lg);
+    cursor: pointer;
     transition: all 0.2s ease;
-    white-space: nowrap;
+    overflow: hidden;
 }
 
-.collapsed .menu-item {
-    padding: 12px 0;
-    justify-content: center;
+.nav-item:hover {
+    background: var(--section-background);
 }
 
-.menu-item:hover {
-    background-color: #f8f9fa;
-    color: var(--primary-color);
+.nav-item.active {
+    background: var(--clr-primary-a0);
+    color: var(--clr-light-a0);
+    box-shadow: var(--shadow-sm);
 }
 
-.dark-mode .menu-item:hover {
-    background-color: #2a2a2a;
-}
-
-.menu-item.active {
-    color: var(--primary-color);
-    background-color: rgba(1, 114, 62, 0.1);
-    font-weight: 500;
-}
-
-.dark-mode .menu-item.active {
-    background-color: rgba(1, 134, 74, 0.15);
-}
-
-.menu-item.active::before {
-    content: "";
+.nav-item.active::before {
+    content: '';
     position: absolute;
     left: 0;
     top: 0;
     width: 4px;
     height: 100%;
-    background-color: var(--primary-color);
-    border-radius: 0 4px 4px 0;
+    background: var(--secondary-color);
+    border-radius: 0 var(--border-radius-sm) var(--border-radius-sm) 0;
 }
 
-.menu-item i {
-    font-size: 18px;
+.nav-item-content {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    position: relative;
+    z-index: 2;
+}
+
+.collapsed .nav-item-content {
+    justify-content: center;
+    padding: 0.75rem 0.5rem;
+}
+
+.nav-icon {
     width: 20px;
-    text-align: center;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    transition: all 0.2s ease;
 }
 
-.collapsed .menu-item i {
-    margin-right: 0;
+.nav-item:hover .nav-icon {
+    color: var(--text-color);
 }
 
-.menu-item span {
-    margin-left: 12px;
-    transition: opacity 0.3s ease;
+.nav-item.active .nav-icon {
+    color: var(--clr-light-a0);
 }
 
-.collapsed .menu-item span {
-    display: none;
+.nav-label {
+    margin-left: 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-color);
+    transition: all 0.2s ease;
+    flex: 1;
 }
 
-/* Footer/Logout styles */
+.nav-item:hover .nav-label {
+    font-weight: 600;
+}
+
+.nav-item.active .nav-label {
+    color: var(--clr-light-a0);
+    font-weight: 600;
+}
+
+.nav-badge {
+    background: var(--danger-color);
+    color: var(--clr-light-a0);
+    font-size: 0.6875rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
+}
+
+/* Footer */
 .sidebar-footer {
     margin-top: auto;
-    padding: 10px 0;
-    border-top: 1px solid #f0f0f0;
+    padding: var(--component-spacing) 0.75rem;
+    border-top: 1px solid var(--card-border);
+    background: var(--section-background);
 }
 
-.dark-mode .sidebar-footer {
-    border-top: 1px solid #2c2c2c;
+.footer-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.profile-item:hover {
+    background: var(--clr-surface-tonal-a10);
 }
 
 .logout-item {
-    color: #666;
+    color: var(--text-color);
 }
 
 .logout-item:hover {
-    color: #f44336;
-    background-color: rgba(244, 67, 54, 0.1);
+    background: rgba(239, 68, 68, 0.1);
+    border-left: 3px solid var(--danger-color);
 }
 
-.dark-mode .logout-item:hover {
-    background-color: rgba(244, 67, 54, 0.15);
+.logout-item:hover .nav-icon,
+.logout-item:hover .nav-label {
+    color: var(--danger-color);
 }
 
+/* Sidebar backdrop for mobile */
+.sidebar-backdrop {
+    display: none;
+}
+
+/* Responsive design */
 @media (max-width: 768px) {
     .app-sidebar {
         width: 100%;
-        height: auto;
-        position: relative;
-        border-radius: 0;
-        border-right: none;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        transform: translateX(-100%);
     }
-
-    .app-sidebar.collapsed {
-        width: 100%;
+    
+    .app-sidebar:not(.collapsed) {
+        transform: translateX(0);
     }
-
-    .sidebar-content {
-        height: auto;
-    }
-
-    .collapsed .sidebar-logo,
-    .sidebar-logo {
-        padding: 16px;
-        justify-content: space-between;
-    }
-
-    .collapsed .menu-item {
-        padding: 10px 16px;
-        justify-content: flex-start;
-    }
-
-    .collapsed .menu-item span {
+    
+    .sidebar-backdrop {
         display: block;
-        margin-left: 12px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: -1;
     }
+}
 
-    .expand-btn-container {
-        display: none;
+@media (max-width: 480px) {
+    .app-sidebar {
+        width: 85%;
     }
+}
+
+/* Accessibility improvements */
+.nav-item:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.collapse-btn:focus-visible,
+.expand-btn:focus-visible {
+    outline: 2px solid var(--clr-light-a0);
+    outline-offset: 2px;
 }
 </style>

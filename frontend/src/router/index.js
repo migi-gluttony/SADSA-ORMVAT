@@ -70,7 +70,7 @@ const router = createRouter({
           meta: { title: 'Formulaires du Dossier' },
           props: true
         }, {
-          path: 'dossiers/:dossierId/documents',
+          path: 'dossiers/documents/:dossierId',
           name: 'dossier-documents',
           component: DocumentFillingView,
           meta: { title: 'Documents du Dossier' },

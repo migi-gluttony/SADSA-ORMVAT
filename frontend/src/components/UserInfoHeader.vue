@@ -1,43 +1,59 @@
 <template>
-  <div class="user-info-header">
-    <div class="search-container">
-      <i class="pi pi-search"></i>
-      <InputText 
-        v-model="searchValue" 
-        :placeholder="searchPlaceholder" 
-        class="search-input"
-        @input="handleSearch"
-      />
-      <button 
-        class="clear-button" 
-        v-if="searchValue" 
-        @click="clearSearch"
-      >
-        <i class="pi pi-times"></i>
-      </button>
-    </div>
-    
-    <div class="user-container">
-      <div class="notifications">
-        <button class="notification-button">
-          <i class="pi pi-bell"></i>
-          <span class="notification-badge" v-if="notificationCount > 0">{{ notificationCount }}</span>
-        </button>
-      </div>
-      
-      <div class="user-profile">
-        <div class="avatar">
-          <img v-if="userAvatar" :src="userAvatar" alt="User Avatar" />
-          <div v-else class="avatar-placeholder">
-            {{ getEmailInitial() }}
+  <div class="app-header">
+    <div class="header-content">
+      <!-- Search Section -->
+      <div class="search-section">
+        <div class="search-container">
+          <div class="search-input-wrapper">
+            <i class="pi pi-search search-icon"></i>
+            <InputText 
+              v-model="searchValue" 
+              :placeholder="searchPlaceholder" 
+              class="search-input"
+              @input="handleSearch"
+            />
+            <button 
+              v-if="searchValue" 
+              class="clear-button" 
+              @click="clearSearch"
+              title="Effacer la recherche"
+            >
+              <i class="pi pi-times"></i>
+            </button>
           </div>
         </div>
-        <div class="user-info">
-          <div class="user-name-with-role">
-            <span class="user-full-name">{{ userName }}</span>
-            <span class="user-role-badge">{{ userRole }}</span>
-          </div>
-          <div class="user-email">{{ userEmail }}</div>
+      </div>
+      
+      <!-- Actions Section -->
+      <div class="actions-section">
+        <!-- Notifications -->
+        <div class="action-item">
+          <button class="action-button notification-button" title="Notifications">
+            <i class="pi pi-bell"></i>
+            <span v-if="notificationCount > 0" class="notification-badge">
+              {{ notificationCount > 99 ? '99+' : notificationCount }}
+            </span>
+          </button>
+        </div>
+
+        <!-- Theme Toggle -->
+        <div class="action-item">
+          <button class="action-button theme-button" @click="toggleTheme" :title="isDarkMode ? 'Mode clair' : 'Mode sombre'">
+            <i :class="isDarkMode ? 'pi pi-sun' : 'pi pi-moon'"></i>
+          </button>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="action-item">
+          <button class="action-button" title="Aide" @click="$emit('help-click')">
+            <i class="pi pi-question-circle"></i>
+          </button>
+        </div>
+        
+        <div class="action-item">
+          <button class="action-button" title="Paramètres" @click="$emit('settings-click')">
+            <i class="pi pi-cog"></i>
+          </button>
         </div>
       </div>
     </div>
@@ -45,19 +61,15 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
-import AuthService from '@/services/AuthService';
+import { ref, computed, watch } from 'vue';
 import InputText from 'primevue/inputtext';
-
-const router = useRouter();
-
+import { ThemeService } from '@/services/ThemeService';
 
 // Props
 const props = defineProps({
   searchPlaceholder: {
     type: String,
-    default: 'Rechercher...'
+    default: 'Rechercher dans SADSA...'
   },
   initialSearchValue: {
     type: String,
@@ -70,44 +82,13 @@ const props = defineProps({
 });
 
 // Emits
-const emit = defineEmits(['search']);
+const emit = defineEmits(['search', 'notification-click', 'help-click', 'settings-click']);
 
 // Component state
 const searchValue = ref(props.initialSearchValue);
-const currentUser = ref(AuthService.getCurrentUser());
-
-// Computed properties
-const userName = computed(() => {
-  if (!currentUser.value) return 'Utilisateur';
-  return `${currentUser.value?.prenom || ''} ${currentUser.value?.nom || ''}`.trim();
-});
-
-// Add this watch to log the user data whenever it changes
-watch(currentUser, (newValue) => {
-  console.log('Current user from auth service:', newValue);
-}, { immediate: true }); // The immediate option logs the initial value
-
-
-const userEmail = computed(() => {
-  return currentUser.value?.email || '';
-});
-
-const userAvatar = computed(() => {
-  return null; // Set to image URL if you have user avatars
-});
-
-const userRole = computed(() => {
-  return currentUser.value?.role || 'Utilisateur';
-});
+const isDarkMode = computed(() => ThemeService.getTheme() === 'dark');
 
 // Methods
-function getEmailInitial() {
-  if (!currentUser.value?.email) return '';
-  
-  // Get the first character of the email and convert to uppercase
-  return currentUser.value.email.charAt(0).toUpperCase();
-}
-
 function handleSearch() {
   emit('search', searchValue.value);
 }
@@ -117,272 +98,234 @@ function clearSearch() {
   handleSearch();
 }
 
+function toggleTheme() {
+  ThemeService.toggleTheme();
+}
+
 // Watch props
 watch(() => props.initialSearchValue, (newValue) => {
   searchValue.value = newValue;
 });
-
-// Update user when auth state changes
-onMounted(() => {
-  // Listen for auth state changes to update the user data
-  window.addEventListener('auth-state-changed', () => {
-    currentUser.value = AuthService.getCurrentUser();
-  });
-});
 </script>
 
 <style scoped>
-.user-info-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 1.5rem;
-  background-color: #ffffff;
-  margin-bottom: 1.5rem;
-  height: 64px;
-  width: 100%;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  border-radius: 10px;
-  transition: background-color 0.3s ease;
+.app-header {
+  background: var(--card-background);
+  border-bottom: 1px solid var(--card-border);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  margin-bottom: var(--component-spacing);
 }
 
-.dark-mode .user-info-header {
-  background-color: #121212;
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem var(--component-spacing);
+  max-width: 100%;
+  gap: var(--component-spacing);
+}
+
+/* Search Section */
+.search-section {
+  flex: 1;
+  max-width: 500px;
 }
 
 .search-container {
-  flex: 1;
-  max-width: 85%;
-  margin-right: 1rem;
+  width: 100%;
+}
+
+.search-input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  z-index: 2;
+  transition: color 0.3s ease;
 }
 
 .search-input {
   width: 100%;
   height: 36px;
-  border-radius: 18px;
-  background-color: #f5f5f5;
-  border: 1px solid #eaeaea;
+  padding: 0 2.5rem 0 2.25rem;
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius-lg);
+  background: var(--background-color);
   color: var(--text-color);
-  font-size: 0.9rem;
-  padding: 0 2.5rem 0 2.5rem;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+  font-family: inherit;
 }
 
 .search-input::placeholder {
-  color: #a0a0a0;
+  color: var(--text-muted);
 }
 
 .search-input:focus {
   outline: none;
   border-color: var(--primary-color);
-  background-color: #ffffff;
+  background: var(--card-background);
+  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.1);
 }
 
-.search-container .pi-search {
-  position: absolute;
-  left: 0.8rem;
+.search-input:focus + .search-icon {
   color: var(--primary-color);
-  font-size: 0.9rem;
 }
 
-/* Clear button styles */
 .clear-button {
   position: absolute;
-  right: 0.8rem;
-  top: 50%;
-  transform: translateY(-50%);
+  right: 0.5rem;
   background: none;
   border: none;
-  color: var(--text-color);
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: 0.9rem;
+  padding: 0.25rem;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.75rem;
+  transition: all 0.2s ease;
+  z-index: 2;
 }
 
-.dark-mode .clear-button {
-  color: rgba(255, 255, 255, 0.6);
+.clear-button:hover {
+  color: var(--text-color);
+  background: var(--clr-surface-tonal-a10);
 }
 
-/* Dark mode overrides */
-.dark-mode .search-input {
-  background-color: rgba(255, 255, 255, 0.1);
-  border: none;
-  color: #fff;
-}
-
-.dark-mode .search-input::placeholder {
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.dark-mode .search-input:focus {
-  background-color: rgba(255, 255, 255, 0.15);
-  border-color: transparent;
-}
-
-.dark-mode .search-container .pi-search {
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.user-container {
+/* Actions Section */
+.actions-section {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
-  position: relative;
+  gap: 0.5rem;
 }
 
-.notifications {
-  position: relative;
+.action-item {
+  display: flex;
+  align-items: center;
 }
 
-.notification-button {
-  background: none;
-  border: none;
+.action-button {
+  position: relative;
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius-md);
+  background: var(--card-background);
+  color: var(--text-secondary);
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  position: relative;
-  color: var(--primary-color);
-  transition: background-color 0.2s;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
 }
 
-.notification-button:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+.action-button:hover {
+  background: var(--section-background);
+  color: var(--text-color);
+  border-color: var(--primary-color);
 }
 
-.notification-button i {
-  font-size: 1.1rem;
+.action-button:active {
+  transform: translateY(1px);
 }
 
+/* Notification Badge */
 .notification-badge {
   position: absolute;
-  top: 0;
-  right: 0;
-  background-color: #ef4444;
-  color: white;
-  font-size: 0.7rem;
-  min-width: 18px;
-  height: 18px;
-  border-radius: 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
-}
-
-/* Dark mode overrides for notification button */
-.dark-mode .notification-button {
-  color: #fff;
-}
-
-.dark-mode .notification-button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.user-profile {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem;
-  border-radius: 20px;
-}
-
-.avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  overflow: hidden;
-}
-
-.avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.avatar-placeholder {
-  width: 100%;
-  height: 100%;
-  background-color: var(--primary-color);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  top: -2px;
+  right: -2px;
+  background: var(--danger-color);
+  color: var(--clr-light-a0);
+  font-size: 0.625rem;
   font-weight: 600;
-  font-size: 1rem;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.user-name-with-role {
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  padding: 0 0.25rem;
+  box-shadow: var(--shadow-sm);
+  border: 2px solid var(--card-background);
 }
 
-.user-full-name {
-  font-weight: 500;
-  font-size: 0.9rem;
-  color: var(--text-color);
+/* Special button states */
+.notification-button:has(.notification-badge):hover {
+  border-color: var(--danger-color);
 }
 
-.user-role-badge {
-  background-color: var(--primary-color);
-  color: white;
-  font-size: 0.7rem;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+.theme-button:hover {
+  background: var(--clr-primary-a0);
+  color: var(--clr-light-a0);
+  border-color: var(--clr-primary-a0);
 }
 
-.user-email {
-  font-size: 0.75rem;
-  color: var(--text-secondary-color, #666);
-}
-
-/* Dark mode overrides for user info */
-.dark-mode .user-full-name {
-  color: #fff;
-}
-
-.dark-mode .user-email {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-/* Responsive styles */
+/* Responsive Design */
 @media (max-width: 768px) {
-  .user-info-header {
-    flex-direction: row;
+  .header-content {
     padding: 0.75rem 1rem;
+    gap: 0.75rem;
   }
   
-  .search-container {
-    max-width: 50%;
+  .search-section {
+    max-width: none;
+    flex: 1;
   }
   
-  .user-container {
-    justify-content: flex-end;
+  .actions-section {
+    gap: 0.375rem;
+  }
+  
+  .action-button {
+    width: 32px;
+    height: 32px;
+    font-size: 0.8125rem;
   }
 }
 
 @media (max-width: 640px) {
-  .search-container {
-    max-width: 70%;
-  }
-  
-  .user-info {
-    display: none;
-  }
-  
-  .user-container {
+  .header-content {
+    padding: 0.5rem;
     gap: 0.5rem;
   }
+  
+  .search-input {
+    height: 32px;
+    font-size: 0.8125rem;
+  }
+  
+  .action-button:last-child {
+    display: none;
+  }
+}
+
+/* Focus and Accessibility */
+.action-button:focus-visible,
+.search-input:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Loading States */
+.search-input:disabled,
+.action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-button:disabled:hover {
+  background: var(--card-background);
+  color: var(--text-secondary);
+  transform: none;
+  border-color: var(--card-border);
 }
 </style>

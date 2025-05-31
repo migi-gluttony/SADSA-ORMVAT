@@ -2,14 +2,16 @@
 <template>
   <div class="document-requis-admin">
     <!-- Header -->
-    <div class="page-header">
-      <h1><i class="pi pi-file-edit"></i> Gestion des Documents Requis</h1>
-      <p>Gérez les documents requis pour chaque sous-rubrique</p>
+    <div class="component-card page-header">
+      <div class="header-info">
+        <h2><i class="pi pi-file-edit"></i> Gestion des Documents Requis</h2>
+        <p>Gérez les documents requis pour chaque sous-rubrique</p>
+      </div>
     </div>
 
     <!-- Statistics Cards -->
-    <div class="stats-cards" v-if="statistics">
-      <div class="stat-card">
+    <div class="stats-grid" v-if="statistics">
+      <div class="component-card stat-card">
         <div class="stat-icon">
           <i class="pi pi-file"></i>
         </div>
@@ -19,7 +21,7 @@
         </div>
       </div>
       
-      <div class="stat-card">
+      <div class="component-card stat-card">
         <div class="stat-icon">
           <i class="pi pi-star-fill"></i>
         </div>
@@ -29,7 +31,7 @@
         </div>
       </div>
       
-      <div class="stat-card">
+      <div class="component-card stat-card">
         <div class="stat-icon">
           <i class="pi pi-star"></i>
         </div>
@@ -43,7 +45,7 @@
     <!-- Main Content -->
     <div class="content-area">
       <!-- Loading State -->
-      <div v-if="loading" class="loading-container">
+      <div v-if="loading" class="component-card loading-container">
         <ProgressBar mode="indeterminate" />
         <p>Chargement des données...</p>
       </div>
@@ -53,11 +55,18 @@
         <div 
           v-for="rubrique in rubriques" 
           :key="rubrique.id"
-          class="rubrique-card"
+          class="component-card rubrique-card"
         >
           <div class="rubrique-header">
-            <h2>{{ rubrique.designation }}</h2>
-            <p v-if="rubrique.description">{{ rubrique.description }}</p>
+            <div class="category-header">
+              <div class="category-icon">
+                <i :class="getCategoryIcon(rubrique.designation)"></i>
+              </div>
+              <div class="category-info">
+                <h3>{{ rubrique.designation }}</h3>
+                <p v-if="rubrique.description">{{ rubrique.description }}</p>
+              </div>
+            </div>
           </div>
 
           <!-- Sous-Rubriques -->
@@ -69,9 +78,10 @@
             >
               <div class="sous-rubrique-header">
                 <div class="sous-rubrique-info">
-                  <h3>{{ sousRubrique.designation }}</h3>
+                  <h4>{{ sousRubrique.designation }}</h4>
                   <p v-if="sousRubrique.description">{{ sousRubrique.description }}</p>
                   <span class="document-count">
+                    <i class="pi pi-file"></i>
                     {{ sousRubrique.documentsRequis.length }} document(s)
                   </span>
                 </div>
@@ -79,7 +89,7 @@
                   icon="pi pi-plus" 
                   label="Ajouter Document"
                   @click="openCreateDialog(sousRubrique)"
-                  class="p-button-sm p-button-success"
+                  class="p-button-sm btn-primary"
                 />
               </div>
 
@@ -142,13 +152,13 @@
                         <Button 
                           icon="pi pi-pencil" 
                           @click="openEditDialog(slotProps.data)"
-                          class="p-button-rounded p-button-text p-button-info"
+                          class="p-button-rounded p-button-text p-button-info action-btn"
                           v-tooltip.top="'Modifier'"
                         />
                         <Button 
                           icon="pi pi-trash" 
                           @click="confirmDelete(slotProps.data)"
-                          class="p-button-rounded p-button-text p-button-danger"
+                          class="p-button-rounded p-button-text p-button-danger action-btn"
                           v-tooltip.top="'Supprimer'"
                         />
                       </div>
@@ -159,14 +169,17 @@
 
               <!-- Empty State -->
               <div v-else class="empty-documents">
-                <i class="pi pi-inbox"></i>
-                <p>Aucun document requis pour cette sous-rubrique</p>
-                <Button 
-                  label="Ajouter le premier document" 
-                  icon="pi pi-plus"
-                  @click="openCreateDialog(sousRubrique)"
-                  class="p-button-outlined"
-                />
+                <div class="empty-content">
+                  <i class="pi pi-inbox empty-icon"></i>
+                  <h5>Aucun document requis</h5>
+                  <p>Cette sous-rubrique n'a pas encore de documents requis</p>
+                  <Button 
+                    label="Ajouter le premier document" 
+                    icon="pi pi-plus"
+                    @click="openCreateDialog(sousRubrique)"
+                    class="p-button-outlined"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -290,7 +303,7 @@
           label="Annuler" 
           icon="pi pi-times" 
           @click="closeDialog"
-          class="p-button-text" 
+          class="p-button-outlined" 
         />
         <Button 
           :label="dialogMode === 'create' ? 'Créer' : 'Modifier'"
@@ -298,6 +311,7 @@
           @click="submitForm"
           :loading="submitting"
           :disabled="!isFormValid"
+          class="btn-primary"
         />
       </template>
     </Dialog>
@@ -375,6 +389,33 @@ const isFormValid = computed(() => {
          !formErrors.value.nomDocument &&
          !formErrors.value.proprietes;
 });
+
+// Get category icon
+function getCategoryIcon(categoryName) {
+  const iconMap = {
+    'FILIERES VEGETALES': 'pi pi-leaf',
+    'FILIERES ANIMALES': 'pi pi-heart',
+    'AMENAGEMENT HYDRO-AGRICOLE ET AMELIORATION FONCIERE': 'pi pi-wrench'
+  };
+  
+  // Try exact match first
+  if (iconMap[categoryName]) {
+    return iconMap[categoryName];
+  }
+  
+  // Fallback based on keywords
+  const lowerName = categoryName.toLowerCase();
+  if (lowerName.includes('vegetal') || lowerName.includes('plant')) {
+    return 'pi pi-leaf';
+  } else if (lowerName.includes('animal') || lowerName.includes('elevage')) {
+    return 'pi pi-heart';
+  } else if (lowerName.includes('amenagement') || lowerName.includes('hydro') || lowerName.includes('infrastructure')) {
+    return 'pi pi-wrench';
+  }
+  
+  // Default icon
+  return 'pi pi-folder';
+}
 
 // API Methods
 async function loadRubriquesWithDocuments() {
@@ -779,56 +820,70 @@ watch(jsonProprietesText, () => {
 .document-requis-admin {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 0;
+  background: var(--background-color);
+  min-height: 100vh;
+}
+
+/* Primary Button Styles */
+:deep(.btn-primary) {
+  background-color: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
+  color: var(--text-on-primary) !important;
+}
+
+:deep(.btn-primary:hover) {
+  background-color: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
 }
 
 /* Header */
 .page-header {
-  margin-bottom: 2rem;
+  margin-bottom: var(--component-spacing);
+}
+
+.header-info {
   text-align: center;
 }
 
-.page-header h1 {
+.header-info h2 {
   color: var(--primary-color);
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  margin-bottom: 0.5rem;
+  margin: 0 0 0.5rem 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  font-family: 'Poppins', sans-serif;
 }
 
-.page-header p {
-  color: var(--text-color-secondary);
-  font-size: 1.1rem;
-  opacity: 0.8;
+.header-info p {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  margin: 0;
 }
 
 /* Statistics Cards */
-.stats-cards {
+.stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  gap: var(--component-spacing);
+  margin-bottom: var(--component-spacing);
 }
 
 .stat-card {
-  background: white;
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   gap: 1rem;
+  padding: var(--component-spacing);
 }
 
 .stat-icon {
   width: 3rem;
   height: 3rem;
   border-radius: 50%;
-  background: rgba(1, 114, 62, 0.1);
+  background: var(--clr-surface-tonal-a0);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -841,11 +896,12 @@ watch(jsonProprietesText, () => {
   font-weight: 700;
   color: var(--primary-color);
   margin: 0;
+  font-family: 'Poppins', sans-serif;
 }
 
 .stat-content p {
   font-size: 0.875rem;
-  color: var(--text-color-secondary);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -857,84 +913,103 @@ watch(jsonProprietesText, () => {
 
 .loading-container p {
   margin-top: 1rem;
-  color: var(--text-color-secondary);
+  color: var(--text-secondary);
 }
 
 /* Rubriques */
 .rubriques-container {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: var(--component-spacing);
 }
 
 .rubrique-card {
-  background: white;
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .rubrique-header {
-  background: rgba(1, 114, 62, 0.05);
-  padding: 1.5rem;
+  background: var(--section-background);
+  padding: var(--component-spacing);
   border-bottom: 1px solid var(--border-color);
 }
 
-.rubrique-header h2 {
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.category-icon {
+  width: 50px;
+  height: 50px;
+  background: var(--primary-color);
+  border-radius: var(--border-radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-on-primary);
+  font-size: 1.5rem;
+}
+
+.category-info h3 {
   color: var(--primary-color);
   font-size: 1.25rem;
   font-weight: 700;
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.25rem 0;
+  font-family: 'Poppins', sans-serif;
 }
 
-.rubrique-header p {
-  color: var(--text-color-secondary);
+.category-info p {
+  color: var(--text-secondary);
   margin: 0;
-  font-style: italic;
+  font-size: 0.9rem;
 }
 
 /* Sous-Rubriques */
 .sous-rubriques {
-  padding: 1rem;
+  padding: var(--component-spacing);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--component-spacing);
 }
 
 .sous-rubrique-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
   overflow: hidden;
+  background: var(--card-background);
 }
 
 .sous-rubrique-header {
-  background: #f8f9fa;
+  background: var(--section-background);
   padding: 1rem;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.sous-rubrique-info h3 {
+.sous-rubrique-info h4 {
   color: var(--text-color);
   font-size: 1rem;
   font-weight: 600;
   margin: 0 0 0.25rem 0;
+  font-family: 'Poppins', sans-serif;
 }
 
 .sous-rubrique-info p {
-  color: var(--text-color-secondary);
+  color: var(--text-secondary);
   font-size: 0.875rem;
   margin: 0 0 0.5rem 0;
 }
 
 .document-count {
-  background: var(--primary-color);
-  color: white;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--text-color);
   padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--border-radius-sm);
   font-size: 0.75rem;
   font-weight: 500;
 }
@@ -955,16 +1030,8 @@ watch(jsonProprietesText, () => {
 }
 
 .description-text {
-  color: var(--text-color-secondary);
+  color: var(--text-secondary);
   font-size: 0.875rem;
-}
-
-.form-location {
-  font-family: monospace;
-  font-size: 0.75rem;
-  background: #f3f4f6;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
 }
 
 .json-file-info {
@@ -988,7 +1055,7 @@ watch(jsonProprietesText, () => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--text-color-secondary);
+  color: var(--text-secondary);
   font-style: italic;
   font-size: 0.875rem;
 }
@@ -999,20 +1066,45 @@ watch(jsonProprietesText, () => {
 
 .action-buttons {
   display: flex;
-  gap: 0.25rem;
+  gap: 0.375rem;
+}
+
+.action-btn {
+  padding: 0.5rem !important;
+  min-width: 2.5rem !important;
+  height: 2.5rem !important;
 }
 
 /* Empty State */
 .empty-documents {
   padding: 2rem;
-  text-align: center;
-  color: var(--text-color-secondary);
+  display: flex;
+  justify-content: center;
 }
 
-.empty-documents i {
-  font-size: 2rem;
+.empty-content {
+  text-align: center;
+  max-width: 400px;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  color: var(--text-muted);
   margin-bottom: 1rem;
-  opacity: 0.5;
+}
+
+.empty-content h5 {
+  color: var(--text-color);
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+  font-family: 'Poppins', sans-serif;
+}
+
+.empty-content p {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin: 0 0 1.5rem 0;
 }
 
 /* Form Styles */
@@ -1022,7 +1114,7 @@ watch(jsonProprietesText, () => {
 
 .form-grid {
   display: grid;
-  gap: 1.5rem;
+  gap: var(--component-spacing);
 }
 
 .form-group {
@@ -1043,12 +1135,12 @@ watch(jsonProprietesText, () => {
 
 .form-group label.required::after {
   content: ' *';
-  color: #dc2626;
+  color: var(--danger-color);
 }
 
 .form-help {
   font-size: 0.75rem;
-  color: var(--text-color-secondary);
+  color: var(--text-secondary);
   margin-top: 0.25rem;
   display: flex;
   align-items: center;
@@ -1089,14 +1181,14 @@ watch(jsonProprietesText, () => {
 :deep(.p-fileupload-basic .p-button) {
   width: 100%;
   justify-content: flex-start;
-  background: var(--surface-ground);
+  background: var(--surface-background);
   color: var(--text-color);
-  border: 2px dashed var(--surface-border);
+  border: 2px dashed var(--border-color);
   padding: 1rem;
 }
 
 :deep(.p-fileupload-basic .p-button:hover) {
-  background: var(--surface-hover);
+  background: var(--section-background);
   border-color: var(--primary-color);
 }
 
@@ -1109,9 +1201,9 @@ watch(jsonProprietesText, () => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem;
-  background: rgba(var(--primary-color-rgb), 0.1);
-  border: 1px solid rgba(var(--primary-color-rgb), 0.2);
-  border-radius: 6px;
+  background: var(--clr-surface-tonal-a0);
+  border: 1px solid var(--clr-primary-a20);
+  border-radius: var(--border-radius-sm);
   font-size: 0.875rem;
 }
 
@@ -1130,7 +1222,7 @@ watch(jsonProprietesText, () => {
     padding: 0.5rem;
   }
   
-  .stats-cards {
+  .stats-grid {
     grid-template-columns: 1fr;
   }
   
@@ -1143,27 +1235,25 @@ watch(jsonProprietesText, () => {
   .action-buttons {
     justify-content: center;
   }
+  
+  .category-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.75rem;
+  }
 }
 
-/* Dark Mode Support */
-.dark-mode .rubrique-card,
-.dark-mode .sous-rubrique-card,
-.dark-mode .stat-card {
-  background-color: #1f2937;
-  border-color: #374151;
-}
-
-.dark-mode .rubrique-header {
-  background-color: rgba(1, 134, 74, 0.1);
-}
-
-.dark-mode .sous-rubrique-header {
-  background-color: #374151;
-  border-color: #4b5563;
-}
-
-.dark-mode .form-location {
-  background-color: #374151;
-  color: #e5e7eb;
+@media (max-width: 480px) {
+  .stats-grid {
+    gap: 1rem;
+  }
+  
+  .stat-card {
+    padding: 1rem;
+  }
+  
+  .header-info h2 {
+    font-size: 1.5rem;
+  }
 }
 </style>
