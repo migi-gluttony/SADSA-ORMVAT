@@ -251,29 +251,19 @@ const menuItems = computed(() => {
     } else if (role === "AGENT_COMMISSION") {
         items.push(
             {
-                label: "Évaluation Technique",
-                icon: "pi pi-check-square",
-                command: () => router.push("/agent_commission/evaluation"),
-                route: "/agent_commission/evaluation",
+                label: "Mes Dossiers",
+                icon: "pi pi-folder-open",
+                command: () => router.push("/agent_commission/dossiers"),
+                route: "/agent_commission/dossiers",
             },
+
             {
                 label: "Visites de Terrain",
                 icon: "pi pi-map-marker",
-                command: () => router.push("/agent_commission/visites"),
-                route: "/agent_commission/visites",
-            },
-            {
-                label: "Approbations",
-                icon: "pi pi-verified",
-                command: () => router.push("/agent_commission/approbations"),
-                route: "/agent_commission/approbations",
-            },
-            {
-                label: "Constats de Réalisation",
-                icon: "pi pi-eye",
-                command: () => router.push("/agent_commission/constats"),
-                route: "/agent_commission/constats",
+                command: () => router.push("/agent_commission/terrain-visits"),
+                route: "/agent_commission/terrain-visits",
             }
+       
         );
     } else if (role === "ADMIN") {
         items.push(
@@ -462,7 +452,7 @@ const menuItems = computed(() => {
 /* Navigation */
 .sidebar-nav {
     flex: 1;
-    padding: var(--component-spacing) 0.75rem;
+    padding: 0.5rem;
     overflow-y: auto;
     overflow-x: hidden;
 }
@@ -578,7 +568,7 @@ const menuItems = computed(() => {
 /* Footer */
 .sidebar-footer {
     margin-top: auto;
-    padding: var(--component-spacing) 0.75rem;
+    padding:  0.5rem;
     border-top: 1px solid var(--card-border);
     background: var(--section-background);
 }

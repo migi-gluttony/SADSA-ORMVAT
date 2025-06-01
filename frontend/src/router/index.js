@@ -11,6 +11,7 @@ import DossierDetailView from '@/views/common/DossierDetailView.vue'
 import AdminDocumentRequisView from '@/views/admin/AdminDocumentRequisView.vue'
 import DocumentFillingView from '@/views/agent_antenne/DocumentFillingView.vue'
 import ProfileView from '@/views/common/ProfileView.vue'
+import TerrainVisitsView from '@/views/commission/TerrainVisitsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -116,6 +117,12 @@ const router = createRouter({
       component: DossierDetailView,
       meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION', title: 'Détails du Dossier' },
       props: true
+    },
+    {
+      path: '/agent_commission/terrain-visits',
+      name: 'agent-commission-terrain-visits',
+      component:TerrainVisitsView,
+      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION', title: 'Visites Terrain - Commission AHA-AF' }
     },
 
     // Catch-all route for 404

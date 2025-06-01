@@ -2,6 +2,9 @@ package ormvat.sadsa.service.agent_commission;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -13,10 +16,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.ArrayList;
 
 @Service
 @RequiredArgsConstructor
@@ -34,30 +40,91 @@ public class TerrainVisitService {
     private static final String UPLOAD_DIR = "uploads/terrain-visits/";
 
     /**
-     * Get terrain visits for commission agent
+     * Get dashboard summary for commission agent
      */
-    public VisitListResponse getTerrainVisits(Integer page, Integer size, String statut, 
-                                             String searchTerm, String userEmail) {
+    public DashboardSummaryDTO getDashboardSummary(String userEmail) {
         try {
-            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
-                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+            Utilisateur utilisateur = getCommissionAgent(userEmail);
+            List<VisiteTerrain> allVisits = visiteTerrainRepository.findByUtilisateurCommissionId(utilisateur.getId());
+            
+            LocalDate today = LocalDate.now();
+            LocalDate tomorrow = today.plusDays(1);
+            
+            long visitesAujourdHui = allVisits.stream()
+                    .filter(v -> v.getDateVisite() != null && v.getDateVisite().equals(today))
+                    .count();
+                    
+            long visitesDemain = allVisits.stream()
+                    .filter(v -> v.getDateVisite() != null && v.getDateVisite().equals(tomorrow))
+                    .count();
+                    
+            long visitesEnRetard = allVisits.stream()
+                    .filter(this::isVisiteOverdue)
+                    .count();
+                    
+            long visitesEnAttente = allVisits.stream()
+                    .filter(v -> v.getDateConstat() == null)
+                    .count();
+            
+            // Get upcoming visits (next 7 days)
+            List<VisiteTerrainSummaryDTO> prochaines = allVisits.stream()
+                    .filter(v -> v.getDateVisite() != null && 
+                            v.getDateVisite().isAfter(today) && 
+                            v.getDateVisite().isBefore(today.plusDays(8)) &&
+                            v.getDateConstat() == null)
+                    .map(this::mapToVisiteTerrainSummaryDTO)
+                    .sorted((a, b) -> a.getDateVisite().compareTo(b.getDateVisite()))
+                    .limit(5)
+                    .collect(Collectors.toList());
+            
+            // Get urgent visits (overdue or today)
+            List<VisiteTerrainSummaryDTO> urgentes = allVisits.stream()
+                    .filter(v -> (v.getDateVisite() != null && 
+                            v.getDateVisite().isBefore(tomorrow) && 
+                            v.getDateConstat() == null) || isVisiteOverdue(v))
+                    .map(this::mapToVisiteTerrainSummaryDTO)
+                    .sorted((a, b) -> a.getDateVisite().compareTo(b.getDateVisite()))
+                    .limit(5)
+                    .collect(Collectors.toList());
+            
+            VisitStatisticsDTO statistiques = calculateVisitStatistics(allVisits);
+            
+            return DashboardSummaryDTO.builder()
+                    .visitesAujourdHui(visitesAujourdHui)
+                    .visitesDemain(visitesDemain)
+                    .visitesEnRetard(visitesEnRetard)
+                    .visitesEnAttente(visitesEnAttente)
+                    .prochaines(prochaines)
+                    .urgentes(urgentes)
+                    .statistiques(statistiques)
+                    .build();
+                    
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération du tableau de bord", e);
+            throw new RuntimeException("Erreur lors de la récupération: " + e.getMessage());
+        }
+    }
 
-            if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION)) {
-                throw new RuntimeException("Accès non autorisé");
-            }
-
-            // Get all terrain visits for this commission agent
+    /**
+     * Get terrain visits with filtering and pagination
+     */
+    public VisitListResponse getTerrainVisits(VisitFilterRequest filterRequest, String userEmail) {
+        try {
+            Utilisateur utilisateur = getCommissionAgent(userEmail);
             List<VisiteTerrain> allVisits = visiteTerrainRepository.findByUtilisateurCommissionId(utilisateur.getId());
 
             // Apply filters
-            List<VisiteTerrain> filteredVisits = allVisits.stream()
-                    .filter(v -> statut == null || matchesStatus(v, statut))
-                    .filter(v -> searchTerm == null || matchesSearchTerm(v, searchTerm))
-                    .collect(Collectors.toList());
+            List<VisiteTerrain> filteredVisits = applyFilters(allVisits, filterRequest);
+
+            // Apply sorting
+            filteredVisits = applySorting(filteredVisits, filterRequest);
 
             // Apply pagination
+            int page = filterRequest.getPage() != null ? filterRequest.getPage() : 0;
+            int size = filterRequest.getSize() != null ? filterRequest.getSize() : 20;
             int start = page * size;
             int end = Math.min(start + size, filteredVisits.size());
+            
             List<VisiteTerrain> paginatedVisits = filteredVisits.subList(start, end);
 
             // Convert to DTOs
@@ -75,6 +142,8 @@ public class TerrainVisitService {
                     .pageSize(size)
                     .totalPages((int) Math.ceil((double) filteredVisits.size() / size))
                     .statistics(statistics)
+                    .availableStatuses(getAvailableStatuses())
+                    .availableProjectTypes(getAvailableProjectTypes())
                     .build();
 
         } catch (Exception e) {
@@ -88,16 +157,14 @@ public class TerrainVisitService {
      */
     public VisiteTerrainResponse getTerrainVisitDetail(Long visiteId, String userEmail) {
         try {
-            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
-                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-
+            Utilisateur utilisateur = getCommissionAgent(userEmail);
             VisiteTerrain visite = visiteTerrainRepository.findById(visiteId)
                     .orElseThrow(() -> new RuntimeException("Visite terrain non trouvée"));
 
             // Check access permission
-            if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION) &&
+            if (!visite.getUtilisateurCommission().getId().equals(utilisateur.getId()) &&
                 !utilisateur.getRole().equals(Utilisateur.UserRole.ADMIN)) {
-                throw new RuntimeException("Accès non autorisé");
+                throw new RuntimeException("Accès non autorisé à cette visite");
             }
 
             return mapToVisiteTerrainResponse(visite, utilisateur);
@@ -114,19 +181,12 @@ public class TerrainVisitService {
     @Transactional
     public TerrainVisitActionResponse scheduleTerrainVisit(ScheduleVisitRequest request, String userEmail) {
         try {
-            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
-                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-
-            if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION)) {
-                throw new RuntimeException("Seul un agent commission peut programmer une visite terrain");
-            }
-
+            Utilisateur utilisateur = getCommissionAgent(userEmail);
             Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
             // Check if dossier is in the right status for terrain visit
-            if (!dossier.getStatus().equals(Dossier.DossierStatus.SUBMITTED) &&
-                !dossier.getStatus().equals(Dossier.DossierStatus.IN_REVIEW)) {
+            if (!canScheduleTerrainVisit(dossier)) {
                 throw new RuntimeException("Le dossier n'est pas dans le bon statut pour une visite terrain");
             }
 
@@ -138,11 +198,11 @@ public class TerrainVisitService {
             visite.setObservations(request.getObservations());
             visite.setCoordonneesGPS(request.getCoordonneesGPS());
             visite.setRecommandations(request.getRecommandations());
-            visite.setApprouve(null); // Not decided yet
+            visite.setApprouve(null);
 
             visite = visiteTerrainRepository.save(visite);
 
-            // Update dossier status to IN_REVIEW
+            // Update dossier status
             dossier.setStatus(Dossier.DossierStatus.IN_REVIEW);
             dossierRepository.save(dossier);
 
@@ -168,25 +228,66 @@ public class TerrainVisitService {
     }
 
     /**
-     * Complete a terrain visit
+     * Update visit notes (auto-save)
+     */
+    @Transactional
+    public TerrainVisitActionResponse updateVisitNotes(UpdateVisitNotesRequest request, String userEmail) {
+        try {
+            Utilisateur utilisateur = getCommissionAgent(userEmail);
+            VisiteTerrain visite = visiteTerrainRepository.findById(request.getVisiteId())
+                    .orElseThrow(() -> new RuntimeException("Visite terrain non trouvée"));
+
+            // Check permission
+            if (!canModifyVisit(visite, utilisateur)) {
+                throw new RuntimeException("Vous n'avez pas l'autorisation de modifier cette visite");
+            }
+
+            // Update notes
+            if (request.getObservations() != null) {
+                visite.setObservations(request.getObservations());
+            }
+            if (request.getRecommandations() != null) {
+                visite.setRecommandations(request.getRecommandations());
+            }
+            if (request.getCoordonneesGPS() != null) {
+                visite.setCoordonneesGPS(request.getCoordonneesGPS());
+            }
+
+            visiteTerrainRepository.save(visite);
+
+            // Only create audit trail for manual saves, not auto-saves
+            if (!Boolean.TRUE.equals(request.getIsAutoSave())) {
+                createAuditTrail("VISITE_TERRAIN_NOTES_MISES_A_JOUR", visite.getDossier(), utilisateur,
+                        "Notes de visite mises à jour");
+            }
+
+            return TerrainVisitActionResponse.builder()
+                    .success(true)
+                    .message(Boolean.TRUE.equals(request.getIsAutoSave()) ? 
+                            "Notes sauvegardées automatiquement" : "Notes mises à jour avec succès")
+                    .visiteId(visite.getId())
+                    .dateAction(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la mise à jour des notes", e);
+            throw new RuntimeException("Erreur lors de la mise à jour: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Complete a terrain visit with approval/rejection
      */
     @Transactional
     public TerrainVisitActionResponse completeTerrainVisit(CompleteVisitRequest request, String userEmail) {
         try {
-            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
-                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-
-            if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION)) {
-                throw new RuntimeException("Seul un agent commission peut compléter une visite terrain");
-            }
-
+            Utilisateur utilisateur = getCommissionAgent(userEmail);
             VisiteTerrain visite = visiteTerrainRepository.findById(request.getVisiteId())
                     .orElseThrow(() -> new RuntimeException("Visite terrain non trouvée"));
 
-            // Check if user has permission to complete this visit
-            if (!visite.getUtilisateurCommission().getId().equals(utilisateur.getId()) &&
-                !utilisateur.getRole().equals(Utilisateur.UserRole.ADMIN)) {
-                throw new RuntimeException("Vous n'avez pas l'autorisation de compléter cette visite");
+            // Check permission
+            if (!canCompleteVisit(visite, utilisateur)) {
+                throw new RuntimeException("Vous n'avez pas l'autorisation de finaliser cette visite");
             }
 
             // Update visit details
@@ -208,7 +309,8 @@ public class TerrainVisitService {
             dossierRepository.save(dossier);
 
             // Update workflow
-            updateWorkflowForVisitCompletion(dossier, utilisateur, request.getApprouve(), request.getObservations());
+            updateWorkflowForVisitCompletion(dossier, utilisateur, request.getApprouve(), 
+                    request.getObservations());
 
             // Create audit trail
             String action = request.getApprouve() ? "VISITE_TERRAIN_APPROUVEE" : "VISITE_TERRAIN_REJETEE";
@@ -216,7 +318,8 @@ public class TerrainVisitService {
 
             return TerrainVisitActionResponse.builder()
                     .success(true)
-                    .message(request.getApprouve() ? "Visite terrain approuvée" : "Visite terrain rejetée")
+                    .message(request.getApprouve() ? 
+                            "Visite terrain approuvée avec succès" : "Visite terrain rejetée")
                     .visiteId(visite.getId())
                     .newStatut(request.getApprouve() ? "APPROUVE" : "REJETE")
                     .dateAction(LocalDateTime.now())
@@ -236,15 +339,12 @@ public class TerrainVisitService {
                                                        List<String> descriptions, List<String> coordonnees,
                                                        String userEmail) {
         try {
-            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
-                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-
+            Utilisateur utilisateur = getCommissionAgent(userEmail);
             VisiteTerrain visite = visiteTerrainRepository.findById(visiteId)
                     .orElseThrow(() -> new RuntimeException("Visite terrain non trouvée"));
 
             // Check permission
-            if (!visite.getUtilisateurCommission().getId().equals(utilisateur.getId()) &&
-                !utilisateur.getRole().equals(Utilisateur.UserRole.ADMIN)) {
+            if (!canModifyVisit(visite, utilisateur)) {
                 throw new RuntimeException("Vous n'avez pas l'autorisation d'ajouter des photos à cette visite");
             }
 
@@ -261,6 +361,11 @@ public class TerrainVisitService {
                 String gps = coordonnees != null && i < coordonnees.size() ? coordonnees.get(i) : "";
 
                 if (!file.isEmpty()) {
+                    // Validate file type and size
+                    if (!isValidImageFile(file)) {
+                        continue; // Skip invalid files
+                    }
+
                     String fileName = generateUniqueFileName(file.getOriginalFilename());
                     Path filePath = uploadPath.resolve(fileName);
                     Files.copy(file.getInputStream(), filePath);
@@ -277,6 +382,11 @@ public class TerrainVisitService {
                     photoVisiteRepository.save(photo);
                     photosUploaded++;
                 }
+            }
+
+            if (photosUploaded > 0) {
+                createAuditTrail("PHOTOS_VISITE_AJOUTEES", visite.getDossier(), utilisateur,
+                        photosUploaded + " photo(s) ajoutée(s) à la visite terrain");
             }
 
             return TerrainVisitActionResponse.builder()
@@ -296,93 +406,217 @@ public class TerrainVisitService {
     }
 
     /**
-     * Update terrain visit details
+     * Delete a photo from terrain visit
      */
     @Transactional
-    public TerrainVisitActionResponse updateTerrainVisit(Long visiteId, ScheduleVisitRequest request, String userEmail) {
+    public TerrainVisitActionResponse deleteVisitPhoto(Long photoId, String userEmail) {
         try {
-            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
-                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+            Utilisateur utilisateur = getCommissionAgent(userEmail);
+            PhotoVisite photo = photoVisiteRepository.findById(photoId)
+                    .orElseThrow(() -> new RuntimeException("Photo non trouvée"));
 
-            VisiteTerrain visite = visiteTerrainRepository.findById(visiteId)
-                    .orElseThrow(() -> new RuntimeException("Visite terrain non trouvée"));
-
+            VisiteTerrain visite = photo.getVisiteTerrain();
+            
             // Check permission
-            if (!visite.getUtilisateurCommission().getId().equals(utilisateur.getId()) &&
-                !utilisateur.getRole().equals(Utilisateur.UserRole.ADMIN)) {
-                throw new RuntimeException("Vous n'avez pas l'autorisation de modifier cette visite");
+            if (!canModifyVisit(visite, utilisateur)) {
+                throw new RuntimeException("Vous n'avez pas l'autorisation de supprimer cette photo");
             }
 
-            // Update visit details
-            visite.setDateVisite(request.getDateVisite());
-            visite.setObservations(request.getObservations());
-            visite.setCoordonneesGPS(request.getCoordonneesGPS());
-            visite.setRecommandations(request.getRecommandations());
+            // Delete physical file
+            try {
+                Path filePath = Paths.get(photo.getCheminFichier());
+                Files.deleteIfExists(filePath);
+            } catch (IOException e) {
+                log.warn("Impossible de supprimer le fichier physique: " + photo.getCheminFichier(), e);
+            }
 
-            visite = visiteTerrainRepository.save(visite);
+            // Delete database record
+            photoVisiteRepository.delete(photo);
 
-            // Create audit trail
-            createAuditTrail("VISITE_TERRAIN_MODIFIEE", visite.getDossier(), utilisateur,
-                    "Visite terrain reprogrammée pour le " + request.getDateVisite());
+            createAuditTrail("PHOTO_VISITE_SUPPRIMEE", visite.getDossier(), utilisateur,
+                    "Photo supprimée: " + photo.getNomFichier());
 
             return TerrainVisitActionResponse.builder()
                     .success(true)
-                    .message("Visite terrain mise à jour avec succès")
-                    .visiteId(visiteId)
+                    .message("Photo supprimée avec succès")
+                    .visiteId(visite.getId())
                     .dateAction(LocalDateTime.now())
                     .build();
 
         } catch (Exception e) {
-            log.error("Erreur lors de la mise à jour de la visite terrain", e);
-            throw new RuntimeException("Erreur lors de la mise à jour: " + e.getMessage());
+            log.error("Erreur lors de la suppression de la photo", e);
+            throw new RuntimeException("Erreur lors de la suppression: " + e.getMessage());
         }
     }
 
     // Private helper methods
 
+    private Utilisateur getCommissionAgent(String userEmail) {
+        Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+        if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION) &&
+            !utilisateur.getRole().equals(Utilisateur.UserRole.ADMIN)) {
+            throw new RuntimeException("Accès non autorisé - rôle commission requis");
+        }
+
+        return utilisateur;
+    }
+
+    private boolean canScheduleTerrainVisit(Dossier dossier) {
+        return dossier.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
+               dossier.getStatus().equals(Dossier.DossierStatus.IN_REVIEW);
+    }
+
+    private boolean canModifyVisit(VisiteTerrain visite, Utilisateur user) {
+        return (user.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION) &&
+                visite.getUtilisateurCommission().getId().equals(user.getId()) &&
+                visite.getDateConstat() == null) ||
+                user.getRole().equals(Utilisateur.UserRole.ADMIN);
+    }
+
+    private boolean canCompleteVisit(VisiteTerrain visite, Utilisateur user) {
+        return (user.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION) &&
+                visite.getUtilisateurCommission().getId().equals(user.getId()) &&
+                visite.getDateConstat() == null) ||
+                user.getRole().equals(Utilisateur.UserRole.ADMIN);
+    }
+
+    private boolean isVisiteOverdue(VisiteTerrain visite) {
+        return visite.getDateVisite() != null && 
+               visite.getDateConstat() == null && 
+               visite.getDateVisite().isBefore(LocalDate.now());
+    }
+
+    private List<VisiteTerrain> applyFilters(List<VisiteTerrain> visites, VisitFilterRequest filter) {
+        return visites.stream()
+                .filter(v -> filter.getStatut() == null || matchesStatus(v, filter.getStatut()))
+                .filter(v -> filter.getSearchTerm() == null || matchesSearchTerm(v, filter.getSearchTerm()))
+                .filter(v -> filter.getRubrique() == null || matchesRubrique(v, filter.getRubrique()))
+                .filter(v -> filter.getAntenne() == null || matchesAntenne(v, filter.getAntenne()))
+                .filter(v -> filter.getDateDebut() == null || !v.getDateVisite().isBefore(filter.getDateDebut()))
+                .filter(v -> filter.getDateFin() == null || !v.getDateVisite().isAfter(filter.getDateFin()))
+                .filter(v -> filter.getEnRetard() == null || filter.getEnRetard().equals(isVisiteOverdue(v)))
+                .filter(v -> filter.getACompleter() == null || 
+                        filter.getACompleter().equals(v.getDateConstat() == null))
+                .collect(Collectors.toList());
+    }
+
+    private List<VisiteTerrain> applySorting(List<VisiteTerrain> visites, VisitFilterRequest filter) {
+        String sortBy = filter.getSortBy() != null ? filter.getSortBy() : "dateVisite";
+        boolean ascending = !"DESC".equalsIgnoreCase(filter.getSortDirection());
+
+        return visites.stream()
+                .sorted((a, b) -> {
+                    int result = 0;
+                    switch (sortBy) {
+                        case "dateVisite":
+                            result = a.getDateVisite().compareTo(b.getDateVisite());
+                            break;
+                        case "dateConstat":
+                            if (a.getDateConstat() == null && b.getDateConstat() == null) result = 0;
+                            else if (a.getDateConstat() == null) result = 1;
+                            else if (b.getDateConstat() == null) result = -1;
+                            else result = a.getDateConstat().compareTo(b.getDateConstat());
+                            break;
+                        case "agriculteur":
+                            result = a.getDossier().getAgriculteur().getNom()
+                                    .compareTo(b.getDossier().getAgriculteur().getNom());
+                            break;
+                        case "statut":
+                            result = getVisiteStatus(a).compareTo(getVisiteStatus(b));
+                            break;
+                        default:
+                            result = a.getDateVisite().compareTo(b.getDateVisite());
+                    }
+                    return ascending ? result : -result;
+                })
+                .collect(Collectors.toList());
+    }
+
     private boolean matchesStatus(VisiteTerrain visite, String statut) {
-        String visiteStatus = getVisiteStatus(visite);
-        return visiteStatus.equalsIgnoreCase(statut);
+        return getVisiteStatus(visite).equalsIgnoreCase(statut);
     }
 
     private boolean matchesSearchTerm(VisiteTerrain visite, String searchTerm) {
         String term = searchTerm.toLowerCase();
-        return (visite.getDossier().getReference() != null && visite.getDossier().getReference().toLowerCase().contains(term)) ||
-                (visite.getDossier().getSaba() != null && visite.getDossier().getSaba().toLowerCase().contains(term)) ||
-                (visite.getDossier().getAgriculteur().getNom() != null && visite.getDossier().getAgriculteur().getNom().toLowerCase().contains(term)) ||
-                (visite.getDossier().getAgriculteur().getPrenom() != null && visite.getDossier().getAgriculteur().getPrenom().toLowerCase().contains(term));
+        Dossier dossier = visite.getDossier();
+        return (dossier.getReference() != null && dossier.getReference().toLowerCase().contains(term)) ||
+                (dossier.getSaba() != null && dossier.getSaba().toLowerCase().contains(term)) ||
+                (dossier.getAgriculteur().getNom() != null && 
+                 dossier.getAgriculteur().getNom().toLowerCase().contains(term)) ||
+                (dossier.getAgriculteur().getPrenom() != null && 
+                 dossier.getAgriculteur().getPrenom().toLowerCase().contains(term)) ||
+                (dossier.getAgriculteur().getCin() != null && 
+                 dossier.getAgriculteur().getCin().toLowerCase().contains(term));
+    }
+
+    private boolean matchesRubrique(VisiteTerrain visite, String rubrique) {
+        return visite.getDossier().getSousRubrique().getRubrique().getDesignation()
+                .toLowerCase().contains(rubrique.toLowerCase());
+    }
+
+    private boolean matchesAntenne(VisiteTerrain visite, String antenne) {
+        return visite.getDossier().getAntenne().getDesignation()
+                .toLowerCase().contains(antenne.toLowerCase());
     }
 
     private String getVisiteStatus(VisiteTerrain visite) {
         if (visite.getDateConstat() != null) {
-            return visite.getApprouve() != null ? 
-                    (visite.getApprouve() ? "APPROUVEE" : "REJETEE") : 
-                    "COMPLETEE";
+            if (visite.getApprouve() == null) return "COMPLETEE";
+            return visite.getApprouve() ? "APPROUVEE" : "REJETEE";
         } else if (visite.getDateVisite() != null) {
+            if (visite.getDateVisite().isBefore(LocalDate.now())) {
+                return "EN_RETARD";
+            }
             return "PROGRAMMEE";
         }
         return "NOUVELLE";
     }
 
+    private String getVisiteStatusDisplay(VisiteTerrain visite) {
+        switch (getVisiteStatus(visite)) {
+            case "PROGRAMMEE": return "Programmée";
+            case "EN_RETARD": return "En retard";
+            case "COMPLETEE": return "Complétée";
+            case "APPROUVEE": return "Approuvée";
+            case "REJETEE": return "Rejetée";
+            default: return "Nouvelle";
+        }
+    }
+
     private VisiteTerrainSummaryDTO mapToVisiteTerrainSummaryDTO(VisiteTerrain visite) {
+        Dossier dossier = visite.getDossier();
+        int photosCount = photoVisiteRepository.findByVisiteTerrainId(visite.getId()).size();
+        
         return VisiteTerrainSummaryDTO.builder()
                 .id(visite.getId())
                 .dateVisite(visite.getDateVisite())
                 .dateConstat(visite.getDateConstat())
                 .approuve(visite.getApprouve())
                 .statut(getVisiteStatus(visite))
-                .dossierId(visite.getDossier().getId())
-                .dossierReference(visite.getDossier().getReference())
-                .saba(visite.getDossier().getSaba())
-                .agriculteurNom(visite.getDossier().getAgriculteur().getNom())
-                .agriculteurPrenom(visite.getDossier().getAgriculteur().getPrenom())
-                .agriculteurTelephone(visite.getDossier().getAgriculteur().getTelephone())
-                .sousRubriqueDesignation(visite.getDossier().getSousRubrique().getDesignation())
-                .antenneDesignation(visite.getDossier().getAntenne().getDesignation())
-                .joursRestants(calculateDaysRemaining(visite))
-                .enRetard(isVisiteEnRetard(visite))
+                .statutDisplay(getVisiteStatusDisplay(visite))
+                .isOverdue(isVisiteOverdue(visite))
+                .daysUntilVisit(calculateDaysUntilVisit(visite))
+                .dossierId(dossier.getId())
+                .dossierReference(dossier.getReference())
+                .saba(dossier.getSaba())
+                .agriculteurNom(dossier.getAgriculteur().getNom())
+                .agriculteurPrenom(dossier.getAgriculteur().getPrenom())
+                .agriculteurCin(dossier.getAgriculteur().getCin())
+                .agriculteurTelephone(dossier.getAgriculteur().getTelephone())
+                .rubriqueDesignation(dossier.getSousRubrique().getRubrique().getDesignation())
+                .sousRubriqueDesignation(dossier.getSousRubrique().getDesignation())
+                .antenneDesignation(dossier.getAntenne().getDesignation())
+                .agriculteurCommune(dossier.getAgriculteur().getCommuneRurale() != null ? 
+                        dossier.getAgriculteur().getCommuneRurale().getDesignation() : null)
+                .agriculteurDouar(dossier.getAgriculteur().getDouar() != null ? 
+                        dossier.getAgriculteur().getDouar().getDesignation() : null)
                 .canComplete(visite.getDateConstat() == null)
                 .canModify(visite.getDateConstat() == null)
+                .canView(true)
+                .photosCount(photosCount)
+                .hasNotes(visite.getObservations() != null && !visite.getObservations().isEmpty())
                 .build();
     }
 
@@ -392,6 +626,8 @@ public class TerrainVisitService {
                 .map(this::mapToPhotoVisiteDTO)
                 .collect(Collectors.toList());
 
+        Dossier dossier = visite.getDossier();
+        
         return VisiteTerrainResponse.builder()
                 .id(visite.getId())
                 .dateVisite(visite.getDateVisite())
@@ -401,18 +637,31 @@ public class TerrainVisitService {
                 .approuve(visite.getApprouve())
                 .coordonneesGPS(visite.getCoordonneesGPS())
                 .statut(getVisiteStatus(visite))
-                .dossierId(visite.getDossier().getId())
-                .dossierReference(visite.getDossier().getReference())
-                .agriculteurNom(visite.getDossier().getAgriculteur().getNom())
-                .agriculteurPrenom(visite.getDossier().getAgriculteur().getPrenom())
-                .agriculteurTelephone(visite.getDossier().getAgriculteur().getTelephone())
-                .sousRubriqueDesignation(visite.getDossier().getSousRubrique().getDesignation())
-                .antenneDesignation(visite.getDossier().getAntenne().getDesignation())
-                .utilisateurCommissionNom(visite.getUtilisateurCommission().getPrenom() + " " + visite.getUtilisateurCommission().getNom())
+                .dossierId(dossier.getId())
+                .dossierReference(dossier.getReference())
+                .dossierSaba(dossier.getSaba())
+                .dossierStatut(dossier.getStatus().name())
+                .agriculteurNom(dossier.getAgriculteur().getNom())
+                .agriculteurPrenom(dossier.getAgriculteur().getPrenom())
+                .agriculteurCin(dossier.getAgriculteur().getCin())
+                .agriculteurTelephone(dossier.getAgriculteur().getTelephone())
+                .agriculteurCommune(dossier.getAgriculteur().getCommuneRurale() != null ? 
+                        dossier.getAgriculteur().getCommuneRurale().getDesignation() : null)
+                .agriculteurDouar(dossier.getAgriculteur().getDouar() != null ? 
+                        dossier.getAgriculteur().getDouar().getDesignation() : null)
+                .rubriqueDesignation(dossier.getSousRubrique().getRubrique().getDesignation())
+                .sousRubriqueDesignation(dossier.getSousRubrique().getDesignation())
+                .antenneDesignation(dossier.getAntenne().getDesignation())
+                .cdaNom(dossier.getAntenne().getCda() != null ? 
+                        dossier.getAntenne().getCda().getDescription() : null)
+                .utilisateurCommissionNom(visite.getUtilisateurCommission().getPrenom() + " " + 
+                        visite.getUtilisateurCommission().getNom())
                 .photos(photos)
-                .canSchedule(false) // Already scheduled
-                .canComplete(visite.getDateConstat() == null && canUserCompleteVisit(visite, currentUser))
-                .canModify(visite.getDateConstat() == null && canUserModifyVisit(visite, currentUser))
+                .canSchedule(false)
+                .canComplete(canCompleteVisit(visite, currentUser))
+                .canModify(canModifyVisit(visite, currentUser))
+                .isOverdue(isVisiteOverdue(visite))
+                .daysUntilVisit(calculateDaysUntilVisit(visite))
                 .build();
     }
 
@@ -424,7 +673,13 @@ public class TerrainVisitService {
                 .description(photo.getDescription())
                 .coordonneesGPS(photo.getCoordonneesGPS())
                 .datePrise(photo.getDatePrise())
+                .downloadUrl("/api/agent_commission/terrain-visits/photos/" + photo.getId() + "/download")
                 .build();
+    }
+
+    private Integer calculateDaysUntilVisit(VisiteTerrain visite) {
+        if (visite.getDateVisite() == null) return null;
+        return (int) ChronoUnit.DAYS.between(LocalDate.now(), visite.getDateVisite());
     }
 
     private VisitStatisticsDTO calculateVisitStatistics(List<VisiteTerrain> visites) {
@@ -433,7 +688,20 @@ public class TerrainVisitService {
         long realisees = visites.stream().filter(v -> v.getDateConstat() != null).count();
         long approuvees = visites.stream().filter(v -> Boolean.TRUE.equals(v.getApprouve())).count();
         long rejetees = visites.stream().filter(v -> Boolean.FALSE.equals(v.getApprouve())).count();
-        long enRetard = visites.stream().filter(this::isVisiteEnRetard).count();
+        long enRetard = visites.stream().filter(this::isVisiteOverdue).count();
+        
+        LocalDate today = LocalDate.now();
+        long aujourd_hui = visites.stream()
+                .filter(v -> v.getDateVisite() != null && v.getDateVisite().equals(today))
+                .count();
+                
+        LocalDate startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1);
+        LocalDate endOfWeek = startOfWeek.plusDays(6);
+        long cetteSemaine = visites.stream()
+                .filter(v -> v.getDateVisite() != null && 
+                        !v.getDateVisite().isBefore(startOfWeek) && 
+                        !v.getDateVisite().isAfter(endOfWeek))
+                .count();
 
         double tauxApprobation = realisees > 0 ? (double) approuvees / realisees * 100 : 0;
 
@@ -444,30 +712,28 @@ public class TerrainVisitService {
                 .visitesApprouvees(approuvees)
                 .visitesRejetees(rejetees)
                 .visitesEnRetard(enRetard)
+                .visitesAujourdHui(aujourd_hui)
+                .visitesCetteSemaine(cetteSemaine)
                 .tauxApprobation(tauxApprobation)
+                .tauxRejetRapide(0.0) // To be implemented
                 .build();
     }
 
-    private Integer calculateDaysRemaining(VisiteTerrain visite) {
-        if (visite.getDateVisite() == null) return null;
-        return (int) java.time.temporal.ChronoUnit.DAYS.between(
-                java.time.LocalDate.now(), visite.getDateVisite());
+    private List<String> getAvailableStatuses() {
+        return List.of("NOUVELLE", "PROGRAMMEE", "EN_RETARD", "COMPLETEE", "APPROUVEE", "REJETEE");
     }
 
-    private Boolean isVisiteEnRetard(VisiteTerrain visite) {
-        if (visite.getDateVisite() == null || visite.getDateConstat() != null) return false;
-        return visite.getDateVisite().isBefore(java.time.LocalDate.now());
+    private List<String> getAvailableProjectTypes() {
+        return List.of("FILIERES VEGETALES", "FILIERES ANIMALES", 
+                       "AMENAGEMENT HYDRO-AGRICOLE ET AMELIORATION FONCIERE");
     }
 
-    private boolean canUserCompleteVisit(VisiteTerrain visite, Utilisateur user) {
-        return user.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION) ||
-                user.getRole().equals(Utilisateur.UserRole.ADMIN);
-    }
-
-    private boolean canUserModifyVisit(VisiteTerrain visite, Utilisateur user) {
-        return (user.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION) &&
-                visite.getUtilisateurCommission().getId().equals(user.getId())) ||
-                user.getRole().equals(Utilisateur.UserRole.ADMIN);
+    private boolean isValidImageFile(MultipartFile file) {
+        String contentType = file.getContentType();
+        return contentType != null && (
+                contentType.startsWith("image/") || 
+                contentType.equals("application/pdf")
+        );
     }
 
     private String generateUniqueFileName(String originalFilename) {
@@ -478,6 +744,7 @@ public class TerrainVisitService {
         return UUID.randomUUID().toString() + extension;
     }
 
+    // Workflow and audit methods remain the same as in the original service
     private void updateWorkflowForTerrainVisit(Dossier dossier, Utilisateur utilisateur, String commentaire) {
         List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
         

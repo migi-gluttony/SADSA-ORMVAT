@@ -53,17 +53,11 @@ public class TerrainVisitDTOs {
         
         private String coordonneesGPS;
         
-        private List<UploadPhotoRequest> photos;
-    }
-
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class UploadPhotoRequest {
-        private String nomFichier;
-        private String description;
-        private String coordonneesGPS;
+        private String motifRejet;
+        
+        private List<String> pointsNonConformes;
+        
+        private String remarquesGenerales;
     }
 
     @Data
@@ -79,15 +73,25 @@ public class TerrainVisitDTOs {
         private Boolean approuve;
         private String coordonneesGPS;
         private String statut;
+        private String motifRejet;
+        private List<String> pointsNonConformes;
+        private String remarquesGenerales;
         
         // Dossier info
         private Long dossierId;
         private String dossierReference;
+        private String dossierSaba;
+        private String dossierStatut;
         private String agriculteurNom;
         private String agriculteurPrenom;
+        private String agriculteurCin;
         private String agriculteurTelephone;
+        private String agriculteurCommune;
+        private String agriculteurDouar;
+        private String rubriqueDesignation;
         private String sousRubriqueDesignation;
         private String antenneDesignation;
+        private String cdaNom;
         
         // Commission agent info
         private String utilisateurCommissionNom;
@@ -99,6 +103,8 @@ public class TerrainVisitDTOs {
         private Boolean canSchedule;
         private Boolean canComplete;
         private Boolean canModify;
+        private Boolean isOverdue;
+        private Integer daysUntilVisit;
     }
 
     @Data
@@ -112,6 +118,9 @@ public class TerrainVisitDTOs {
         private String description;
         private String coordonneesGPS;
         private LocalDateTime datePrise;
+        private String downloadUrl;
+        private Long tailleFichier;
+        private String formatFichier;
     }
 
     @Data
@@ -125,6 +134,8 @@ public class TerrainVisitDTOs {
         private Integer pageSize;
         private Integer totalPages;
         private VisitStatisticsDTO statistics;
+        private List<String> availableStatuses;
+        private List<String> availableProjectTypes;
     }
 
     @Data
@@ -137,6 +148,9 @@ public class TerrainVisitDTOs {
         private LocalDate dateConstat;
         private Boolean approuve;
         private String statut;
+        private String statutDisplay;
+        private Boolean isOverdue;
+        private Integer daysUntilVisit;
         
         // Dossier info
         private Long dossierId;
@@ -144,17 +158,20 @@ public class TerrainVisitDTOs {
         private String saba;
         private String agriculteurNom;
         private String agriculteurPrenom;
+        private String agriculteurCin;
         private String agriculteurTelephone;
+        private String rubriqueDesignation;
         private String sousRubriqueDesignation;
         private String antenneDesignation;
+        private String agriculteurCommune;
+        private String agriculteurDouar;
         
-        // Timing info
-        private Integer joursRestants;
-        private Boolean enRetard;
-        
-        // Actions available
+        // Quick actions
         private Boolean canComplete;
         private Boolean canModify;
+        private Boolean canView;
+        private Integer photosCount;
+        private Boolean hasNotes;
     }
 
     @Data
@@ -168,7 +185,10 @@ public class TerrainVisitDTOs {
         private Long visitesApprouvees;
         private Long visitesRejetees;
         private Long visitesEnRetard;
+        private Long visitesAujourdHui;
+        private Long visitesCetteSemaine;
         private Double tauxApprobation;
+        private Double tauxRejetRapide; // Rejets sans visite terrain
     }
 
     @Data
@@ -181,5 +201,84 @@ public class TerrainVisitDTOs {
         private Long visiteId;
         private String newStatut;
         private LocalDateTime dateAction;
+        private String redirectUrl;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class UploadPhotosRequest {
+        @NotNull(message = "L'ID de la visite est requis")
+        private Long visiteId;
+        
+        private List<String> descriptions;
+        private List<String> coordonnees;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class UpdateVisitNotesRequest {
+        @NotNull(message = "L'ID de la visite est requis")
+        private Long visiteId;
+        
+        private String observations;
+        private String recommandations;
+        private String remarquesGenerales;
+        private List<String> pointsNonConformes;
+        private String coordonneesGPS;
+        
+        // Auto-save functionality
+        private Boolean isAutoSave;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class QuickActionRequest {
+        @NotNull(message = "L'ID de la visite est requis")
+        private Long visiteId;
+        
+        @NotBlank(message = "L'action est requise")
+        private String action; // "approve", "reject", "postpone"
+        
+        private String motif;
+        private LocalDate nouvelleDate; // For postpone
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class VisitFilterRequest {
+        private String statut;
+        private String searchTerm;
+        private String rubrique;
+        private String antenne;
+        private LocalDate dateDebut;
+        private LocalDate dateFin;
+        private Boolean enRetard;
+        private Boolean aCompleter;
+        private String sortBy;
+        private String sortDirection;
+        private Integer page;
+        private Integer size;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class DashboardSummaryDTO {
+        private Long visitesAujourdHui;
+        private Long visitesDemain;
+        private Long visitesEnRetard;
+        private Long visitesEnAttente;
+        private List<VisiteTerrainSummaryDTO> prochaines;
+        private List<VisiteTerrainSummaryDTO> urgentes;
+        private VisitStatisticsDTO statistiques;
     }
 }

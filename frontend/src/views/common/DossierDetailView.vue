@@ -1240,7 +1240,7 @@ function formatFileSize(bytes) {
 .forms-actions {
   text-align: center;
   padding: 2rem;
-  background: #f8f9fa;
+  background: var(--section-background);
   border-radius: 12px;
   border: 2px dashed var(--primary-color);
   margin-bottom: 2rem;
@@ -1299,7 +1299,7 @@ function formatFileSize(bytes) {
 }
 
 .forms-overview {
-  background: white;
+  background: var(--section-background);
   border-radius: 12px;
   padding: 1.5rem;
   border: 1px solid #e5e7eb;
@@ -1318,7 +1318,7 @@ function formatFileSize(bytes) {
 }
 
 .form-card {
-  background: #f8f9fa;
+  background: var(--section-background);
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   padding: 1rem;
@@ -1331,7 +1331,7 @@ function formatFileSize(bytes) {
 }
 
 .form-card.form-readonly {
-  background: #f3f4f6;
+  background: var(--section-background);
   border-style: dashed;
 }
 
@@ -1691,10 +1691,10 @@ function formatFileSize(bytes) {
 
 .step-comment {
   font-size: 0.85rem;
-  color: #374151;
+  color: var();
   margin: 0;
   font-style: italic;
-  background: #f8f9fa;
+  background: var(--section-background);
   padding: 0.5rem;
   border-radius: 4px;
   border-left: 3px solid var(--primary-color);
