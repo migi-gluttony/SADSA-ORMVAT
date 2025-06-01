@@ -1,6 +1,6 @@
 <template>
   <DossierDetailBase 
-    :breadcrumb-root="getBreadcrumbRoot()"
+    :breadcrumb-root="breadcrumbRoot"
     :user-role="'AGENT_COMMISSION_TERRAIN'"
     @dossier-loaded="handleDossierLoaded"
     ref="baseComponent"
@@ -156,6 +156,7 @@
 
   <!-- Schedule Terrain Visit Dialog -->
   <ScheduleTerrainVisitDialog 
+    v-if="scheduleVisitDialog.dossier"
     v-model:visible="scheduleVisitDialog.visible"
     :dossier="scheduleVisitDialog.dossier"
     @visit-scheduled="handleVisitScheduled"
@@ -163,6 +164,7 @@
 
   <!-- Complete Terrain Visit Dialog -->
   <CompleteTerrainVisitDialog 
+    v-if="completeVisitDialog.visit"
     v-model:visible="completeVisitDialog.visible"
     :visit="completeVisitDialog.visit"
     @visit-completed="handleVisitCompleted"
@@ -170,6 +172,7 @@
 
   <!-- Form Data Viewer Dialog -->
   <FormDataViewerDialog 
+    v-if="formDataDialog.form && currentDossier"
     v-model:visible="formDataDialog.visible"
     :form="formDataDialog.form"
     :dossier="currentDossier"
@@ -177,6 +180,7 @@
 
   <!-- Photo Viewer Dialog -->
   <PhotoViewerDialog 
+    v-if="photoDialog.photo"
     v-model:visible="photoDialog.visible"
     :photo="photoDialog.photo"
   />
@@ -227,7 +231,22 @@ const photoDialog = reactive({
   photo: null
 });
 
-// Computed
+// Computed properties
+const breadcrumbRoot = computed(() => {
+  const currentUser = AuthService.getCurrentUser();
+  const equipe = currentUser?.equipeCommission;
+  
+  if (equipe) {
+    const teamNames = {
+      'FILIERES_VEGETALES': 'Commission Filières Végétales',
+      'FILIERES_ANIMALES': 'Commission Filières Animales',
+      'AMENAGEMENT_HYDRO_AGRICOLE': 'Commission Aménagement'
+    };
+    return teamNames[equipe] || 'Commission Terrain';
+  }
+  return 'Commission Terrain';
+});
+
 const currentTerrainVisit = computed(() => {
   const visits = currentDossierDetail.value?.visitesTerrain;
   return visits && visits.length > 0 ? visits[visits.length - 1] : null;
@@ -252,21 +271,6 @@ function canViewInspection() {
 }
 
 // Methods
-function getBreadcrumbRoot() {
-  const currentUser = AuthService.getCurrentUser();
-  const equipe = currentUser?.equipeCommission;
-  
-  if (equipe) {
-    const teamNames = {
-      'FILIERES_VEGETALES': 'Commission Filières Végétales',
-      'FILIERES_ANIMALES': 'Commission Filières Animales',
-      'AMENAGEMENT_HYDRO_AGRICOLE': 'Commission Aménagement'
-    };
-    return teamNames[equipe] || 'Commission Terrain';
-  }
-  return 'Commission Terrain';
-}
-
 function handleDossierLoaded(dossier) {
   currentDossier.value = dossier.dossier;
   currentDossierDetail.value = dossier;
