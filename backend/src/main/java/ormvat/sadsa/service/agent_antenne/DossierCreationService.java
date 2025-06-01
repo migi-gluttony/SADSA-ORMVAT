@@ -33,13 +33,13 @@ public class DossierCreationService {
     private final CommuneRuraleRepository communeRuraleRepository;
     private final DouarRepository douarRepository;
     private final DocumentRequisRepository documentRequisRepository;
+    private final JoursFerieRepository joursFerieRepository;
 
     /**
      * Get all initialization data needed for dossier creation
      */
     public InitializationDataResponse getInitializationData(String userEmail) {
         try {
-            // Get user and their Antenne
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
             
@@ -48,13 +48,11 @@ public class DossierCreationService {
                 throw new RuntimeException("L'utilisateur n'est associé à aucune antenne");
             }
 
-            // Get all rubriques with sous-rubriques and documents
             List<Rubrique> rubriques = rubriqueRepository.findAll();
             List<SimplifiedRubriqueDTO> rubriqueDTOs = rubriques.stream()
                     .map(this::mapToSimplifiedRubriqueDTO)
                     .collect(Collectors.toList());
 
-            // Get geographic data
             List<GeographicDTO> provinces = provinceRepository.findAll().stream()
                     .map(p -> GeographicDTO.builder()
                             .id(p.getId())
@@ -62,7 +60,6 @@ public class DossierCreationService {
                             .build())
                     .collect(Collectors.toList());
 
-            // Get all antennes for selection
             List<AntenneInfoDTO> antennes = antenneRepository.findAll().stream()
                     .map(a -> AntenneInfoDTO.builder()
                             .id(a.getId())
@@ -72,7 +69,6 @@ public class DossierCreationService {
                             .build())
                     .collect(Collectors.toList());
 
-            // Generate SABA number
             String sabaNumber = generateSabaNumber();
 
             return InitializationDataResponse.builder()
@@ -95,6 +91,83 @@ public class DossierCreationService {
     }
 
     /**
+     * Check if farmer exists by CIN
+     */
+    public AgriculteurCheckResponse checkFarmerExists(String cin) {
+        try {
+            Optional<Agriculteur> agriculteurOpt = agriculteurRepository.findByCin(cin);
+            
+            if (agriculteurOpt.isPresent()) {
+                Agriculteur agriculteur = agriculteurOpt.get();
+                
+                // Get previous dossiers for this farmer
+                List<Dossier> previousDossiers = dossierRepository.findByAgriculteurId(agriculteur.getId());
+                List<DossierHistoryDTO> dossierHistory = previousDossiers.stream()
+                        .map(d -> DossierHistoryDTO.builder()
+                                .id(d.getId())
+                                .numeroDossier(d.getNumeroDossier())
+                                .saba(d.getSaba())
+                                .sousRubriqueDesignation(d.getSousRubrique().getDesignation())
+                                .status(d.getStatus().name())
+                                .dateCreation(d.getDateCreation())
+                                .antenneDesignation(d.getAntenne().getDesignation())
+                                .build())
+                        .collect(Collectors.toList());
+
+                return AgriculteurCheckResponse.builder()
+                        .exists(true)
+                        .agriculteur(AgriculteurInfoDTO.builder()
+                                .cin(agriculteur.getCin())
+                                .nom(agriculteur.getNom())
+                                .prenom(agriculteur.getPrenom())
+                                .telephone(agriculteur.getTelephone())
+                                .communeRuraleId(agriculteur.getCommuneRurale() != null ? 
+                                        agriculteur.getCommuneRurale().getId() : null)
+                                .douarId(agriculteur.getDouar() != null ? 
+                                        agriculteur.getDouar().getId() : null)
+                                .build())
+                        .message("Agriculteur trouvé dans le système")
+                        .previousDossiers(dossierHistory)
+                        .build();
+            } else {
+                return AgriculteurCheckResponse.builder()
+                        .exists(false)
+                        .message("Agriculteur non trouvé dans le système")
+                        .previousDossiers(new ArrayList<>())
+                        .build();
+            }
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de la vérification de l'agriculteur", e);
+            throw new RuntimeException("Erreur lors de la vérification: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Search project types by search term
+     */
+    public List<SimplifiedSousRubriqueDTO> searchProjectTypes(String searchTerm) {
+        try {
+            List<SousRubrique> allSousRubriques = sousRubriqueRepository.findAll();
+            
+            return allSousRubriques.stream()
+                    .filter(sr -> sr.getDesignation().toLowerCase().contains(searchTerm.toLowerCase()) ||
+                            (sr.getDescription() != null && sr.getDescription().toLowerCase().contains(searchTerm.toLowerCase())))
+                    .map(sr -> SimplifiedSousRubriqueDTO.builder()
+                            .id(sr.getId())
+                            .designation(sr.getDesignation())
+                            .description(sr.getDescription())
+                            .documentsRequis(getDocumentNames(sr.getId()))
+                            .build())
+                    .collect(Collectors.toList());
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de la recherche de types de projet", e);
+            throw new RuntimeException("Erreur lors de la recherche: " + e.getMessage());
+        }
+    }
+
+    /**
      * Create a new dossier with workflow tracking
      */
     @Transactional
@@ -102,31 +175,25 @@ public class DossierCreationService {
         try {
             log.info("Début création dossier pour l'utilisateur: {}", userEmail);
 
-            // Get user
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
             
-            // Get selected antenne
             Antenne antenne = antenneRepository.findById(request.getDossier().getAntenneId())
                     .orElseThrow(() -> new RuntimeException("Antenne non trouvée"));
 
-            // Validate and get or create agriculteur
             Agriculteur agriculteur = getOrCreateAgriculteur(request.getAgriculteur());
 
-            // Get sous-rubrique
             SousRubrique sousRubrique = sousRubriqueRepository.findById(request.getDossier().getSousRubriqueId())
                     .orElseThrow(() -> new RuntimeException("Sous-rubrique non trouvée"));
 
-            // Get initial etape (Phase Antenne)
             Etape etapeInitiale = getOrCreateEtape("Phase Antenne");
 
-            // Create dossier
             Dossier dossier = new Dossier();
             dossier.setSaba(request.getDossier().getSaba());
             dossier.setReference(generateReference(antenne, sousRubrique));
             dossier.setNumeroDossier(generateNumeroDossier());
             dossier.setAgriculteur(agriculteur);
-            dossier.setAntenne(antenne); // Changed from setCda to setAntenne
+            dossier.setAntenne(antenne);
             dossier.setSousRubrique(sousRubrique);
             dossier.setUtilisateurCreateur(utilisateur);
             dossier.setStatus(Dossier.DossierStatus.DRAFT);
@@ -134,39 +201,10 @@ public class DossierCreationService {
 
             Dossier savedDossier = dossierRepository.save(dossier);
 
-            // Create workflow instance
-            WorkflowInstance workflowInstance = new WorkflowInstance();
-            workflowInstance.setDossier(savedDossier);
-            workflowInstance.setEtapeDesignation("Phase Antenne");
-            workflowInstance.setEmplacementActuel(WorkflowInstance.EmplacementType.ANTENNE);
-            workflowInstance.setDateEntree(LocalDateTime.now());
-            workflowInstance.setDateLimite(calculateDateLimite(etapeInitiale));
-            workflowInstance.setEtape(etapeInitiale);
-            workflowInstance.setJoursRestants(etapeInitiale.getDureeJours());
-            workflowInstanceRepository.save(workflowInstance);
+            createInitialWorkflow(savedDossier, etapeInitiale, utilisateur);
+            createAuditTrail("CREATION_DOSSIER", savedDossier, utilisateur, 
+                    "Création d'un nouveau dossier avec SABA: " + savedDossier.getSaba());
 
-            // Create workflow history entry
-            HistoriqueWorkflow historique = new HistoriqueWorkflow();
-            historique.setDossier(savedDossier);
-            historique.setEtapeDesignation("Phase Antenne");
-            historique.setEmplacementType(WorkflowInstance.EmplacementType.ANTENNE);
-            historique.setDateEntree(LocalDateTime.now());
-            historique.setUtilisateur(utilisateur);
-            historique.setCommentaire("Création du dossier");
-            historique.setEtape(etapeInitiale);
-            historiqueWorkflowRepository.save(historique);
-
-            // Create audit trail entry
-            AuditTrail auditTrail = new AuditTrail();
-            auditTrail.setAction("CREATION_DOSSIER");
-            auditTrail.setEntite("Dossier");
-            auditTrail.setEntiteId(savedDossier.getId());
-            auditTrail.setDateAction(LocalDateTime.now());
-            auditTrail.setUtilisateur(utilisateur);
-            auditTrail.setDescription("Création d'un nouveau dossier avec SABA: " + savedDossier.getSaba());
-            auditTrailRepository.save(auditTrail);
-
-            // Generate recepisse
             RecepisseDossierDTO recepisse = generateRecepisse(savedDossier, request);
 
             log.info("Dossier créé avec succès - ID: {}, SABA: {}", savedDossier.getId(), savedDossier.getSaba());
@@ -185,7 +223,121 @@ public class DossierCreationService {
         }
     }
 
-    // Continue with other methods (getCerclesByProvince, etc. - same as before)
+    /**
+     * Update an existing dossier
+     */
+    @Transactional
+    public UpdateDossierResponse updateDossier(UpdateDossierRequest request, String userEmail) {
+        try {
+            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+            Dossier dossier = dossierRepository.findById(request.getDossierId())
+                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+            // Check if user can edit this dossier
+            if (!canEditDossier(dossier, utilisateur)) {
+                throw new RuntimeException("Vous n'avez pas l'autorisation de modifier ce dossier");
+            }
+
+            // Update agriculteur information
+            if (request.getAgriculteur() != null) {
+                updateAgriculteur(dossier.getAgriculteur(), request.getAgriculteur());
+            }
+
+            // Update dossier information if provided
+            if (request.getDossier() != null) {
+                updateDossierInfo(dossier, request.getDossier());
+            }
+
+            dossierRepository.save(dossier);
+
+            createAuditTrail("MODIFICATION_DOSSIER", dossier, utilisateur, 
+                    "Modification du dossier " + dossier.getNumeroDossier());
+
+            return UpdateDossierResponse.builder()
+                    .dossierId(dossier.getId())
+                    .message("Dossier mis à jour avec succès")
+                    .success(true)
+                    .lastUpdated(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la mise à jour du dossier", e);
+            throw new RuntimeException("Erreur lors de la mise à jour: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Get dossier for editing
+     */
+    public DossierEditResponse getDossierForEdit(Long dossierId, String userEmail) {
+        try {
+            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+            Dossier dossier = dossierRepository.findById(dossierId)
+                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+            if (!canEditDossier(dossier, utilisateur)) {
+                throw new RuntimeException("Vous n'avez pas l'autorisation de modifier ce dossier");
+            }
+
+            // Get all required data for editing
+            List<Rubrique> rubriques = rubriqueRepository.findAll();
+            List<SimplifiedRubriqueDTO> rubriqueDTOs = rubriques.stream()
+                    .map(this::mapToSimplifiedRubriqueDTO)
+                    .collect(Collectors.toList());
+
+            List<GeographicDTO> provinces = provinceRepository.findAll().stream()
+                    .map(p -> GeographicDTO.builder()
+                            .id(p.getId())
+                            .designation(p.getDesignation())
+                            .build())
+                    .collect(Collectors.toList());
+
+            List<AntenneInfoDTO> antennes = antenneRepository.findAll().stream()
+                    .map(a -> AntenneInfoDTO.builder()
+                            .id(a.getId())
+                            .designation(a.getDesignation())
+                            .cdaNom(a.getCda() != null ? a.getCda().getDescription() : "N/A")
+                            .cdaId(a.getCda() != null ? a.getCda().getId() : null)
+                            .build())
+                    .collect(Collectors.toList());
+
+            return DossierEditResponse.builder()
+                    .dossierId(dossier.getId())
+                    .agriculteur(AgriculteurInfoDTO.builder()
+                            .cin(dossier.getAgriculteur().getCin())
+                            .nom(dossier.getAgriculteur().getNom())
+                            .prenom(dossier.getAgriculteur().getPrenom())
+                            .telephone(dossier.getAgriculteur().getTelephone())
+                            .communeRuraleId(dossier.getAgriculteur().getCommuneRurale() != null ? 
+                                    dossier.getAgriculteur().getCommuneRurale().getId() : null)
+                            .douarId(dossier.getAgriculteur().getDouar() != null ? 
+                                    dossier.getAgriculteur().getDouar().getId() : null)
+                            .build())
+                    .dossier(DossierInfoDTO.builder()
+                            .saba(dossier.getSaba())
+                            .reference(dossier.getReference())
+                            .sousRubriqueId(dossier.getSousRubrique().getId())
+                            .antenneId(dossier.getAntenne().getId())
+                            .build())
+                    .currentStatus(dossier.getStatus().name())
+                    .canEdit(true)
+                    .lastModified(dossier.getDateCreation().toString())
+                    .rubriques(rubriqueDTOs)
+                    .provinces(provinces)
+                    .antennes(antennes)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération du dossier pour édition", e);
+            throw new RuntimeException("Erreur lors de la récupération: " + e.getMessage());
+        }
+    }
+
+    // Geographic methods
     public List<GeographicDTO> getCerclesByProvince(Long provinceId) {
         return cercleRepository.findByProvinceId(provinceId).stream()
                 .map(c -> GeographicDTO.builder()
@@ -217,6 +369,119 @@ public class DossierCreationService {
     }
 
     // Private helper methods
+    private boolean canEditDossier(Dossier dossier, Utilisateur utilisateur) {
+        // Only AGENT_ANTENNE can edit, and only DRAFT or RETURNED_FOR_COMPLETION status
+        if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_ANTENNE)) {
+            return false;
+        }
+
+        // Must be from same antenne
+        if (!dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId())) {
+            return false;
+        }
+
+        // Can only edit if DRAFT or RETURNED_FOR_COMPLETION
+        return dossier.getStatus() == Dossier.DossierStatus.DRAFT ||
+               dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
+    }
+
+    private void updateAgriculteur(Agriculteur agriculteur, AgriculteurInfoDTO agriculteurInfo) {
+        if (agriculteurInfo.getNom() != null) {
+            agriculteur.setNom(agriculteurInfo.getNom());
+        }
+        if (agriculteurInfo.getPrenom() != null) {
+            agriculteur.setPrenom(agriculteurInfo.getPrenom());
+        }
+        if (agriculteurInfo.getTelephone() != null) {
+            agriculteur.setTelephone(agriculteurInfo.getTelephone());
+        }
+        if (agriculteurInfo.getCommuneRuraleId() != null) {
+            CommuneRurale commune = communeRuraleRepository.findById(agriculteurInfo.getCommuneRuraleId())
+                    .orElse(null);
+            agriculteur.setCommuneRurale(commune);
+        }
+        if (agriculteurInfo.getDouarId() != null) {
+            Douar douar = douarRepository.findById(agriculteurInfo.getDouarId())
+                    .orElse(null);
+            agriculteur.setDouar(douar);
+        }
+        agriculteurRepository.save(agriculteur);
+    }
+
+    private void updateDossierInfo(Dossier dossier, DossierInfoDTO dossierInfo) {
+        if (dossierInfo.getSousRubriqueId() != null && 
+            !dossierInfo.getSousRubriqueId().equals(dossier.getSousRubrique().getId())) {
+            SousRubrique sousRubrique = sousRubriqueRepository.findById(dossierInfo.getSousRubriqueId())
+                    .orElseThrow(() -> new RuntimeException("Sous-rubrique non trouvée"));
+            dossier.setSousRubrique(sousRubrique);
+        }
+        if (dossierInfo.getAntenneId() != null && 
+            !dossierInfo.getAntenneId().equals(dossier.getAntenne().getId())) {
+            Antenne antenne = antenneRepository.findById(dossierInfo.getAntenneId())
+                    .orElseThrow(() -> new RuntimeException("Antenne non trouvée"));
+            dossier.setAntenne(antenne);
+        }
+    }
+
+    private void createInitialWorkflow(Dossier dossier, Etape etapeInitiale, Utilisateur utilisateur) {
+        WorkflowInstance workflowInstance = new WorkflowInstance();
+        workflowInstance.setDossier(dossier);
+        workflowInstance.setEtapeDesignation("Phase Antenne");
+        workflowInstance.setEmplacementActuel(WorkflowInstance.EmplacementType.ANTENNE);
+        workflowInstance.setDateEntree(LocalDateTime.now());
+        workflowInstance.setDateLimite(calculateDateLimiteWithHolidays(etapeInitiale));
+        workflowInstance.setEtape(etapeInitiale);
+        workflowInstance.setJoursRestants(etapeInitiale.getDureeJours());
+        workflowInstanceRepository.save(workflowInstance);
+
+        HistoriqueWorkflow historique = new HistoriqueWorkflow();
+        historique.setDossier(dossier);
+        historique.setEtapeDesignation("Phase Antenne");
+        historique.setEmplacementType(WorkflowInstance.EmplacementType.ANTENNE);
+        historique.setDateEntree(LocalDateTime.now());
+        historique.setUtilisateur(utilisateur);
+        historique.setCommentaire("Création du dossier");
+        historique.setEtape(etapeInitiale);
+        historiqueWorkflowRepository.save(historique);
+    }
+
+    /**
+     * Calculate deadline excluding holidays and weekends
+     */
+    private LocalDateTime calculateDateLimiteWithHolidays(Etape etape) {
+        LocalDateTime now = LocalDateTime.now();
+        int dureeJours = etape.getDureeJours() != null ? etape.getDureeJours() : 3;
+        
+        LocalDate currentDate = now.toLocalDate();
+        int workingDaysAdded = 0;
+        
+        // Get holidays for the year
+        LocalDate startOfYear = LocalDate.of(currentDate.getYear(), 1, 1);
+        LocalDate endOfYear = LocalDate.of(currentDate.getYear(), 12, 31);
+        List<JoursFerie> holidays = joursFerieRepository.findByDateBetween(startOfYear, endOfYear);
+        Set<LocalDate> holidayDates = holidays.stream()
+                .map(JoursFerie::getDate)
+                .collect(Collectors.toSet());
+        
+        while (workingDaysAdded < dureeJours) {
+            currentDate = currentDate.plusDays(1);
+            
+            // Skip weekends (Saturday = 6, Sunday = 7)
+            if (currentDate.getDayOfWeek().getValue() == 6 || currentDate.getDayOfWeek().getValue() == 7) {
+                continue;
+            }
+            
+            // Skip holidays
+            if (holidayDates.contains(currentDate)) {
+                continue;
+            }
+            
+            workingDaysAdded++;
+        }
+        
+        return currentDate.atTime(now.getHour(), now.getMinute());
+    }
+
     private SimplifiedRubriqueDTO mapToSimplifiedRubriqueDTO(Rubrique rubrique) {
         List<SimplifiedSousRubriqueDTO> sousRubriquesDTOs = rubrique.getSousRubriques().stream()
                 .map(sr -> SimplifiedSousRubriqueDTO.builder()
@@ -280,12 +545,6 @@ public class DossierCreationService {
         return etapeRepository.save(etape);
     }
 
-    private LocalDateTime calculateDateLimite(Etape etape) {
-        LocalDateTime now = LocalDateTime.now();
-        int dureeJours = etape.getDureeJours() != null ? etape.getDureeJours() : 3;
-        return now.plusDays(dureeJours);
-    }
-
     private String generateReference(Antenne antenne, SousRubrique sousRubrique) {
         String annee = String.valueOf(LocalDate.now().getYear());
         String antenneCode = String.format("%03d", antenne.getId());
@@ -326,9 +585,23 @@ public class DossierCreationService {
                 .telephone(dossier.getAgriculteur().getTelephone())
                 .typeProduit(dossier.getSousRubrique().getDesignation())
                 .saba(dossier.getSaba())
+                .reference(dossier.getReference()) // Added reference
                 .montantDemande(request.getDossier().getMontantDemande())
-                .antenneName(dossier.getAntenne().getDesignation()) // Changed from cdaNom
+                .antenneName(dossier.getAntenne().getDesignation())
                 .cdaName(dossier.getAntenne().getCda() != null ? dossier.getAntenne().getCda().getDescription() : "N/A")
+                .numeroSerie(String.format("S-%06d", System.currentTimeMillis() % 1000000))
+                .dateEmission(LocalDateTime.now())
                 .build();
+    }
+
+    private void createAuditTrail(String action, Dossier dossier, Utilisateur utilisateur, String description) {
+        AuditTrail auditTrail = new AuditTrail();
+        auditTrail.setAction(action);
+        auditTrail.setEntite("Dossier");
+        auditTrail.setEntiteId(dossier.getId());
+        auditTrail.setDateAction(LocalDateTime.now());
+        auditTrail.setUtilisateur(utilisateur);
+        auditTrail.setDescription(description);
+        auditTrailRepository.save(auditTrail);
     }
 }

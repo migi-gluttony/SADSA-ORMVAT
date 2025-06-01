@@ -42,6 +42,41 @@ public class DossierCreationController {
     }
 
     /**
+     * Check if farmer exists by CIN
+     */
+    @GetMapping("/check-farmer/{cin}")
+    public ResponseEntity<AgriculteurCheckResponse> checkFarmerExists(@PathVariable String cin) {
+        try {
+            log.info("Vérification de l'existence de l'agriculteur avec CIN: {}", cin);
+            
+            AgriculteurCheckResponse response = dossierService.checkFarmerExists(cin);
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de la vérification de l'agriculteur", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Search project types (sous-rubriques)
+     */
+    @GetMapping("/search-project-types")
+    public ResponseEntity<List<SimplifiedSousRubriqueDTO>> searchProjectTypes(
+            @RequestParam String searchTerm) {
+        try {
+            log.info("Recherche de types de projet avec terme: {}", searchTerm);
+            
+            List<SimplifiedSousRubriqueDTO> results = dossierService.searchProjectTypes(searchTerm);
+            return ResponseEntity.ok(results);
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de la recherche de types de projet", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
      * Create a new dossier
      */
     @PostMapping("/create")
@@ -70,6 +105,60 @@ public class DossierCreationController {
             log.error("Erreur technique lors de la création du dossier", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(createErrorResponse("Erreur technique lors de la création du dossier"));
+        }
+    }
+
+    /**
+     * Update an existing dossier (only if DRAFT or RETURNED_FOR_COMPLETION)
+     */
+    @PutMapping("/{dossierId}")
+    public ResponseEntity<?> updateDossier(
+            @PathVariable Long dossierId,
+            @Valid @RequestBody UpdateDossierRequest request,
+            Authentication authentication) {
+        try {
+            String userEmail = authentication.getName();
+            log.info("Mise à jour du dossier {} par l'utilisateur: {}", dossierId, userEmail);
+
+            request.setDossierId(dossierId);
+            UpdateDossierResponse response = dossierService.updateDossier(request, userEmail);
+
+            log.info("Dossier {} mis à jour avec succès", dossierId);
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            log.warn("Données invalides pour la mise à jour du dossier: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (RuntimeException e) {
+            log.error("Erreur métier lors de la mise à jour du dossier: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Erreur technique lors de la mise à jour du dossier", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("Erreur technique lors de la mise à jour du dossier"));
+        }
+    }
+
+    /**
+     * Get dossier for editing
+     */
+    @GetMapping("/{dossierId}/edit")
+    public ResponseEntity<DossierEditResponse> getDossierForEdit(
+            @PathVariable Long dossierId,
+            Authentication authentication) {
+        try {
+            String userEmail = authentication.getName();
+            log.info("Récupération du dossier {} pour édition par l'utilisateur: {}", dossierId, userEmail);
+            
+            DossierEditResponse response = dossierService.getDossierForEdit(dossierId, userEmail);
+            return ResponseEntity.ok(response);
+            
+        } catch (RuntimeException e) {
+            log.error("Erreur lors de la récupération du dossier pour édition: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+        } catch (Exception e) {
+            log.error("Erreur technique lors de la récupération du dossier pour édition", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
 

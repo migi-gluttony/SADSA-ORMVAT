@@ -28,6 +28,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 @Service
@@ -60,34 +61,40 @@ public class DocumentFillingService {
      */
     public DossierDocumentsResponse getDossierDocuments(Long dossierId, String userEmail) {
         try {
-            // Get dossier
             Dossier dossier = dossierRepository.findById(dossierId)
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
-            // Verify user access (agent can only access dossiers from their antenne)
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
             
-            if (!dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId()) && 
-                !utilisateur.getRole().equals(Utilisateur.UserRole.ADMIN)) {
+            if (!canAccessDossier(dossier, utilisateur)) {
                 throw new RuntimeException("Accès non autorisé à ce dossier");
             }
 
-            // Get documents requis for this sous-rubrique
             List<DocumentRequis> documentsRequis = documentRequisRepository
                     .findBySousRubriqueId(dossier.getSousRubrique().getId());
 
-            // Build response
-            DossierSummaryDTO dossierSummary = buildDossierSummary(dossier);
+            DossierSummaryDTO dossierSummary = buildDossierSummary(dossier, userEmail);
             List<DocumentRequisWithFilesDTO> documentsWithFiles = documentsRequis.stream()
                     .map(doc -> buildDocumentWithFiles(doc, dossierId))
                     .collect(Collectors.toList());
             DocumentStatisticsDTO statistics = calculateStatistics(documentsWithFiles);
 
+            // Build navigation info
+            NavigationInfoDTO navigationInfo = NavigationInfoDTO.builder()
+                    .backUrl("/api/dossiers/" + dossierId)
+                    .dossierDetailUrl("/api/dossiers/" + dossierId)
+                    .dossierManagementUrl("/api/dossiers")
+                    .showBackButton(true)
+                    .currentStep("Document Filling")
+                    .nextStep(canModifyDossier(dossier, utilisateur) ? "Submission" : "Review")
+                    .build();
+
             return DossierDocumentsResponse.builder()
                     .dossier(dossierSummary)
                     .documentsRequis(documentsWithFiles)
                     .statistics(statistics)
+                    .navigationInfo(navigationInfo)
                     .build();
 
         } catch (Exception e) {
@@ -103,7 +110,6 @@ public class DocumentFillingService {
     public UploadDocumentResponse uploadDocument(Long dossierId, Long documentRequisId, 
                                                MultipartFile file, String userEmail) {
         try {
-            // Validate dossier and document requis
             Dossier dossier = dossierRepository.findById(dossierId)
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
             
@@ -113,19 +119,13 @@ public class DocumentFillingService {
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
-            // Verify access
-            if (!dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId()) && 
-                !utilisateur.getRole().equals(Utilisateur.UserRole.ADMIN)) {
+            if (!canModifyDossier(dossier, utilisateur)) {
                 throw new RuntimeException("Accès non autorisé");
             }
 
-            // Create subdirectory for this dossier
             String subDirectory = createDossierDirectory(dossierId);
-            
-            // Store the file
             String filePath = storeFile(file, subDirectory);
 
-            // Create PieceJointe record
             PieceJointe pieceJointe = new PieceJointe();
             pieceJointe.setNomFichier(file.getOriginalFilename());
             pieceJointe.setCheminFichier(filePath);
@@ -138,7 +138,6 @@ public class DocumentFillingService {
 
             PieceJointe savedPieceJointe = pieceJointeRepository.save(pieceJointe);
 
-            // Create audit trail
             createAuditTrail("UPLOAD_DOCUMENT", dossierId, 
                     "Upload document: " + file.getOriginalFilename() + " pour " + documentRequis.getNomDocument(), 
                     userEmail);
@@ -161,12 +160,11 @@ public class DocumentFillingService {
     }
 
     /**
-     * Save form data for a document requis as JSON file
+     * Save form data for a document requis - Progressive saving (updates existing file)
      */
     @Transactional
     public SaveFormDataResponse saveFormData(SaveFormDataRequest request, String userEmail) {
         try {
-            // Validate dossier and document requis
             Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
             
@@ -176,43 +174,27 @@ public class DocumentFillingService {
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
-            // Verify access
-            if (!dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId()) && 
-                !utilisateur.getRole().equals(Utilisateur.UserRole.ADMIN)) {
+            if (!canModifyDossier(dossier, utilisateur)) {
                 throw new RuntimeException("Accès non autorisé");
             }
 
-            // Create subdirectory for this dossier
             String subDirectory = createDossierDirectory(request.getDossierId());
             
-            // Save form data as JSON file
-            String formDataFilePath = saveFormDataAsJsonFile(request.getFormData(), subDirectory, 
-                    documentRequis.getNomDocument(), request.getDossierId(), request.getDocumentRequisId());
+            // Find existing form data piece jointe or create new one
+            PieceJointe formDataPieceJointe = findOrCreateFormDataPieceJointe(
+                    dossier, documentRequis, utilisateur);
 
-            // Find or create piece jointe for form data storage
-            PieceJointe formDataPieceJointe = pieceJointeRepository
-                    .findByDossierIdAndDocumentRequisId(request.getDossierId(), request.getDocumentRequisId())
-                    .stream()
-                    .filter(pj -> pj.getCheminDonneesFormulaire() != null)
-                    .findFirst()
-                    .orElse(new PieceJointe());
+            // Save/Update form data as JSON file (overwrite existing)
+            String formDataFilePath = saveOrUpdateFormDataAsJsonFile(
+                    request.getFormData(), subDirectory, 
+                    documentRequis.getNomDocument(), 
+                    request.getDossierId(), 
+                    request.getDocumentRequisId(),
+                    formDataPieceJointe.getCheminDonneesFormulaire());
 
-            if (formDataPieceJointe.getId() == null) {
-                // Create new form data record
-                formDataPieceJointe.setNomFichier("form_data_" + documentRequis.getNomDocument() + ".json");
-                formDataPieceJointe.setTypeDocument("FORM_DATA");
-                formDataPieceJointe.setStatus(PieceJointe.DocumentStatus.COMPLETE);
-                formDataPieceJointe.setDateUpload(LocalDateTime.now());
-                formDataPieceJointe.setDossier(dossier);
-                formDataPieceJointe.setDocumentRequis(documentRequis);
-                formDataPieceJointe.setUtilisateur(utilisateur);
-            }
-            
-            // Store the file path (not the JSON content directly)
             formDataPieceJointe.setCheminDonneesFormulaire(formDataFilePath);
             pieceJointeRepository.save(formDataPieceJointe);
 
-            // Create audit trail
             createAuditTrail("SAVE_FORM_DATA", request.getDossierId(), 
                     "Sauvegarde données formulaire: " + documentRequis.getNomDocument(), userEmail);
 
@@ -243,9 +225,7 @@ public class DocumentFillingService {
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
-            // Verify access
-            if (!pieceJointe.getDossier().getAntenne().getId().equals(utilisateur.getAntenne().getId()) && 
-                !utilisateur.getRole().equals(Utilisateur.UserRole.ADMIN)) {
+            if (!canModifyDossier(pieceJointe.getDossier(), utilisateur)) {
                 throw new RuntimeException("Accès non autorisé");
             }
 
@@ -254,7 +234,6 @@ public class DocumentFillingService {
             String formDataPath = pieceJointe.getCheminDonneesFormulaire();
             Long dossierId = pieceJointe.getDossier().getId();
 
-            // Delete physical files if they exist
             if (filePath != null) {
                 deleteFile(filePath);
             }
@@ -262,10 +241,8 @@ public class DocumentFillingService {
                 deleteFile(formDataPath);
             }
 
-            // Delete database record
             pieceJointeRepository.delete(pieceJointe);
 
-            // Create audit trail
             createAuditTrail("DELETE_DOCUMENT", dossierId, 
                     "Suppression document: " + fileName, userEmail);
 
@@ -289,9 +266,7 @@ public class DocumentFillingService {
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
-            // Verify access
-            if (!pieceJointe.getDossier().getAntenne().getId().equals(utilisateur.getAntenne().getId()) && 
-                !utilisateur.getRole().equals(Utilisateur.UserRole.ADMIN)) {
+            if (!canAccessDossier(pieceJointe.getDossier(), utilisateur)) {
                 throw new RuntimeException("Accès non autorisé");
             }
 
@@ -299,16 +274,13 @@ public class DocumentFillingService {
                 throw new RuntimeException("Aucun fichier associé à ce document");
             }
 
-            // Load file as resource
             Resource resource = loadFileAsResource(pieceJointe.getCheminFichier());
             
-            // Determine content type
             String contentType = getMimeType(pieceJointe.getCheminFichier());
             if (contentType == null) {
                 contentType = "application/octet-stream";
             }
 
-            // Create audit trail
             createAuditTrail("DOWNLOAD_DOCUMENT", pieceJointe.getDossier().getId(), 
                     "Téléchargement document: " + pieceJointe.getNomFichier(), userEmail);
 
@@ -327,21 +299,104 @@ public class DocumentFillingService {
         }
     }
 
-    // Private file storage methods
+    // Private helper methods for access control
+    private boolean canAccessDossier(Dossier dossier, Utilisateur utilisateur) {
+        switch (utilisateur.getRole()) {
+            case ADMIN:
+                return true;
+            case AGENT_ANTENNE:
+                return utilisateur.getAntenne() != null &&
+                        dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId());
+            case AGENT_GUC:
+                return !dossier.getStatus().equals(Dossier.DossierStatus.DRAFT);
+            case AGENT_COMMISSION:
+                return dossier.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
+                        dossier.getStatus().equals(Dossier.DossierStatus.IN_REVIEW) ||
+                        dossier.getStatus().equals(Dossier.DossierStatus.APPROVED) ||
+                        dossier.getStatus().equals(Dossier.DossierStatus.REJECTED);
+            default:
+                return false;
+        }
+    }
 
+    private boolean canModifyDossier(Dossier dossier, Utilisateur utilisateur) {
+        if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_ANTENNE)) {
+            return false;
+        }
+        
+        if (!dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId())) {
+            return false;
+        }
+        
+        return dossier.getStatus() == Dossier.DossierStatus.DRAFT ||
+               dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
+    }
+
+    private PieceJointe findOrCreateFormDataPieceJointe(Dossier dossier, DocumentRequis documentRequis, Utilisateur utilisateur) {
+        return pieceJointeRepository
+                .findByDossierIdAndDocumentRequisId(dossier.getId(), documentRequis.getId())
+                .stream()
+                .filter(pj -> pj.getCheminDonneesFormulaire() != null)
+                .findFirst()
+                .orElseGet(() -> {
+                    PieceJointe newPieceJointe = new PieceJointe();
+                    newPieceJointe.setNomFichier("form_data_" + documentRequis.getNomDocument() + ".json");
+                    newPieceJointe.setTypeDocument("FORM_DATA");
+                    newPieceJointe.setStatus(PieceJointe.DocumentStatus.COMPLETE);
+                    newPieceJointe.setDateUpload(LocalDateTime.now());
+                    newPieceJointe.setDossier(dossier);
+                    newPieceJointe.setDocumentRequis(documentRequis);
+                    newPieceJointe.setUtilisateur(utilisateur);
+                    return pieceJointeRepository.save(newPieceJointe);
+                });
+    }
+
+    private String saveOrUpdateFormDataAsJsonFile(Map<String, Object> formData, String subDirectory, 
+                                        String documentName, Long dossierId, Long documentRequisId,
+                                        String existingFilePath) {
+        try {
+            String fileName;
+            
+            // If existing file exists, use the same name, otherwise create new
+            if (existingFilePath != null) {
+                Path existingPath = Paths.get(existingFilePath);
+                fileName = existingPath.getFileName().toString();
+                
+                // Delete old file first
+                Path fullExistingPath = getStorageLocation().resolve(existingFilePath);
+                Files.deleteIfExists(fullExistingPath);
+            } else {
+                String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+                fileName = "form_data_" + documentName.replaceAll("[^a-zA-Z0-9]", "_") + 
+                        "_" + dossierId + "_" + documentRequisId + "_" + timestamp + ".json";
+            }
+            
+            Path targetLocation = getStorageLocation().resolve(subDirectory);
+            Files.createDirectories(targetLocation);
+            
+            String jsonContent = objectMapper.writeValueAsString(formData);
+            
+            Path filePath = targetLocation.resolve(fileName);
+            Files.write(filePath, jsonContent.getBytes());
+            
+            return subDirectory + "/" + fileName;
+            
+        } catch (IOException ex) {
+            throw new RuntimeException("Could not save form data as JSON file. Please try again!", ex);
+        }
+    }
+
+    // File storage methods
     private String storeFile(MultipartFile file, String subDirectory) {
         try {
             String fileName = generateUniqueFileName(file.getOriginalFilename());
             
-            // Create subdirectory if it doesn't exist
             Path targetLocation = getStorageLocation().resolve(subDirectory);
             Files.createDirectories(targetLocation);
             
-            // Store the file
             Path filePath = targetLocation.resolve(fileName);
             Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
             
-            // Return relative path
             return subDirectory + "/" + fileName;
             
         } catch (IOException ex) {
@@ -357,33 +412,6 @@ public class DocumentFillingService {
             return subDirectory;
         } catch (IOException ex) {
             throw new RuntimeException("Could not create dossier directory for dossier " + dossierId, ex);
-        }
-    }
-
-    private String saveFormDataAsJsonFile(Map<String, Object> formData, String subDirectory, 
-                                        String documentName, Long dossierId, Long documentRequisId) {
-        try {
-            // Generate unique filename for form data
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String fileName = "form_data_" + documentName.replaceAll("[^a-zA-Z0-9]", "_") + 
-                            "_" + dossierId + "_" + documentRequisId + "_" + timestamp + ".json";
-            
-            // Create subdirectory if it doesn't exist
-            Path targetLocation = getStorageLocation().resolve(subDirectory);
-            Files.createDirectories(targetLocation);
-            
-            // Convert form data to JSON
-            String jsonContent = objectMapper.writeValueAsString(formData);
-            
-            // Write to file
-            Path filePath = targetLocation.resolve(fileName);
-            Files.write(filePath, jsonContent.getBytes());
-            
-            // Return relative path
-            return subDirectory + "/" + fileName;
-            
-        } catch (IOException ex) {
-            throw new RuntimeException("Could not save form data as JSON file. Please try again!", ex);
         }
     }
 
@@ -432,49 +460,178 @@ public class DocumentFillingService {
         }
     }
 
-    // Private helper methods
+    // Build response methods
+    private DossierSummaryDTO buildDossierSummary(Dossier dossier, String userEmail) {
+        try {
+            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+            
+            boolean canEdit = canModifyDossier(dossier, utilisateur);
+            boolean canSubmit = canEdit && dossier.getStatus() == Dossier.DossierStatus.DRAFT;
+            
+            String statusMessage = getStatusMessage(dossier.getStatus());
+            String nextAction = getNextAction(dossier.getStatus(), canEdit);
 
-    private DossierSummaryDTO buildDossierSummary(Dossier dossier) {
-        return DossierSummaryDTO.builder()
-                .id(dossier.getId())
-                .numeroDossier(dossier.getNumeroDossier())
-                .saba(dossier.getSaba())
-                .reference(dossier.getReference())
-                .status(dossier.getStatus().name())
-                .dateCreation(dossier.getDateCreation())
-                .agriculteurNom(dossier.getAgriculteur().getNom())
-                .agriculteurPrenom(dossier.getAgriculteur().getPrenom())
-                .agriculteurCin(dossier.getAgriculteur().getCin())
-                .agriculteurTelephone(dossier.getAgriculteur().getTelephone())
-                .rubriqueDesignation(dossier.getSousRubrique().getRubrique().getDesignation())
-                .sousRubriqueDesignation(dossier.getSousRubrique().getDesignation())
-                .antenneDesignation(dossier.getAntenne().getDesignation())
-                .montantDemande(dossier.getMontantSubvention() != null ? dossier.getMontantSubvention().doubleValue() : null)
-                .build();
+            return DossierSummaryDTO.builder()
+                    .id(dossier.getId())
+                    .numeroDossier(dossier.getNumeroDossier())
+                    .saba(dossier.getSaba())
+                    .reference(dossier.getReference())
+                    .status(dossier.getStatus().name())
+                    .dateCreation(dossier.getDateCreation())
+                    .agriculteurNom(dossier.getAgriculteur().getNom())
+                    .agriculteurPrenom(dossier.getAgriculteur().getPrenom())
+                    .agriculteurCin(dossier.getAgriculteur().getCin())
+                    .agriculteurTelephone(dossier.getAgriculteur().getTelephone())
+                    .rubriqueDesignation(dossier.getSousRubrique().getRubrique().getDesignation())
+                    .sousRubriqueDesignation(dossier.getSousRubrique().getDesignation())
+                    .antenneDesignation(dossier.getAntenne().getDesignation())
+                    .montantDemande(dossier.getMontantSubvention() != null ? dossier.getMontantSubvention().doubleValue() : null)
+                    .canEdit(canEdit)
+                    .canSubmit(canSubmit)
+                    .statusMessage(statusMessage)
+                    .nextAction(nextAction)
+                    .build();
+        } catch (Exception e) {
+            log.warn("Erreur lors de la construction du résumé du dossier", e);
+            // Return basic info without user-specific data
+            return DossierSummaryDTO.builder()
+                    .id(dossier.getId())
+                    .numeroDossier(dossier.getNumeroDossier())
+                    .saba(dossier.getSaba())
+                    .reference(dossier.getReference())
+                    .status(dossier.getStatus().name())
+                    .dateCreation(dossier.getDateCreation())
+                    .agriculteurNom(dossier.getAgriculteur().getNom())
+                    .agriculteurPrenom(dossier.getAgriculteur().getPrenom())
+                    .agriculteurCin(dossier.getAgriculteur().getCin())
+                    .agriculteurTelephone(dossier.getAgriculteur().getTelephone())
+                    .rubriqueDesignation(dossier.getSousRubrique().getRubrique().getDesignation())
+                    .sousRubriqueDesignation(dossier.getSousRubrique().getDesignation())
+                    .antenneDesignation(dossier.getAntenne().getDesignation())
+                    .montantDemande(dossier.getMontantSubvention() != null ? dossier.getMontantSubvention().doubleValue() : null)
+                    .canEdit(false)
+                    .canSubmit(false)
+                    .statusMessage("Consultation uniquement")
+                    .nextAction("Aucune action disponible")
+                    .build();
+        }
+    }
+
+    private String getStatusMessage(Dossier.DossierStatus status) {
+        switch (status) {
+            case DRAFT:
+                return "Dossier en cours de création - Remplissez les documents requis";
+            case SUBMITTED:
+                return "Dossier soumis au GUC - En attente de traitement";
+            case IN_REVIEW:
+                return "Dossier en cours d'examen";
+            case RETURNED_FOR_COMPLETION:
+                return "Dossier retourné - Compléments requis";
+            case APPROVED:
+                return "Dossier approuvé";
+            case REJECTED:
+                return "Dossier rejeté";
+            default:
+                return "Statut: " + status.name();
+        }
+    }
+
+    private String getNextAction(Dossier.DossierStatus status, boolean canEdit) {
+        if (!canEdit) {
+            return "Consultation uniquement";
+        }
+        
+        switch (status) {
+            case DRAFT:
+                return "Remplir les documents et soumettre";
+            case RETURNED_FOR_COMPLETION:
+                return "Compléter les documents manquants";
+            default:
+                return "Aucune action disponible";
+        }
     }
 
     private DocumentRequisWithFilesDTO buildDocumentWithFiles(DocumentRequis documentRequis, Long dossierId) {
-        // Get uploaded files for this document
         List<PieceJointe> pieceJointes = pieceJointeRepository
                 .findByDossierIdAndDocumentRequisId(dossierId, documentRequis.getId());
 
-        List<PieceJointeDTO> fichiers = pieceJointes.stream()
-                .filter(pj -> pj.getCheminFichier() != null) // Only actual files, not form data
+        // Group files by type
+        List<PieceJointeGroupDTO> fichierGroups = new ArrayList<>();
+        
+        // Group 1: Uploaded files
+        List<PieceJointeDTO> uploadedFiles = pieceJointes.stream()
+                .filter(pj -> pj.getCheminFichier() != null)
                 .map(this::buildPieceJointeDTO)
                 .collect(Collectors.toList());
+        
+        if (!uploadedFiles.isEmpty()) {
+            PieceJointeGroupDTO filesGroup = PieceJointeGroupDTO.builder()
+                    .groupName("Documents téléchargés")
+                    .groupType("FILES")
+                    .files(uploadedFiles)
+                    .totalFiles(uploadedFiles.size())
+                    .totalSize(uploadedFiles.stream().mapToLong(f -> f.getTailleFichier() != null ? f.getTailleFichier() : 0L).sum())
+                    .lastUpdated(uploadedFiles.stream().map(PieceJointeDTO::getDateUpload).max(LocalDateTime::compareTo).orElse(null))
+                    .isComplete(true)
+                    .groupStatus("COMPLETE")
+                    .build();
+            fichierGroups.add(filesGroup);
+        }
 
-        // Parse form structure from JSON file if exists
-        Map<String, Object> formStructure = parseFormStructure(documentRequis.getLocationFormulaire());
-
-        // Get saved form data if exists
+        // Group 2: Form data
         Map<String, Object> formData = pieceJointes.stream()
                 .filter(pj -> pj.getCheminDonneesFormulaire() != null)
                 .findFirst()
                 .map(pj -> parseFormDataFromFile(pj.getCheminDonneesFormulaire()))
                 .orElse(new HashMap<>());
+        
+        if (!formData.isEmpty()) {
+            PieceJointeDTO formDataFile = PieceJointeDTO.builder()
+                    .id(-1L) // Virtual ID for form data
+                    .nomFichier("Données du formulaire")
+                    .typeDocument("FORM_DATA")
+                    .status("COMPLETE")
+                    .dateUpload(pieceJointes.stream()
+                            .filter(pj -> pj.getCheminDonneesFormulaire() != null)
+                            .findFirst()
+                            .map(PieceJointe::getDateUpload)
+                            .orElse(LocalDateTime.now()))
+                    .utilisateurNom("Système")
+                    .tailleFichier(0L)
+                    .formatFichier("JSON")
+                    .displayName("Formulaire rempli")
+                    .canDelete(false)
+                    .canDownload(false)
+                    .build();
+            
+            PieceJointeGroupDTO formGroup = PieceJointeGroupDTO.builder()
+                    .groupName("Données de formulaire")
+                    .groupType("FORM_DATA")
+                    .files(List.of(formDataFile))
+                    .totalFiles(1)
+                    .totalSize(0L)
+                    .lastUpdated(formDataFile.getDateUpload())
+                    .isComplete(true)
+                    .groupStatus("COMPLETE")
+                    .build();
+            fichierGroups.add(formGroup);
+        }
 
-        // Determine status
-        String status = determineDocumentStatus(documentRequis, fichiers, formData);
+        Map<String, Object> formStructure = parseFormStructure(documentRequis.getLocationFormulaire());
+        String status = determineDocumentStatus(documentRequis, uploadedFiles, formData);
+
+        // Create progress info
+        DocumentProgressDTO progress = DocumentProgressDTO.builder()
+                .isRequired(documentRequis.getObligatoire())
+                .isComplete("COMPLETE".equals(status))
+                .hasFiles(!uploadedFiles.isEmpty())
+                .hasFormData(!formData.isEmpty())
+                .completionPercentage("COMPLETE".equals(status) ? 100.0 : 0.0)
+                .nextStep(status.equals("COMPLETE") ? "Completed" : "Upload documents or fill form")
+                .missingElements(status.equals("MISSING") ? List.of("Documents ou formulaire requis") : List.of())
+                .completedElements(status.equals("COMPLETE") ? List.of("Documents téléchargés ou formulaire rempli") : List.of())
+                .build();
 
         return DocumentRequisWithFilesDTO.builder()
                 .id(documentRequis.getId())
@@ -483,9 +640,12 @@ public class DocumentFillingService {
                 .obligatoire(documentRequis.getObligatoire())
                 .locationFormulaire(documentRequis.getLocationFormulaire())
                 .formStructure(formStructure)
-                .fichiers(fichiers)
+                .fichierGroups(fichierGroups)
                 .formData(formData)
                 .status(status)
+                .progress(progress)
+                .documentCategory("REQUIRED")
+                .order(1)
                 .build();
     }
 
@@ -500,6 +660,11 @@ public class DocumentFillingService {
                 .utilisateurNom(pieceJointe.getUtilisateur().getNom() + " " + pieceJointe.getUtilisateur().getPrenom())
                 .tailleFichier(calculateFileSize(pieceJointe.getCheminFichier()))
                 .formatFichier(extractFileExtension(pieceJointe.getNomFichier()))
+                .displayName(pieceJointe.getNomFichier())
+                .description("Document téléchargé")
+                .canDelete(true) // Will be determined by business logic
+                .canDownload(true)
+                .thumbnailUrl(null) // To be implemented for images
                 .build();
     }
 
@@ -550,12 +715,35 @@ public class DocumentFillingService {
         
         double percentage = total > 0 ? (double) completed / total * 100 : 0;
 
+        // Calculate file statistics
+        int totalFiles = documents.stream()
+                .mapToInt(doc -> doc.getFichierGroups().stream()
+                        .mapToInt(group -> group.getTotalFiles() != null ? group.getTotalFiles() : 0)
+                        .sum())
+                .sum();
+
+        long totalFileSize = documents.stream()
+                .mapToLong(doc -> doc.getFichierGroups().stream()
+                        .mapToLong(group -> group.getTotalSize() != null ? group.getTotalSize() : 0L)
+                        .sum())
+                .sum();
+
+        int formsCompleted = (int) documents.stream()
+                .filter(doc -> doc.getFormData() != null && !doc.getFormData().isEmpty())
+                .count();
+
+        int formsTotal = documents.size(); // All documents can potentially have forms
+
         return DocumentStatisticsDTO.builder()
                 .totalDocuments(total)
                 .documentsCompletes(completed)
                 .documentsManquants(missing)
                 .documentsOptionnels(optional)
                 .pourcentageCompletion(percentage)
+                .totalFiles(totalFiles)
+                .totalFileSize(totalFileSize)
+                .formsCompleted(formsCompleted)
+                .formsTotal(formsTotal)
                 .build();
     }
 

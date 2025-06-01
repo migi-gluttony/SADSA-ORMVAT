@@ -5,12 +5,14 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import ormvat.sadsa.dto.common.DossierManagementDTOs.*;
 import ormvat.sadsa.service.common.DossierManagementService;
+import ormvat.sadsa.service.common.CsvExportService;
 
 import jakarta.validation.Valid;
 
@@ -21,6 +23,7 @@ import jakarta.validation.Valid;
 public class DossierManagementController {
 
     private final DossierManagementService dossierManagementService;
+    private final CsvExportService csvExportService;
 
     /**
      * Get paginated list of dossiers with filtering and search (role-based)
@@ -46,7 +49,6 @@ public class DossierManagementController {
             String userEmail = authentication.getName();
             log.info("Récupération des dossiers pour l'utilisateur: {}, page: {}, size: {}", userEmail, page, size);
 
-            // Build filter request
             DossierFilterRequest filterRequest = DossierFilterRequest.builder()
                     .searchTerm(searchTerm)
                     .statut(statut)
@@ -70,6 +72,33 @@ public class DossierManagementController {
             return ResponseEntity.badRequest().build();
         } catch (Exception e) {
             log.error("Erreur technique lors de la récupération des dossiers", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Export dossiers to CSV (accessible by all user roles)
+     */
+    @GetMapping("/export/csv")
+    public ResponseEntity<Resource> exportDossiersToCsv(
+            @RequestParam(defaultValue = "all") String exportType,
+            @RequestParam(required = false) String searchTerm,
+            @RequestParam(required = false) String statut,
+            @RequestParam(required = false) Long sousRubriqueId,
+            @RequestParam(required = false) Long antenneId,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Export CSV des dossiers pour l'utilisateur: {}, type: {}", userEmail, exportType);
+
+            return csvExportService.exportDossiersToCsv(userEmail, exportType);
+            
+        } catch (RuntimeException e) {
+            log.error("Erreur lors de l'export CSV: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Erreur technique lors de l'export CSV", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -120,7 +149,6 @@ public class DossierManagementController {
             String userEmail = authentication.getName();
             log.info("Envoi du dossier {} au GUC par l'utilisateur: {}", dossierId, userEmail);
 
-            // If no request body, create default request
             if (request == null) {
                 request = SendToGUCRequest.builder()
                         .dossierId(dossierId)
@@ -286,7 +314,6 @@ public class DossierManagementController {
 
             request.setDossierId(dossierId);
 
-            // This would be implemented in the service
             return ResponseEntity.ok(
                 DossierActionResponse.builder()
                     .success(true)
@@ -318,7 +345,6 @@ public class DossierManagementController {
             String userEmail = authentication.getName();
             log.info("Suppression du dossier {} par l'utilisateur: {}", dossierId, userEmail);
 
-            // If no request body, create default request
             if (request == null) {
                 request = DeleteDossierRequest.builder()
                         .dossierId(dossierId)
@@ -392,6 +418,32 @@ public class DossierManagementController {
     }
 
     /**
+     * Get all notes for a dossier (all roles)
+     */
+    @GetMapping("/{dossierId}/notes")
+    public ResponseEntity<List<NoteDTO>> getDossierNotes(
+            @PathVariable Long dossierId,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Récupération des notes du dossier {} pour l'utilisateur: {}", dossierId, userEmail);
+
+            // This would be implemented in the service
+            DossierDetailResponse dossierDetail = dossierManagementService.getDossierDetail(dossierId, userEmail);
+            
+            return ResponseEntity.ok(dossierDetail.getNotes());
+
+        } catch (RuntimeException e) {
+            log.error("Erreur lors de la récupération des notes du dossier {}: {}", dossierId, e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Erreur technique lors de la récupération des notes du dossier {}", dossierId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
      * Get dossier statistics for dashboard (role-based)
      */
     @GetMapping("/stats")
@@ -403,7 +455,6 @@ public class DossierManagementController {
             String userEmail = authentication.getName();
             log.info("Récupération des statistiques des dossiers pour l'utilisateur: {}", userEmail);
 
-            // For now, get statistics through the list endpoint with no pagination
             DossierFilterRequest filterRequest = DossierFilterRequest.builder()
                     .page(0)
                     .size(Integer.MAX_VALUE)
