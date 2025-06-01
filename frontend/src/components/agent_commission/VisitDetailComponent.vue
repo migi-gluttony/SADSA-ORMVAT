@@ -114,6 +114,24 @@
               <span class="label">Antenne:</span>
               <span class="value">{{ visit.antenneDesignation }}</span>
             </div>
+            <div v-if="visit.cdaNom" class="detail-item">
+              <span class="label">CDA:</span>
+              <span class="value">{{ visit.cdaNom }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-group">
+          <h4>Commission</h4>
+          <div class="info-details">
+            <div class="detail-item">
+              <span class="label">Agent Commission:</span>
+              <span class="value">{{ visit.utilisateurCommissionNom }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">Statut Dossier:</span>
+              <span class="value">{{ formatDossierStatus(visit.dossierStatut) }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -126,18 +144,23 @@
           <i class="pi pi-file-edit"></i>
           Notes de Visite
         </h3>
-        <Button 
-          v-if="visit.canModify && !autoSaving"
-          label="Sauvegarder" 
-          icon="pi pi-save" 
-          @click="saveNotes"
-          class="p-button-sm"
-          :loading="saving"
-        />
-        <span v-if="autoSaving" class="auto-save-indicator">
-          <i class="pi pi-spin pi-spinner"></i>
-          Sauvegarde automatique...
-        </span>
+        <div class="notes-actions">
+          <Button 
+            v-if="visit.canModify && !autoSaving"
+            label="Sauvegarder" 
+            icon="pi pi-save" 
+            @click="saveNotes"
+            class="p-button-sm"
+            :loading="saving"
+          />
+          <span v-if="autoSaving" class="auto-save-indicator">
+            <i class="pi pi-spin pi-spinner"></i>
+            Sauvegarde automatique...
+          </span>
+          <span v-if="lastSaved" class="last-saved">
+            Dernière sauvegarde: {{ formatDateTime(lastSaved) }}
+          </span>
+        </div>
       </div>
 
       <div class="notes-content">
@@ -191,36 +214,6 @@
           </div>
         </div>
 
-        <div v-if="visit.canModify" class="form-group">
-          <label>Points non conformes</label>
-          <div class="tags-input">
-            <Chip 
-              v-for="(point, index) in formData.pointsNonConformes" 
-              :key="index"
-              :label="point" 
-              removable 
-              @remove="removeNonConformPoint(index)"
-            />
-            <InputText 
-              v-model="newNonConformPoint" 
-              placeholder="Ajouter un point non conforme..."
-              @keyup.enter="addNonConformPoint"
-              class="add-point-input"
-            />
-          </div>
-        </div>
-
-        <div v-else-if="formData.pointsNonConformes?.length > 0" class="form-group">
-          <label>Points non conformes</label>
-          <div class="tags-display">
-            <Chip 
-              v-for="point in formData.pointsNonConformes" 
-              :key="point"
-              :label="point"
-            />
-          </div>
-        </div>
-
         <div class="form-group">
           <label for="general-remarks">Remarques générales</label>
           <Textarea 
@@ -265,7 +258,7 @@
       <!-- Upload Progress -->
       <div v-if="uploadingPhotos" class="upload-progress">
         <ProgressBar :value="uploadProgress" />
-        <small>Upload en cours...</small>
+        <small>Upload en cours... {{ uploadProgress }}%</small>
       </div>
 
       <!-- Photos Grid -->
@@ -349,9 +342,21 @@
           />
         </div>
         
-        <div v-if="visit.motifRejet && !visit.approuve" class="rejection-reason">
+        <div v-if="visit.motifRejet && !visit.approuve" class="rejection-details">
           <h4>Motif de rejet</h4>
-          <p>{{ visit.motifRejet }}</p>
+          <p>{{ formatMotifRejet(visit.motifRejet) }}</p>
+          
+          <div v-if="visit.pointsNonConformes?.length > 0" class="non-conform-points">
+            <h5>Points non conformes:</h5>
+            <ul>
+              <li v-for="point in visit.pointsNonConformes" :key="point">{{ point }}</li>
+            </ul>
+          </div>
+        </div>
+
+        <div v-if="visit.remarquesGenerales" class="general-remarks">
+          <h4>Remarques générales</h4>
+          <p>{{ visit.remarquesGenerales }}</p>
         </div>
       </div>
     </div>
@@ -383,6 +388,11 @@
         <div v-if="selectedPhoto.description" class="photo-description-full">
           <h4>Description</h4>
           <p>{{ selectedPhoto.description }}</p>
+        </div>
+        
+        <div v-if="selectedPhoto.coordonneesGPS" class="photo-coordinates-full">
+          <h4>Coordonnées GPS</h4>
+          <p>{{ selectedPhoto.coordonneesGPS }}</p>
         </div>
       </div>
     </Dialog>
@@ -442,7 +452,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed, onUnmounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 import ApiService from '@/services/ApiService';
@@ -453,7 +463,6 @@ import Tag from 'primevue/tag';
 import Textarea from 'primevue/textarea';
 import InputText from 'primevue/inputtext';
 import Calendar from 'primevue/calendar';
-import Chip from 'primevue/chip';
 import ProgressBar from 'primevue/progressbar';
 import Dialog from 'primevue/dialog';
 import ConfirmDialog from 'primevue/confirmdialog';
@@ -482,16 +491,16 @@ const showPhotoViewer = ref(false);
 const showRescheduleDialog = ref(false);
 const selectedPhoto = ref(null);
 const fileInput = ref(null);
-const newNonConformPoint = ref('');
 const newVisitDate = ref(null);
 const rescheduleReason = ref('');
+const lastSaved = ref(null);
+const autoSaveTimer = ref(null);
 
 // Form data
 const formData = reactive({
   observations: props.visit.observations || '',
   recommandations: props.visit.recommandations || '',
   coordonneesGPS: props.visit.coordonneesGPS || '',
-  pointsNonConformes: props.visit.pointsNonConformes || [],
   remarquesGenerales: props.visit.remarquesGenerales || ''
 });
 
@@ -500,45 +509,70 @@ const minDate = computed(() => new Date());
 
 // Lifecycle
 onMounted(() => {
-  // Auto-save setup
-  let autoSaveTimer;
-  const setupAutoSave = () => {
-    clearTimeout(autoSaveTimer);
-    if (props.visit.canModify) {
-      autoSaveTimer = setTimeout(() => {
-        autoSaveNotes();
-      }, 2000);
-    }
-  };
+  // Setup auto-save for modifications
+  if (props.visit.canModify) {
+    setupAutoSave();
+  }
+});
 
-  // Watch for changes
-  window.addEventListener('beforeunload', () => {
-    if (hasUnsavedChanges()) {
-      autoSaveNotes();
-    }
-  });
+onUnmounted(() => {
+  cleanupAutoSave();
 });
 
 // Methods
-function onNotesChange() {
-  if (props.visit.canModify) {
-    clearTimeout(window.autoSaveTimer);
-    window.autoSaveTimer = setTimeout(() => {
-      autoSaveNotes();
-    }, 2000);
+function setupAutoSave() {
+  // Save unsaved changes before page unload
+  window.addEventListener('beforeunload', handleBeforeUnload);
+}
+
+function cleanupAutoSave() {
+  if (autoSaveTimer.value) {
+    clearTimeout(autoSaveTimer.value);
+  }
+  window.removeEventListener('beforeunload', handleBeforeUnload);
+}
+
+function handleBeforeUnload(event) {
+  if (hasUnsavedChanges()) {
+    // Attempt final auto-save
+    autoSaveNotes();
   }
 }
 
+function onNotesChange() {
+  if (!props.visit.canModify) return;
+  
+  // Clear existing timer
+  if (autoSaveTimer.value) {
+    clearTimeout(autoSaveTimer.value);
+  }
+  
+  // Set new timer for auto-save
+  autoSaveTimer.value = setTimeout(() => {
+    autoSaveNotes();
+  }, 2000);
+}
+
 async function autoSaveNotes() {
-  if (!props.visit.canModify || autoSaving.value) return;
+  if (!props.visit.canModify || autoSaving.value || saving.value) return;
   
   try {
     autoSaving.value = true;
     
-    await ApiService.put(`/agent_commission/terrain-visits/${props.visit.id}/notes`, {
-      ...formData,
+    const updateData = {
+      visiteId: props.visit.id,
+      observations: formData.observations,
+      recommandations: formData.recommandations,
+      coordonneesGPS: formData.coordonneesGPS,
+      remarquesGenerales: formData.remarquesGenerales,
       isAutoSave: true
-    });
+    };
+    
+    const response = await ApiService.put(`/agent_commission/terrain-visits/${props.visit.id}/notes`, updateData);
+    
+    if (response.success) {
+      lastSaved.value = new Date();
+    }
     
   } catch (error) {
     console.error('Erreur sauvegarde automatique:', error);
@@ -553,44 +587,42 @@ async function saveNotes() {
   try {
     saving.value = true;
     
-    await ApiService.put(`/agent_commission/terrain-visits/${props.visit.id}/notes`, {
-      ...formData,
+    const updateData = {
+      visiteId: props.visit.id,
+      observations: formData.observations,
+      recommandations: formData.recommandations,
+      coordonneesGPS: formData.coordonneesGPS,
+      remarquesGenerales: formData.remarquesGenerales,
       isAutoSave: false
-    });
+    };
     
-    toast.add({
-      severity: 'success',
-      summary: 'Succès',
-      detail: 'Notes sauvegardées avec succès',
-      life: 3000
-    });
+    const response = await ApiService.put(`/agent_commission/terrain-visits/${props.visit.id}/notes`, updateData);
     
-    emit('visit-updated');
+    if (response.success) {
+      lastSaved.value = new Date();
+      toast.add({
+        severity: 'success',
+        summary: 'Succès',
+        detail: response.message || 'Notes sauvegardées avec succès',
+        life: 3000
+      });
+      
+      emit('visit-updated');
+    } else {
+      throw new Error(response.message || 'Erreur lors de la sauvegarde');
+    }
     
   } catch (error) {
     console.error('Erreur sauvegarde notes:', error);
     toast.add({
       severity: 'error',
       summary: 'Erreur',
-      detail: 'Erreur lors de la sauvegarde',
+      detail: error.response?.data?.message || error.message || 'Erreur lors de la sauvegarde',
       life: 4000
     });
   } finally {
     saving.value = false;
   }
-}
-
-function addNonConformPoint() {
-  if (newNonConformPoint.value.trim()) {
-    formData.pointsNonConformes.push(newNonConformPoint.value.trim());
-    newNonConformPoint.value = '';
-    onNotesChange();
-  }
-}
-
-function removeNonConformPoint(index) {
-  formData.pointsNonConformes.splice(index, 1);
-  onNotesChange();
 }
 
 async function getCurrentLocation() {
@@ -658,29 +690,35 @@ async function onFilesSelected(event) {
       formData.append('files', file);
     });
 
-    const response = await ApiService.uploadFiles(
-      `/agent_commission/terrain-visits/${props.visit.id}/photos`,
-      formData,
-      (progress) => {
-        uploadProgress.value = progress;
-      }
-    );
+    // Simulate progress since we don't have a real progress callback
+    const progressInterval = setInterval(() => {
+      uploadProgress.value = Math.min(uploadProgress.value + 10, 90);
+    }, 200);
 
-    toast.add({
-      severity: 'success',
-      summary: 'Succès',
-      detail: `${files.length} photo(s) ajoutée(s)`,
-      life: 3000
-    });
+    const response = await ApiService.post(`/agent_commission/terrain-visits/${props.visit.id}/photos`, formData);
 
-    emit('visit-updated');
+    clearInterval(progressInterval);
+    uploadProgress.value = 100;
+
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Succès',
+        detail: response.message || `${files.length} photo(s) ajoutée(s)`,
+        life: 3000
+      });
+
+      emit('visit-updated');
+    } else {
+      throw new Error(response.message || 'Erreur lors de l\'upload');
+    }
 
   } catch (error) {
     console.error('Erreur upload photos:', error);
     toast.add({
       severity: 'error',
       summary: 'Erreur',
-      detail: 'Erreur lors de l\'upload des photos',
+      detail: error.response?.data?.message || error.message || 'Erreur lors de l\'upload des photos',
       life: 4000
     });
   } finally {
@@ -698,9 +736,10 @@ function openPhotoViewer(photo) {
 
 async function downloadPhoto(photo) {
   try {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const response = await fetch(photo.downloadUrl, {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`
+        'Authorization': `Bearer ${token}`
       }
     });
     
@@ -743,23 +782,27 @@ function confirmDeletePhoto(photo) {
 
 async function deletePhoto(photo) {
   try {
-    await ApiService.delete(`/agent_commission/terrain-visits/photos/${photo.id}`);
+    const response = await ApiService.delete(`/agent_commission/terrain-visits/photos/${photo.id}`);
     
-    toast.add({
-      severity: 'success',
-      summary: 'Succès',
-      detail: 'Photo supprimée avec succès',
-      life: 3000
-    });
-    
-    emit('visit-updated');
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Succès',
+        detail: response.message || 'Photo supprimée avec succès',
+        life: 3000
+      });
+      
+      emit('visit-updated');
+    } else {
+      throw new Error(response.message || 'Erreur lors de la suppression');
+    }
     
   } catch (error) {
     console.error('Erreur suppression photo:', error);
     toast.add({
       severity: 'error',
       summary: 'Erreur',
-      detail: 'Erreur lors de la suppression',
+      detail: error.response?.data?.message || error.message || 'Erreur lors de la suppression',
       life: 4000
     });
   }
@@ -779,30 +822,36 @@ async function rescheduleVisit() {
   try {
     rescheduling.value = true;
     
-    await ApiService.put(`/agent_commission/terrain-visits/${props.visit.id}`, {
+    const rescheduleData = {
       dossierId: props.visit.dossierId,
-      dateVisite: newVisitDate.value,
+      dateVisite: formatDateForAPI(newVisitDate.value),
       observations: formData.observations,
       coordonneesGPS: formData.coordonneesGPS,
       recommandations: formData.recommandations
-    });
+    };
     
-    toast.add({
-      severity: 'success',
-      summary: 'Succès',
-      detail: 'Visite reprogrammée avec succès',
-      life: 3000
-    });
+    const response = await ApiService.post('/agent_commission/terrain-visits/schedule', rescheduleData);
     
-    showRescheduleDialog.value = false;
-    emit('visit-updated');
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Succès',
+        detail: response.message || 'Visite reprogrammée avec succès',
+        life: 3000
+      });
+      
+      showRescheduleDialog.value = false;
+      emit('visit-updated');
+    } else {
+      throw new Error(response.message || 'Erreur lors de la reprogrammation');
+    }
     
   } catch (error) {
     console.error('Erreur reprogrammation:', error);
     toast.add({
       severity: 'error',
       summary: 'Erreur',
-      detail: 'Erreur lors de la reprogrammation',
+      detail: error.response?.data?.message || error.message || 'Erreur lors de la reprogrammation',
       life: 4000
     });
   } finally {
@@ -827,6 +876,11 @@ function formatDateTime(dateTime) {
   }).format(new Date(dateTime));
 }
 
+function formatDateForAPI(date) {
+  if (!date) return null;
+  return date.toISOString().split('T')[0];
+}
+
 function getLocationText() {
   const parts = [];
   if (props.visit.agriculteurDouar) parts.push(props.visit.agriculteurDouar);
@@ -836,6 +890,7 @@ function getLocationText() {
 
 function getStatusLabel(status) {
   const labels = {
+    'NOUVELLE': 'Nouvelle',
     'PROGRAMMEE': 'Programmée',
     'EN_RETARD': 'En retard',
     'COMPLETEE': 'Complétée',
@@ -847,6 +902,7 @@ function getStatusLabel(status) {
 
 function getStatusSeverity(status) {
   const severities = {
+    'NOUVELLE': 'secondary',
     'PROGRAMMEE': 'info',
     'EN_RETARD': 'danger',
     'COMPLETEE': 'warning',
@@ -872,6 +928,31 @@ function getDaysUntilText() {
   return `Dans ${days} jour(s)`;
 }
 
+function formatDossierStatus(status) {
+  const statusLabels = {
+    'DRAFT': 'Brouillon',
+    'SUBMITTED': 'Soumis',
+    'IN_REVIEW': 'En révision',
+    'APPROVED': 'Approuvé',
+    'REJECTED': 'Rejeté',
+    'COMPLETED': 'Terminé'
+  };
+  return statusLabels[status] || status;
+}
+
+function formatMotifRejet(motif) {
+  const motifLabels = {
+    'TERRAIN_NON_CONFORME': 'Terrain non conforme aux spécifications',
+    'ACCESSIBILITE_INSUFFISANTE': 'Accessibilité insuffisante',
+    'PROBLEMES_ENVIRONNEMENTAUX': 'Problèmes environnementaux',
+    'NORMES_SECURITE': 'Non-respect des normes de sécurité',
+    'FAISABILITE_TECHNIQUE': 'Faisabilité technique douteuse',
+    'CONFLIT_REGLEMENTAIRE': 'Conflit avec réglementations locales',
+    'AUTRE': 'Autre motif'
+  };
+  return motifLabels[motif] || motif;
+}
+
 function isImageFile(filename) {
   const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
   return imageExtensions.some(ext => filename.toLowerCase().endsWith(ext));
@@ -879,13 +960,15 @@ function isImageFile(filename) {
 
 function getPhotoUrl(photo) {
   // In real implementation, this would return the actual photo URL
+  // For now, we'll use the download URL as a placeholder
   return photo.downloadUrl || '#';
 }
 
 function hasUnsavedChanges() {
   return formData.observations !== props.visit.observations ||
          formData.recommandations !== props.visit.recommandations ||
-         formData.coordonneesGPS !== props.visit.coordonneesGPS;
+         formData.coordonneesGPS !== props.visit.coordonneesGPS ||
+         formData.remarquesGenerales !== props.visit.remarquesGenerales;
 }
 </script>
 
@@ -1054,12 +1137,23 @@ function hasUnsavedChanges() {
   gap: 0.5rem;
 }
 
+.notes-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .auto-save-indicator {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   color: var(--text-secondary);
   font-size: 0.875rem;
+}
+
+.last-saved {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
 }
 
 .form-group {
@@ -1085,18 +1179,6 @@ function hasUnsavedChanges() {
 .coordinates-input {
   display: flex;
   gap: 0.5rem;
-}
-
-.tags-input,
-.tags-display {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.add-point-input {
-  min-width: 200px;
 }
 
 /* Photos Section */
@@ -1243,17 +1325,36 @@ function hasUnsavedChanges() {
   padding: 0.75rem 1.5rem;
 }
 
-.rejection-reason h4 {
+.rejection-details h4,
+.general-remarks h4 {
   color: var(--text-color);
   font-size: 1rem;
   font-weight: 600;
   margin: 0 0 0.5rem 0;
 }
 
-.rejection-reason p {
+.rejection-details p,
+.general-remarks p {
   color: var(--text-secondary);
   line-height: 1.5;
+  margin: 0 0 1rem 0;
+}
+
+.non-conform-points h5 {
+  color: var(--text-color);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem 0;
+}
+
+.non-conform-points ul {
   margin: 0;
+  padding-left: 1.5rem;
+}
+
+.non-conform-points li {
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
 }
 
 /* Photo Viewer */
@@ -1281,12 +1382,14 @@ function hasUnsavedChanges() {
   color: var(--danger-color);
 }
 
-.photo-description-full {
+.photo-description-full,
+.photo-coordinates-full {
   margin-top: 1rem;
   text-align: left;
 }
 
-.photo-description-full h4 {
+.photo-description-full h4,
+.photo-coordinates-full h4 {
   margin: 0 0 0.5rem 0;
   color: var(--text-color);
 }
@@ -1330,6 +1433,12 @@ function hasUnsavedChanges() {
   
   .coordinates-input {
     flex-direction: column;
+  }
+  
+  .notes-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
   }
 }
 

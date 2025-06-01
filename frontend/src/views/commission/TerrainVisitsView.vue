@@ -13,7 +13,7 @@
       <div class="dashboard-section">
         <h1 class="page-title">
           <i class="pi pi-map"></i>
-          Visites Terrain - Commission AHA-AF
+          Visites Terrain - Commission Vérification Terrain
         </h1>
 
         <div v-if="dashboardData" class="dashboard-cards">
@@ -22,7 +22,7 @@
               <i class="pi pi-exclamation-triangle"></i>
             </div>
             <div class="card-content">
-              <div class="card-number">{{ dashboardData.visitesEnRetard }}</div>
+              <div class="card-number">{{ dashboardData.visitesEnRetard || 0 }}</div>
               <div class="card-label">En retard</div>
             </div>
           </div>
@@ -32,7 +32,7 @@
               <i class="pi pi-calendar"></i>
             </div>
             <div class="card-content">
-              <div class="card-number">{{ dashboardData.visitesAujourdHui }}</div>
+              <div class="card-number">{{ dashboardData.visitesAujourdHui || 0 }}</div>
               <div class="card-label">Aujourd'hui</div>
             </div>
           </div>
@@ -42,7 +42,7 @@
               <i class="pi pi-calendar-plus"></i>
             </div>
             <div class="card-content">
-              <div class="card-number">{{ dashboardData.visitesDemain }}</div>
+              <div class="card-number">{{ dashboardData.visitesDemain || 0 }}</div>
               <div class="card-label">Demain</div>
             </div>
           </div>
@@ -52,7 +52,7 @@
               <i class="pi pi-clock"></i>
             </div>
             <div class="card-content">
-              <div class="card-number">{{ dashboardData.visitesEnAttente }}</div>
+              <div class="card-number">{{ dashboardData.visitesEnAttente || 0 }}</div>
               <div class="card-label">En attente</div>
             </div>
           </div>
@@ -61,22 +61,16 @@
         <!-- Quick Actions -->
         <div class="quick-actions">
           <Button 
-            label="Programmer une visite" 
-            icon="pi pi-calendar-plus" 
-            @click="showScheduleDialog = true"
-            class="p-button-success"
-          />
-          <Button 
             label="Visites urgentes" 
             icon="pi pi-exclamation-triangle" 
             @click="filterUrgent"
             class="p-button-warning"
-            :badge="dashboardData?.visitesEnRetard || '0'"
+            :badge="(dashboardData?.visitesEnRetard || 0).toString()"
           />
           <Button 
-            label="Exporter rapport" 
-            icon="pi pi-download" 
-            @click="exportReport"
+            label="Actualiser" 
+            icon="pi pi-refresh" 
+            @click="refreshData"
             class="p-button-outlined"
           />
         </div>
@@ -92,7 +86,9 @@
               <InputText 
                 v-model="filters.searchTerm" 
                 placeholder="CIN, nom, référence..."
+                 size="normal"
                 @input="debounceFilter"
+                class="p-inputtext-sm"
               />
             </span>
           </div>
@@ -110,13 +106,25 @@
           </div>
 
           <div class="filter-group">
-            <label>Type de projet</label>
+            <label>Sous-type de projet</label>
             <Dropdown 
-              v-model="filters.rubrique" 
-              :options="projectTypeOptions" 
+              v-model="filters.sousRubrique" 
+              :options="sousRubriqueOptions" 
               optionLabel="label" 
               optionValue="value"
-              placeholder="Tous les types"
+              placeholder="Tous les sous-types"
+              @change="applyFilters"
+            />
+          </div>
+
+          <div class="filter-group">
+            <label>Antenne</label>
+            <Dropdown 
+              v-model="filters.antenne" 
+              :options="antenneOptions" 
+              optionLabel="label" 
+              optionValue="value"
+              placeholder="Toutes les antennes"
               @change="applyFilters"
             />
           </div>
@@ -183,16 +191,24 @@
         <!-- Statistics Bar -->
         <div v-if="visitData?.statistics" class="statistics-bar">
           <div class="stat-item">
-            <span class="stat-value">{{ visitData.statistics.totalVisites }}</span>
+            <span class="stat-value">{{ visitData.statistics.totalVisites || 0 }}</span>
             <span class="stat-label">Total</span>
           </div>
           <div class="stat-item">
-            <span class="stat-value">{{ visitData.statistics.visitesRealisees }}</span>
+            <span class="stat-value">{{ visitData.statistics.visitesRealisees || 0 }}</span>
             <span class="stat-label">Réalisées</span>
           </div>
           <div class="stat-item">
-            <span class="stat-value">{{ Math.round(visitData.statistics.tauxApprobation) }}%</span>
+            <span class="stat-value">{{ Math.round(visitData.statistics.tauxApprobation || 0) }}%</span>
             <span class="stat-label">Taux approbation</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">{{ visitData.statistics.visitesApprouvees || 0 }}</span>
+            <span class="stat-label">Approuvées</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">{{ visitData.statistics.visitesRejetees || 0 }}</span>
+            <span class="stat-label">Rejetées</span>
           </div>
         </div>
 
@@ -210,7 +226,7 @@
               <div class="visit-header">
                 <div class="visit-status">
                   <Tag 
-                    :value="visite.statutDisplay" 
+                    :value="visite.statutDisplay || visite.statut" 
                     :severity="getStatusSeverity(visite.statut)"
                   />
                   <Tag 
@@ -235,7 +251,7 @@
                   <p class="project-type">{{ visite.sousRubriqueDesignation }}</p>
                   <p class="location">
                     <i class="pi pi-map-marker"></i>
-                    {{ visite.agriculteurCommune }} - {{ visite.antenneDesignation }}
+                    {{ getLocationText(visite) }}
                   </p>
                 </div>
 
@@ -288,7 +304,7 @@
               :rows="20"
               :loading="loading"
               responsiveLayout="scroll"
-              @row-click="openVisitDetail"
+              @row-click="onRowClick"
               class="visits-table"
             >
               <Column field="dateVisite" header="Date visite" sortable>
@@ -318,7 +334,7 @@
               <Column field="statut" header="Statut">
                 <template #body="{ data }">
                   <Tag 
-                    :value="data.statutDisplay" 
+                    :value="data.statutDisplay || data.statut" 
                     :severity="getStatusSeverity(data.statut)"
                   />
                 </template>
@@ -375,6 +391,7 @@
         :visit="selectedVisit"
         @visit-updated="onVisitUpdated"
         @close="showDetailDialog = false"
+        @complete-visit="onCompleteFromDetail"
       />
     </Dialog>
 
@@ -383,7 +400,8 @@
       v-model:visible="showCompleteDialog" 
       modal 
       header="Finaliser la Visite Terrain"
-      :style="{ width: '600px' }"
+      :style="{ width: '90vw', maxWidth: '800px' }"
+      maximizable
     >
       <CompleteVisitComponent 
         v-if="selectedVisit && showCompleteDialog"
@@ -393,20 +411,13 @@
       />
     </Dialog>
 
-    <!-- Schedule Visit Dialog -->
-    <ScheduleTerrainVisitDialog
-      v-model:visible="showScheduleDialog"
-      :dossier="null"
-      @visit-scheduled="onVisitScheduled"
-    />
-
     <!-- Toast Messages -->
     <Toast />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useRouter } from 'vue-router';
 import ApiService from '@/services/ApiService';
@@ -425,7 +436,6 @@ import Dialog from 'primevue/dialog';
 import Toast from 'primevue/toast';
 
 // Local Components
-import ScheduleTerrainVisitDialog from '@/components/agent_commission/ScheduleTerrainVisitDialog.vue';
 import VisitDetailComponent from '@/components/agent_commission/VisitDetailComponent.vue';
 import CompleteVisitComponent from '@/components/agent_commission/CompleteVisitComponent.vue';
 
@@ -440,14 +450,13 @@ const selectedVisit = ref(null);
 const viewMode = ref('grid');
 const showDetailDialog = ref(false);
 const showCompleteDialog = ref(false);
-const showScheduleDialog = ref(false);
 const dateRange = ref(null);
 
 // Filters
 const filters = ref({
   searchTerm: '',
   statut: null,
-  rubrique: null,
+  sousRubrique: null,
   antenne: null,
   dateDebut: null,
   dateFin: null,
@@ -462,6 +471,7 @@ const filters = ref({
 // Options
 const statusOptions = ref([
   { label: 'Tous les statuts', value: null },
+  { label: 'Nouvelle', value: 'NOUVELLE' },
   { label: 'Programmée', value: 'PROGRAMMEE' },
   { label: 'En retard', value: 'EN_RETARD' },
   { label: 'Complétée', value: 'COMPLETEE' },
@@ -469,11 +479,30 @@ const statusOptions = ref([
   { label: 'Rejetée', value: 'REJETEE' }
 ]);
 
-const projectTypeOptions = ref([
-  { label: 'Tous les types', value: null },
-  { label: 'Filières Végétales', value: 'FILIERES VEGETALES' },
-  { label: 'Filières Animales', value: 'FILIERES ANIMALES' },
-  { label: 'Aménagement Hydro-Agricole', value: 'AMENAGEMENT HYDRO-AGRICOLE ET AMELIORATION FONCIERE' }
+const sousRubriqueOptions = ref([
+  { label: 'Tous les sous-types', value: null },
+  // Filières Végétales
+  { label: 'Acquisition et installation des serres', value: 'Acquisition et installation des serres destinées à la production agricole' },
+  { label: 'Arboriculture fruitière', value: 'Arboriculture fruitière' },
+  { label: 'Équipement des exploitations en matériel agricole', value: 'Équipement des exploitations en matériel agricole' },
+  { label: 'Filets de protection des cultures maraichères', value: 'Filets de protection des cultures maraichères sous serre' },
+  { label: 'Filets de protection contre la grêle', value: 'Filets de protection des plantations fruitières contre la grêle' },
+  { label: 'Unités de valorisation végétale', value: 'Unités de valorisation de la production végétale' },
+  // Filières Animales
+  { label: 'Acquisition du matériel d\'élevage', value: 'Acquisition du matériel d\'élevage' },
+  { label: 'Centres de collecte de lait', value: 'Centres de collecte de lait' },
+  { label: 'Unités de valorisation animale', value: 'Unités de valorisation de la production animale' },
+  // Aménagement Hydro-Agricole
+  { label: 'Aménagement Hydro-Agricole et Amélioration Foncière', value: 'AMENAGEMENT HYDRO-AGRICOLE ET AMELIORATION FONCIERE' }
+]);
+
+const antenneOptions = ref([
+  { label: 'Toutes les antennes', value: null },
+  { label: 'Antenne Bni Amir', value: 'Antenne Bni Amir' },
+  { label: 'Antenne Souk Sebt', value: 'Antenne Souk Sebt' },
+  { label: 'Antenne Ouldad M\'Bark', value: 'Antenne Ouldad M\'Bark' },
+  { label: 'Antenne Dar Ouled Zidouh', value: 'Antenne Dar Ouled Zidouh' },
+  { label: 'Antenne Afourer', value: 'Antenne Afourer' }
 ]);
 
 // Lifecycle
@@ -542,7 +571,7 @@ function resetFilters() {
   filters.value = {
     searchTerm: '',
     statut: null,
-    rubrique: null,
+    sousRubrique: null,
     antenne: null,
     dateDebut: null,
     dateFin: null,
@@ -598,16 +627,27 @@ function openCompleteDialog(visit) {
   showCompleteDialog.value = true;
 }
 
+function onCompleteFromDetail(visit) {
+  selectedVisit.value = visit;
+  showDetailDialog.value = false;
+  showCompleteDialog.value = true;
+}
+
+function onRowClick(event) {
+  openVisitDetail(event.data);
+}
+
 function onVisitUpdated() {
   loadVisits();
   loadDashboard();
-  showDetailDialog.value = false;
+  // Don't close dialog automatically for updates
 }
 
 function onVisitCompleted() {
   loadVisits();
   loadDashboard();
   showCompleteDialog.value = false;
+  showDetailDialog.value = false;
   
   toast.add({
     severity: 'success',
@@ -617,31 +657,15 @@ function onVisitCompleted() {
   });
 }
 
-function onVisitScheduled() {
-  loadVisits();
+function refreshData() {
   loadDashboard();
-  showScheduleDialog.value = false;
-  
+  loadVisits();
   toast.add({
     severity: 'success',
-    summary: 'Succès',
-    detail: 'Visite terrain programmée avec succès',
-    life: 3000
+    summary: 'Actualisé',
+    detail: 'Données mises à jour',
+    life: 2000
   });
-}
-
-async function exportReport() {
-  try {
-    // Implementation for exporting visits report
-    toast.add({
-      severity: 'info',
-      summary: 'Export',
-      detail: 'Fonctionnalité d\'export en cours de développement',
-      life: 3000
-    });
-  } catch (error) {
-    console.error('Erreur export:', error);
-  }
 }
 
 // Utility Functions
@@ -657,6 +681,7 @@ function formatDateForAPI(date) {
 
 function getStatusSeverity(status) {
   const severities = {
+    'NOUVELLE': 'secondary',
     'PROGRAMMEE': 'info',
     'EN_RETARD': 'danger',
     'COMPLETEE': 'warning',
@@ -672,6 +697,14 @@ function getVisitCardClass(visit) {
   if (visit.statut === 'APPROUVEE') classes.push('approved');
   if (visit.statut === 'REJETEE') classes.push('rejected');
   return classes.join(' ');
+}
+
+function getLocationText(visit) {
+  const parts = [];
+  if (visit.agriculteurDouar) parts.push(visit.agriculteurDouar);
+  if (visit.agriculteurCommune) parts.push(visit.agriculteurCommune);
+  if (visit.antenneDesignation) parts.push(visit.antenneDesignation);
+  return parts.join(' - ') || 'Non spécifié';
 }
 
 function getDaysUntilVisitText(days) {
@@ -778,6 +811,21 @@ function getDaysUntilVisitText(days) {
 }
 
 /* Filters */
+
+.p-input-icon-left{
+  display: flex;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 0.5rem;
+margin-top: 0.3rem;  padding: none;
+}
+
+.p-inputtext-sm {
+  width: 96%;
+  height: 130%;
+}
+
+
 .filters-section {
   background: white;
   border-radius: 12px;

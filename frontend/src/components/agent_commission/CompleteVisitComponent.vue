@@ -512,6 +512,11 @@ function validateForm() {
   return Object.keys(errors.value).length === 0;
 }
 
+function formatDateForAPI(date) {
+  if (!date) return null;
+  return date.toISOString().split('T')[0];
+}
+
 async function completeVisit() {
   if (!validateForm()) return;
   
@@ -521,7 +526,7 @@ async function completeVisit() {
     // Prepare complete request data
     const completeData = {
       visiteId: props.visit.id,
-      dateConstat: formData.dateConstat,
+      dateConstat: formatDateForAPI(formData.dateConstat),
       observations: formData.observations.trim(),
       recommandations: formData.recommandations?.trim() || null,
       coordonneesGPS: formData.coordonneesGPS?.trim() || null,
@@ -531,16 +536,27 @@ async function completeVisit() {
       remarquesGenerales: formData.remarquesGenerales?.trim() || null
     };
     
-    await ApiService.post('/agent_commission/terrain-visits/complete', completeData);
+    const response = await ApiService.post(`/agent_commission/terrain-visits/${props.visit.id}/complete`, completeData);
     
-    emit('visit-completed');
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Succès',
+        detail: response.message || 'Visite terrain finalisée avec succès',
+        life: 3000
+      });
+      
+      emit('visit-completed');
+    } else {
+      throw new Error(response.message || 'Erreur lors de la finalisation');
+    }
     
   } catch (error) {
     console.error('Erreur lors de la finalisation:', error);
     toast.add({
       severity: 'error',
       summary: 'Erreur',
-      detail: error.message || 'Erreur lors de la finalisation de la visite',
+      detail: error.response?.data?.message || error.message || 'Erreur lors de la finalisation de la visite',
       life: 4000
     });
   } finally {

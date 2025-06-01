@@ -267,11 +267,10 @@ function formatRole(role) {
   
   // Map roles to French display names
   const roleMapping = {
-    'ETUDIANT': 'Étudiant',
-    'ENCADRANT': 'Encadrant',
-    'JURY': 'Jury',
-    'CHEF_DE_DEPARTEMENT': 'Chef de Département'
-  };
+ 'AGENT_ANTENNE': 'Agent Antenne',
+    'AGENT_GUC': 'Agent GUC',
+    'AGENT_COMMISSION_TERRAIN': 'Agent Commission Terrain',
+    'ADMIN': 'Administrateur'  };
   
   return roleMapping[role] || role;
 }

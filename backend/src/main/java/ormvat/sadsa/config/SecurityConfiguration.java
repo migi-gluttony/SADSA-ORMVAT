@@ -31,7 +31,7 @@ public class SecurityConfiguration {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/agent_antenne/**").hasAnyRole("AGENT_ANTENNE")
                         .requestMatchers("/api/agent_guc/**").hasRole("AGENT_GUC")
-                        .requestMatchers("/api/agent_commission/**").hasRole("AGENT_COMMISSION")
+                        .requestMatchers("/api/agent_commission/**").hasRole("AGENT_COMMISSION_TERRAIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // Common dossier endpoints - accessible by multiple roles including AGENT_COMMISSION
                         .requestMatchers("/api/dossiers/**").hasAnyRole("AGENT_ANTENNE", "AGENT_GUC", "AGENT_COMMISSION", "ADMIN")

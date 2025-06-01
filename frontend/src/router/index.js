@@ -40,7 +40,7 @@ const router = createRouter({
       component: RegisterView,
       meta: { guest: true, hideHeader: true }
     },
-{
+    {
       path: '/profile',
       name: 'profile',
       component: ProfileView,
@@ -89,7 +89,7 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresRole: 'ADMIN', title: 'Gestion des Documents Requis' }
     },
 
-   // Agent GUC Routes
+    // Agent GUC Routes
     {
       path: '/agent_guc/dossiers',
       name: 'agent-guc-dossiers-list',
@@ -109,22 +109,21 @@ const router = createRouter({
       path: '/agent_commission/dossiers',
       name: 'agent-commission-dossiers-list',
       component: DossierListView,
-      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION', title: 'Dossiers - Commission AHA-AF' }
+      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION_TERRAIN', title: 'Dossiers - Commission AHA-AF' }
     },
     {
       path: '/agent_commission/dossiers/:dossierId',
       name: 'agent-commission-dossier-detail',
       component: DossierDetailView,
-      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION', title: 'Détails du Dossier' },
+      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION_TERRAIN', title: 'Détails du Dossier' },
       props: true
     },
     {
       path: '/agent_commission/terrain-visits',
       name: 'agent-commission-terrain-visits',
-      component:TerrainVisitsView,
-      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION', title: 'Visites Terrain - Commission AHA-AF' }
+      component: TerrainVisitsView,
+      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION_TERRAIN', title: 'Visites Terrain - Commission AHA-AF' }
     },
-
     // Catch-all route for 404
     {
       path: '/:pathMatch(.*)*',
@@ -167,7 +166,6 @@ router.beforeEach((to, from, next) => {
   }
   // Handle routes for guests only
   else if (to.matched.some(record => record.meta.guest) && isAuthenticated) {
-    // ✅ Fixed: Redirect authenticated users to valid routes
     const userRole = currentUser?.role;
     switch (userRole) {
       case 'AGENT_ANTENNE':
@@ -176,11 +174,11 @@ router.beforeEach((to, from, next) => {
       case 'AGENT_GUC':
         next({ path: '/agent_guc/dossiers' });
         break;
-      case 'AGENT_COMMISSION':
+      case 'AGENT_COMMISSION_TERRAIN':
         next({ path: '/agent_commission/dossiers' });
         break;
       case 'ADMIN':
-        next({ path: '/admin/documents-requis' }); // ✅ Fixed: Valid admin route
+        next({ path: '/admin/documents-requis' });
         break;
       default:
         next({ name: 'dashboard' });

@@ -7,13 +7,19 @@
     @hide="resetForm"
   >
     <div class="schedule-visit-form">
-      <div class="dossier-info">
-        <h4>Dossier: {{ dossier?.reference }}</h4>
+      <div v-if="dossier" class="dossier-info">
+        <h4>Dossier: {{ dossier?.reference || dossier?.numeroDossier }}</h4>
         <p>{{ getAgriculteurName() }} - {{ dossier?.sousRubriqueDesignation }}</p>
         <p class="location-info">
           <i class="pi pi-map-marker"></i>
           {{ getLocationInfo() }}
         </p>
+      </div>
+
+      <div v-else class="no-dossier-info">
+        <Message severity="info" :closable="false">
+          Sélectionnez d'abord un dossier depuis la liste des dossiers disponibles
+        </Message>
       </div>
 
       <div class="form-grid">
@@ -36,12 +42,21 @@
 
         <div class="form-group">
           <label for="coordinates">Coordonnées GPS (optionnel)</label>
-          <InputText 
-            id="coordinates"
-            v-model="form.coordonneesGPS" 
-            placeholder="Ex: 32.3578, -6.3491"
-            class="w-full"
-          />
+          <div class="coordinates-input">
+            <InputText 
+              id="coordinates"
+              v-model="form.coordonneesGPS" 
+              placeholder="Ex: 32.3578, -6.3491"
+              class="flex-1"
+            />
+            <Button 
+              icon="pi pi-map-marker" 
+              @click="getCurrentLocation"
+              class="p-button-outlined"
+              v-tooltip="'Obtenir ma position'"
+              :loading="gettingLocation"
+            />
+          </div>
           <small class="help-text">Format: latitude, longitude</small>
         </div>
       </div>
@@ -122,6 +137,7 @@ import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import Calendar from 'primevue/calendar';
+import Message from 'primevue/message';
 
 const toast = useToast();
 
@@ -141,6 +157,7 @@ const emit = defineEmits(['update:visible', 'visit-scheduled']);
 
 // State
 const loading = ref(false);
+const gettingLocation = ref(false);
 const errors = ref({});
 
 const form = ref({
@@ -185,7 +202,8 @@ const daysRemaining = computed(() => {
 });
 
 const isFormValid = computed(() => {
-  return form.value.dateVisite && 
+  return props.dossier && 
+         form.value.dateVisite && 
          form.value.observations?.trim() && 
          form.value.observations.length <= 500;
 });
@@ -217,8 +235,59 @@ function formatDate(date) {
   return new Intl.DateTimeFormat('fr-FR').format(date);
 }
 
+async function getCurrentLocation() {
+  if (!navigator.geolocation) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: 'La géolocalisation n\'est pas supportée',
+      life: 4000
+    });
+    return;
+  }
+
+  try {
+    gettingLocation.value = true;
+    
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000
+      });
+    });
+
+    const lat = position.coords.latitude.toFixed(6);
+    const lng = position.coords.longitude.toFixed(6);
+    form.value.coordonneesGPS = `${lat}, ${lng}`;
+    
+    toast.add({
+      severity: 'success',
+      summary: 'Position obtenue',
+      detail: 'Coordonnées GPS mises à jour',
+      life: 3000
+    });
+    
+  } catch (error) {
+    console.error('Erreur géolocalisation:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: 'Impossible d\'obtenir la position',
+      life: 4000
+    });
+  } finally {
+    gettingLocation.value = false;
+  }
+}
+
 function validateForm() {
   errors.value = {};
+  
+  if (!props.dossier) {
+    errors.value.dossier = 'Aucun dossier sélectionné';
+    return false;
+  }
   
   if (!form.value.dateVisite) {
     errors.value.dateVisite = 'La date de visite est requise';
@@ -248,23 +317,44 @@ function validateForm() {
 }
 
 async function submitSchedule() {
-  if (!validateForm()) return;
+  if (!validateForm()) {
+    if (!props.dossier) {
+      toast.add({
+        severity: 'error',
+        summary: 'Erreur',
+        detail: 'Veuillez sélectionner un dossier',
+        life: 4000
+      });
+    }
+    return;
+  }
   
   try {
     loading.value = true;
     
     const scheduleData = {
       dossierId: props.dossier.id,
-      dateVisite: form.value.dateVisite,
+      dateVisite: formatDateForAPI(form.value.dateVisite),
       observations: form.value.observations.trim(),
       coordonneesGPS: form.value.coordonneesGPS?.trim() || null,
       recommandations: form.value.recommandations?.trim() || null
     };
     
-    await ApiService.post('/agent_commission/terrain-visits/schedule', scheduleData);
+    const response = await ApiService.post('/agent_commission/terrain-visits/schedule', scheduleData);
     
-    emit('visit-scheduled');
-    closeDialog();
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Succès',
+        detail: response.message || 'Visite terrain programmée avec succès',
+        life: 3000
+      });
+      
+      emit('visit-scheduled');
+      closeDialog();
+    } else {
+      throw new Error(response.message || 'Erreur lors de la programmation');
+    }
     
   } catch (error) {
     console.error('Erreur lors de la programmation de la visite:', error);
@@ -272,12 +362,18 @@ async function submitSchedule() {
     toast.add({
       severity: 'error',
       summary: 'Erreur',
-      detail: error.message || 'Erreur lors de la programmation de la visite',
+      detail: error.response?.data?.message || error.message || 'Erreur lors de la programmation de la visite',
       life: 4000
     });
   } finally {
     loading.value = false;
   }
+}
+
+function formatDateForAPI(date) {
+  if (!date) return null;
+  // Convert to ISO date string (YYYY-MM-DD)
+  return date.toISOString().split('T')[0];
 }
 
 function resetForm() {
@@ -293,6 +389,13 @@ function resetForm() {
 function closeDialog() {
   emit('update:visible', false);
 }
+
+// Watch for dossier changes to reset form
+watch(() => props.dossier, () => {
+  if (props.dossier) {
+    resetForm();
+  }
+});
 </script>
 
 <style scoped>
@@ -332,6 +435,10 @@ function closeDialog() {
   color: var(--primary-color);
 }
 
+.no-dossier-info {
+  margin-bottom: 1.5rem;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -353,6 +460,11 @@ function closeDialog() {
 
 .form-group .w-full {
   width: 100%;
+}
+
+.coordinates-input {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .help-text {
@@ -469,6 +581,10 @@ function closeDialog() {
   .info-grid {
     grid-template-columns: 1fr;
     gap: 0.5rem;
+  }
+  
+  .coordinates-input {
+    flex-direction: column;
   }
 }
 

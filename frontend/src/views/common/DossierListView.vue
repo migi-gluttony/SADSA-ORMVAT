@@ -4,44 +4,29 @@
     <div class="list-header">
       <div class="header-info">
         <h1>
-          <i class="pi pi-folder-open"></i> 
+          <i class="pi pi-folder-open"></i>
           {{ getPageTitle() }}
         </h1>
         <p v-if="dossiersData">
-          {{ dossiersData.totalCount }} dossier(s) 
+          {{ dossiersData.totalCount }} dossier(s)
           <span v-if="dossiersData.currentUserRole === 'AGENT_ANTENNE'">
             - CDA: {{ dossiersData.currentUserCDA }}
           </span>
           <span v-else-if="dossiersData.currentUserRole === 'AGENT_GUC'">
             - Tous les dossiers soumis
           </span>
-          <span v-else-if="dossiersData.currentUserRole === 'AGENT_COMMISSION'">
+          <span v-else-if="dossiersData.currentUserRole === 'AGENT_COMMISSION_TERRAIN'">
             - Dossiers pour visite terrain
           </span>
         </p>
       </div>
       <div class="header-actions">
-        <Button 
-          v-if="userRole === 'AGENT_ANTENNE'"
-          label="Nouveau Dossier" 
-          icon="pi pi-plus" 
-          @click="navigateToCreate"
-          class="p-button-success btn-primary"
-        />
-        <Button 
-          label="Actualiser" 
-          icon="pi pi-refresh" 
-          @click="loadDossiers"
-          :loading="loading"
-          class="p-button-outlined"
-        />
-        <Button 
-          v-if="userRole === 'AGENT_GUC'"
-          label="Export Excel" 
-          icon="pi pi-file-excel" 
-          @click="exportToExcel"
-          class="p-button-outlined"
-        />
+        <Button v-if="userRole === 'AGENT_ANTENNE'" label="Nouveau Dossier" icon="pi pi-plus" @click="navigateToCreate"
+          class="p-button-success btn-primary" />
+        <Button label="Actualiser" icon="pi pi-refresh" @click="loadDossiers" :loading="loading"
+          class="p-button-outlined" />
+        <Button v-if="userRole === 'AGENT_GUC'" label="Export Excel" icon="pi pi-file-excel" @click="exportToExcel"
+          class="p-button-outlined" />
       </div>
     </div>
 
@@ -60,7 +45,7 @@
           <div class="stat-value">{{ dossiersData.statistics.dossiersAttenteTraitement }}</div>
           <div class="stat-label">En attente traitement</div>
         </div>
-        <div class="stat-card" v-if="userRole === 'AGENT_COMMISSION'">
+        <div class="stat-card" v-if="userRole === 'AGENT_COMMISSION_TERRAIN'">
           <div class="stat-value">{{ dossiersData.statistics.dossiersAttenteTraitement }}</div>
           <div class="stat-label">Visites à programmer</div>
         </div>
@@ -83,18 +68,9 @@
           <label>RECHERCHE</label>
           <div class="search-input-wrapper">
             <i class="pi pi-search search-icon"></i>
-            <InputText 
-              v-model="searchTerm" 
-              placeholder="Rechercher par SABA, CIN, nom..."
-              class="search-input"
-              @input="handleSearch"
-            />
-            <button 
-              v-if="searchTerm" 
-              class="clear-search-btn" 
-              @click="clearSearch"
-              title="Effacer la recherche"
-            >
+            <InputText v-model="searchTerm" placeholder="Rechercher par SABA, CIN, nom..." class="search-input"
+              @input="handleSearch" />
+            <button v-if="searchTerm" class="clear-search-btn" @click="clearSearch" title="Effacer la recherche">
               <i class="pi pi-times"></i>
             </button>
           </div>
@@ -103,71 +79,35 @@
         <!-- Status Filter -->
         <div class="filter-group">
           <label>STATUT</label>
-          <Select 
-            v-model="filters.statut" 
-            :options="getStatusOptions()"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Tous les statuts"
-            @change="applyFilters"
-            class="filter-select"
-            :clearable="true"
-          />
+          <Select v-model="filters.statut" :options="getStatusOptions()" optionLabel="label" optionValue="value"
+            placeholder="Tous les statuts" @change="applyFilters" class="filter-select" :clearable="true" />
         </div>
 
         <!-- Project Type Filter -->
         <div class="filter-group">
           <label>TYPE DE PROJET</label>
-          <Select 
-            v-model="filters.sousRubriqueId" 
-            :options="sousRubriqueOptions"
-            optionLabel="designation"
-            optionValue="id"
-            placeholder="Tous les types"
-            @change="applyFilters"
-            class="filter-select"
-            :clearable="true"
-          />
+          <Select v-model="filters.sousRubriqueId" :options="sousRubriqueOptions" optionLabel="designation"
+            optionValue="id" placeholder="Tous les types" @change="applyFilters" class="filter-select"
+            :clearable="true" />
         </div>
 
         <!-- Antenne Filter (GUC only) -->
         <div v-if="userRole === 'AGENT_GUC'" class="filter-group">
           <label>ANTENNE</label>
-          <Select 
-            v-model="filters.antenneId" 
-            :options="antenneOptions"
-            optionLabel="designation"
-            optionValue="id"
-            placeholder="Toutes les antennes"
-            @change="applyFilters"
-            class="filter-select"
-            :clearable="true"
-          />
+          <Select v-model="filters.antenneId" :options="antenneOptions" optionLabel="designation" optionValue="id"
+            placeholder="Toutes les antennes" @change="applyFilters" class="filter-select" :clearable="true" />
         </div>
 
         <!-- Priority Filter (GUC only) -->
         <div v-if="userRole === 'AGENT_GUC'" class="filter-group">
           <label>PRIORITÉ</label>
-          <Select 
-            v-model="filters.priorite" 
-            :options="prioriteOptions"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Toutes priorités"
-            @change="applyFilters"
-            class="filter-select"
-            :clearable="true"
-          />
+          <Select v-model="filters.priorite" :options="prioriteOptions" optionLabel="label" optionValue="value"
+            placeholder="Toutes priorités" @change="applyFilters" class="filter-select" :clearable="true" />
         </div>
 
         <!-- Clear Filters -->
         <div class="filter-actions">
-          <Button 
-            label="Effacer" 
-            icon="pi pi-times" 
-            @click="clearFilters"
-            class="p-button-text btn-clear"
-          />
+          <Button label="Effacer" icon="pi pi-times" @click="clearFilters" class="p-button-text btn-clear" />
         </div>
       </div>
     </div>
@@ -183,12 +123,7 @@
       <i class="pi pi-exclamation-triangle"></i>
       <h3>Erreur de chargement</h3>
       <p>{{ error }}</p>
-      <Button 
-        label="Réessayer" 
-        icon="pi pi-refresh" 
-        @click="loadDossiers"
-        class="p-button-outlined"
-      />
+      <Button label="Réessayer" icon="pi pi-refresh" @click="loadDossiers" class="p-button-outlined" />
     </div>
 
     <!-- Empty State -->
@@ -199,22 +134,12 @@
         <p v-if="hasActiveFilters">Aucun dossier ne correspond à vos critères de recherche et filtres.</p>
         <p v-else-if="userRole === 'AGENT_ANTENNE'">Vous n'avez pas encore créé de dossier.</p>
         <p v-else-if="userRole === 'AGENT_GUC'">Aucun dossier n'a encore été soumis au GUC.</p>
-        <p v-else-if="userRole === 'AGENT_COMMISSION'">Aucun dossier n'est en attente de visite terrain.</p>
+        <p v-else-if="userRole === 'AGENT_COMMISSION_TERRAIN'">Aucun dossier n'est en attente de visite terrain.</p>
         <div class="empty-actions">
-          <Button 
-            v-if="hasActiveFilters"
-            label="Effacer les filtres" 
-            icon="pi pi-filter-slash" 
-            @click="clearFilters"
-            class="p-button-outlined"
-          />
-          <Button 
-            v-if="userRole === 'AGENT_ANTENNE'"
-            label="Créer mon premier dossier" 
-            icon="pi pi-plus" 
-            @click="navigateToCreate"
-            class="p-button-success btn-primary"
-          />
+          <Button v-if="hasActiveFilters" label="Effacer les filtres" icon="pi pi-filter-slash" @click="clearFilters"
+            class="p-button-outlined" />
+          <Button v-if="userRole === 'AGENT_ANTENNE'" label="Créer mon premier dossier" icon="pi pi-plus"
+            @click="navigateToCreate" class="p-button-success btn-primary" />
         </div>
       </div>
     </div>
@@ -234,7 +159,7 @@
             </th>
             <th class="col-project">Type de Projet</th>
             <th v-if="userRole === 'AGENT_GUC'" class="col-antenne">Antenne</th>
-            <th v-if="userRole === 'AGENT_COMMISSION'" class="col-visite">Visite Terrain</th>
+            <th v-if="userRole === 'AGENT_COMMISSION_TERRAIN'" class="col-visite">Visite Terrain</th>
             <th class="col-status">
               Statut
               <i class="pi pi-sort-alt sort-icon"></i>
@@ -249,15 +174,10 @@
           </tr>
         </thead>
         <tbody>
-          <tr 
-            v-for="dossier in dossiers" 
-            :key="dossier.id"
-            class="dossier-row"
-            :class="{ 
-              'urgent': dossier.joursRestants <= 1,
-              'warning': dossier.joursRestants <= 2 && dossier.joursRestants > 1
-            }"
-          >
+          <tr v-for="dossier in dossiers" :key="dossier.id" class="dossier-row" :class="{
+            'urgent': dossier.joursRestants <= 1,
+            'warning': dossier.joursRestants <= 2 && dossier.joursRestants > 1
+          }">
             <!-- Reference Column -->
             <td class="col-reference">
               <div class="reference-cell">
@@ -299,13 +219,11 @@
             </td>
 
             <!-- Visite Terrain Column (Commission only) -->
-            <td v-if="userRole === 'AGENT_COMMISSION'" class="col-visite">
+            <td v-if="userRole === 'AGENT_COMMISSION_TERRAIN'" class="col-visite">
               <div class="visite-cell">
                 <div v-if="dossier.visiteTerrainStatus" class="visite-status">
-                  <Tag 
-                    :value="dossier.visiteTerrainStatus" 
-                    :severity="getVisiteSeverity(dossier.visiteTerrainStatus)"
-                  />
+                  <Tag :value="dossier.visiteTerrainStatus"
+                    :severity="getVisiteSeverity(dossier.visiteTerrainStatus)" />
                 </div>
                 <div v-else class="visite-pending">
                   <Tag value="À programmer" severity="warning" />
@@ -319,40 +237,29 @@
 
             <!-- Status Column -->
             <td class="col-status">
-              <Tag 
-                :value="dossier.statut" 
-                :severity="getStatusSeverity(dossier.statut)"
-                class="status-tag"
-              />
+              <Tag :value="dossier.statut" :severity="getStatusSeverity(dossier.statut)" class="status-tag" />
             </td>
 
             <!-- Progress Column -->
             <td class="col-progress">
               <div class="progress-cell">
                 <div class="progress-info">
-                  <span class="progress-text">{{ dossier.formsCompleted || 0 }}/{{ dossier.totalForms || 0 }} formulaires</span>
+                  <span class="progress-text">{{ dossier.formsCompleted || 0 }}/{{ dossier.totalForms || 0 }}
+                    formulaires</span>
                   <span class="progress-percentage">{{ Math.round(dossier.completionPercentage || 0) }}%</span>
                 </div>
-                <ProgressBar 
-                  :value="dossier.completionPercentage || 0" 
-                  :show-value="false"
-                  class="progress-bar"
-                  :class="{
-                    'progress-complete': (dossier.completionPercentage || 0) === 100,
-                    'progress-medium': (dossier.completionPercentage || 0) >= 50 && (dossier.completionPercentage || 0) < 100,
-                    'progress-low': (dossier.completionPercentage || 0) < 50
-                  }"
-                />
+                <ProgressBar :value="dossier.completionPercentage || 0" :show-value="false" class="progress-bar" :class="{
+                  'progress-complete': (dossier.completionPercentage || 0) === 100,
+                  'progress-medium': (dossier.completionPercentage || 0) >= 50 && (dossier.completionPercentage || 0) < 100,
+                  'progress-low': (dossier.completionPercentage || 0) < 50
+                }" />
               </div>
             </td>
 
             <!-- Priority Column (GUC only) -->
             <td v-if="userRole === 'AGENT_GUC'" class="col-priority">
-              <Tag 
-                :value="dossier.priorite || 'NORMALE'" 
-                :severity="getPrioritySeverity(dossier.priorite)"
-                class="priority-tag"
-              />
+              <Tag :value="dossier.priorite || 'NORMALE'" :severity="getPrioritySeverity(dossier.priorite)"
+                class="priority-tag" />
               <div v-if="dossier.notesCount > 0" class="notes-indicator">
                 <i class="pi pi-comment"></i>
                 <span>{{ dossier.notesCount }}</span>
@@ -378,83 +285,48 @@
             <!-- Actions Column -->
             <td class="col-actions">
               <div class="actions-cell">
-                <Button 
-                  icon="pi pi-eye" 
-                  @click="viewDossierDetail(dossier.id)"
-                  class="p-button-outlined p-button-sm action-btn"
-                  v-tooltip.top="'Voir détails'"
-                />
-                
+                <Button icon="pi pi-eye" @click="viewDossierDetail(dossier.id)"
+                  class="p-button-outlined p-button-sm action-btn" v-tooltip.top="'Voir détails'" />
+
                 <!-- Agent Antenne specific actions -->
                 <template v-if="userRole === 'AGENT_ANTENNE'">
-                  <Button 
-                    v-if="dossier.permissions?.peutEtreModifie && (dossier.completionPercentage || 0) < 100" 
-                    icon="pi pi-pencil" 
-                    @click="continueDossier(dossier.id)"
-                    class="p-button-sm action-btn btn-edit"
-                    v-tooltip.top="'Continuer'"
-                  />
+                  <Button v-if="dossier.permissions?.peutEtreModifie && (dossier.completionPercentage || 0) < 100"
+                    icon="pi pi-pencil" @click="continueDossier(dossier.id)" class="p-button-sm action-btn btn-edit"
+                    v-tooltip.top="'Continuer'" />
 
-                  <Button 
-                    v-if="dossier.permissions?.peutEtreEnvoye" 
-                    icon="pi pi-send" 
-                    @click="confirmSendToGUC(dossier)"
-                    class="p-button-success p-button-sm action-btn"
-                    v-tooltip.top="'Envoyer au GUC'"
-                  />
+                  <Button v-if="dossier.permissions?.peutEtreEnvoye" icon="pi pi-send"
+                    @click="confirmSendToGUC(dossier)" class="p-button-success p-button-sm action-btn"
+                    v-tooltip.top="'Envoyer au GUC'" />
 
-                  <Button 
-                    v-if="dossier.permissions?.peutEtreSupprime" 
-                    icon="pi pi-trash" 
+                  <Button v-if="dossier.permissions?.peutEtreSupprime" icon="pi pi-trash"
                     @click="confirmDeleteDossier(dossier)"
-                    class="p-button-danger p-button-outlined p-button-sm action-btn"
-                    v-tooltip.top="'Supprimer'"
-                  />
+                    class="p-button-danger p-button-outlined p-button-sm action-btn" v-tooltip.top="'Supprimer'" />
                 </template>
 
                 <!-- Agent GUC specific actions -->
                 <template v-if="userRole === 'AGENT_GUC'">
-                  <Button 
-                    icon="pi pi-comment" 
-                    @click="showAddNoteDialog(dossier)"
-                    class="p-button-info p-button-sm action-btn"
-                    v-tooltip.top="'Ajouter note'"
-                  />
+                  <Button icon="pi pi-comment" @click="showAddNoteDialog(dossier)"
+                    class="p-button-info p-button-sm action-btn" v-tooltip.top="'Ajouter note'" />
 
-                  <SplitButton 
-                    v-if="dossier.availableActions && dossier.availableActions.length > 0"
-                    :model="getActionMenuItems(dossier)" 
-                    class="p-button-sm action-split-btn"
-                    @click="handlePrimaryAction(dossier)"
-                  >
+                  <SplitButton v-if="dossier.availableActions && dossier.availableActions.length > 0"
+                    :model="getActionMenuItems(dossier)" class="p-button-sm action-split-btn"
+                    @click="handlePrimaryAction(dossier)">
                     {{ getPrimaryActionLabel(dossier) }}
                   </SplitButton>
                 </template>
 
                 <!-- Agent Commission specific actions -->
-                <template v-if="userRole === 'AGENT_COMMISSION'">
-                  <Button 
-                    v-if="!dossier.visiteTerrainStatus || dossier.visiteTerrainStatus === 'À programmer'"
-                    icon="pi pi-calendar-plus" 
-                    @click="scheduleTerrainVisit(dossier)"
-                    class="p-button-info p-button-sm action-btn"
-                    v-tooltip.top="'Programmer visite terrain'"
-                  />
+                <template v-if="userRole === 'AGENT_COMMISSION_TERRAIN'">
+                  <Button v-if="!dossier.visiteTerrainStatus || dossier.visiteTerrainStatus === 'À programmer'"
+                    icon="pi pi-calendar-plus" @click="scheduleTerrainVisit(dossier)"
+                    class="p-button-info p-button-sm action-btn" v-tooltip.top="'Programmer visite terrain'" />
 
-                  <Button 
-                    v-if="dossier.visiteTerrainStatus === 'PROGRAMMEE'"
-                    icon="pi pi-check-square" 
-                    @click="completeTerrainVisit(dossier)"
-                    class="p-button-success p-button-sm action-btn"
-                    v-tooltip.top="'Compléter visite'"
-                  />
+                  <Button v-if="dossier.visiteTerrainStatus === 'PROGRAMMEE'" icon="pi pi-check-square"
+                    @click="completeTerrainVisit(dossier)" class="p-button-success p-button-sm action-btn"
+                    v-tooltip.top="'Compléter visite'" />
 
-                  <Button 
-                    icon="pi pi-comment" 
-                    @click="showAddNoteDialog(dossier)"
-                    class="p-button-outlined p-button-sm action-btn"
-                    v-tooltip.top="'Ajouter note'"
-                  />
+                  <Button icon="pi pi-comment" @click="showAddNoteDialog(dossier)"
+                    class="p-button-outlined p-button-sm action-btn" v-tooltip.top="'Ajouter note'" />
                 </template>
               </div>
             </td>
@@ -465,28 +337,17 @@
 
     <!-- Pagination -->
     <div v-if="dossiers.length > 0" class="pagination-section">
-      <Paginator 
-        :rows="pageSize" 
-        :total-records="totalRecords" 
-        :first="currentPage * pageSize"
-        @page="onPageChange"
-        :rows-per-page-options="[5, 10, 20, 50]"
-      />
+      <Paginator :rows="pageSize" :total-records="totalRecords" :first="currentPage * pageSize" @page="onPageChange"
+        :rows-per-page-options="[5, 10, 20, 50]" />
     </div>
 
     <!-- Action Dialogs -->
-    <ActionDialogs 
-      :dialogs="actionDialogs"
-      @action-confirmed="handleActionConfirmed"
-      @dialog-closed="handleDialogClosed"
-    />
+    <ActionDialogs :dialogs="actionDialogs" @action-confirmed="handleActionConfirmed"
+      @dialog-closed="handleDialogClosed" />
 
     <!-- Add Note Dialog (GUC) -->
-    <AddNoteDialog 
-      v-model:visible="addNoteDialog.visible"
-      :dossier="addNoteDialog.dossier"
-      @note-added="handleNoteAdded"
-    />
+    <AddNoteDialog v-model:visible="addNoteDialog.visible" :dossier="addNoteDialog.dossier"
+      @note-added="handleNoteAdded" />
 
     <Toast />
   </div>
@@ -568,7 +429,7 @@ const hasActiveFilters = computed(() => {
   const hasSubRubrique = filters.sousRubriqueId;
   const hasAntenne = filters.antenneId;
   const hasPriority = filters.priorite;
-  
+
   return hasSearch || hasStatus || hasSubRubrique || hasAntenne || hasPriority;
 });
 
@@ -576,7 +437,7 @@ const hasActiveFilters = computed(() => {
 onMounted(async () => {
   console.log('DossierListView mounted, user role:', userRole.value);
   console.log('Current route:', router.currentRoute.value.path);
-  
+
   try {
     await loadFilterOptions();
     await loadDossiers();
@@ -592,7 +453,7 @@ function getPageTitle() {
       return 'Mes Dossiers';
     case 'AGENT_GUC':
       return 'Dossiers - Guichet Unique Central';
-    case 'AGENT_COMMISSION':
+    case 'AGENT_COMMISSION_TERRAIN':
       return 'Dossiers - Commission AHA-AF';
     case 'ADMIN':
       return 'Tous les Dossiers';
@@ -626,7 +487,7 @@ async function loadDossiers() {
     loading.value = true;
     error.value = null;
     console.log('Starting to load dossiers for role:', userRole.value);
-    
+
     const params = {
       page: currentPage.value,
       size: pageSize.value,
@@ -645,12 +506,12 @@ async function loadDossiers() {
 
     const response = await ApiService.get('/dossiers', params);
     console.log('API response received:', response);
-    
+
     dossiersData.value = response;
     dossiers.value = response.dossiers || [];
-    
+
     console.log('Dossiers loaded successfully:', dossiers.value.length, 'items');
-    
+
   } catch (err) {
     console.error('Erreur lors du chargement des dossiers:', err);
     console.error('Error details:', {
@@ -658,9 +519,9 @@ async function loadDossiers() {
       status: err.response?.status,
       data: err.response?.data
     });
-    
+
     error.value = err.message || 'Impossible de charger les dossiers';
-    
+
     // Initialize with empty data to prevent template errors
     dossiersData.value = {
       dossiers: [],
@@ -681,7 +542,7 @@ async function loadDossiers() {
       }
     };
     dossiers.value = [];
-    
+
   } finally {
     loading.value = false;
   }
@@ -690,7 +551,7 @@ async function loadDossiers() {
 async function loadFilterOptions() {
   try {
     console.log('Loading filter options...');
-    
+
     // Load basic filter options - using hardcoded options for now
     sousRubriqueOptions.value = [
       { id: 1, designation: 'FILIERES VEGETALES - Équipements' },
@@ -711,7 +572,7 @@ async function loadFilterOptions() {
         { id: 5, designation: 'Antenne Afourer' }
       ];
     }
-    
+
     console.log('Filter options loaded successfully');
   } catch (err) {
     console.error('Erreur lors du chargement des options de filtre:', err);
@@ -767,7 +628,7 @@ function viewDossierDetail(dossierId) {
     case 'AGENT_GUC':
       route = `/agent_guc/dossiers/${dossierId}`;
       break;
-    case 'AGENT_COMMISSION':
+    case 'AGENT_COMMISSION_TERRAIN':
       route = `/agent_commission/dossiers/${dossierId}`;
       break;
     default:
@@ -806,7 +667,7 @@ function showAddNoteDialog(dossier) {
 
 function getActionMenuItems(dossier) {
   const items = [];
-  
+
   if (dossier.availableActions?.includes('send_to_commission')) {
     items.push({
       label: 'Envoyer à la Commission',
@@ -814,7 +675,7 @@ function getActionMenuItems(dossier) {
       command: () => showActionDialog('sendToCommission', dossier)
     });
   }
-  
+
   if (dossier.availableActions?.includes('return_to_antenne')) {
     items.push({
       label: 'Retourner à l\'Antenne',
@@ -822,7 +683,7 @@ function getActionMenuItems(dossier) {
       command: () => showActionDialog('returnToAntenne', dossier)
     });
   }
-  
+
   if (dossier.availableActions?.includes('reject')) {
     items.push({
       label: 'Rejeter',
@@ -830,7 +691,7 @@ function getActionMenuItems(dossier) {
       command: () => showActionDialog('reject', dossier)
     });
   }
-  
+
   return items;
 }
 
@@ -884,10 +745,10 @@ function getVisiteSeverity(status) {
 async function handleActionConfirmed(actionData) {
   try {
     const { action, dossier, data } = actionData;
-    
+
     let endpoint = '';
     let payload = {};
-    
+
     switch (action) {
       case 'sendToGUC':
         endpoint = `/dossiers/${dossier.id}/send-to-guc`;
@@ -895,14 +756,14 @@ async function handleActionConfirmed(actionData) {
         break;
       case 'sendToCommission':
         endpoint = `/dossiers/${dossier.id}/send-to-commission`;
-        payload = { 
+        payload = {
           commentaire: data.comment,
           priorite: data.priority
         };
         break;
       case 'returnToAntenne':
         endpoint = `/dossiers/${dossier.id}/return-to-antenne`;
-        payload = { 
+        payload = {
           motif: 'Complétion requise',
           commentaire: data.comment,
           documentsManquants: data.reasons
@@ -910,7 +771,7 @@ async function handleActionConfirmed(actionData) {
         break;
       case 'reject':
         endpoint = `/dossiers/${dossier.id}/reject`;
-        payload = { 
+        payload = {
           motif: 'Rejet du dossier',
           commentaire: data.comment,
           definitif: data.definitive
@@ -921,10 +782,10 @@ async function handleActionConfirmed(actionData) {
         payload = { motif: data.comment };
         break;
     }
-    
+
     const method = action === 'delete' ? 'delete' : 'post';
     const response = await ApiService[method](endpoint, payload);
-    
+
     if (response.success) {
       toast.add({
         severity: 'success',
@@ -932,10 +793,10 @@ async function handleActionConfirmed(actionData) {
         detail: response.message,
         life: 3000
       });
-      
+
       loadDossiers();
     }
-    
+
   } catch (err) {
     console.error(`Erreur lors de l'action ${actionData.action}:`, err);
     toast.add({
@@ -968,7 +829,7 @@ async function handleNoteAdded() {
     detail: 'Note ajoutée avec succès',
     life: 3000
   });
-  
+
   // Reload dossiers to update notes count
   await loadDossiers();
 }
@@ -983,9 +844,9 @@ async function exportToExcel() {
       },
       body: JSON.stringify(filters)
     });
-    
+
     if (!response.ok) throw new Error('Erreur d\'export');
-    
+
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -995,14 +856,14 @@ async function exportToExcel() {
     link.click();
     link.remove();
     window.URL.revokeObjectURL(url);
-    
+
     toast.add({
       severity: 'success',
       summary: 'Succès',
       detail: 'Export Excel généré avec succès',
       life: 3000
     });
-    
+
   } catch (err) {
     console.error('Erreur lors de l\'export:', err);
     toast.add({
@@ -1019,7 +880,7 @@ function getStatusSeverity(status) {
   const severityMap = {
     'DRAFT': 'secondary',
     'SUBMITTED': 'info',
-    'IN_REVIEW': 'warning', 
+    'IN_REVIEW': 'warning',
     'APPROVED': 'success',
     'REJECTED': 'danger',
     'COMPLETED': 'success',
@@ -1246,7 +1107,7 @@ function formatDate(date) {
   box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.1);
 }
 
-.search-input:focus + .search-icon {
+.search-input:focus+.search-icon {
   color: var(--primary-color);
 }
 
@@ -1286,7 +1147,8 @@ function formatDate(date) {
 }
 
 /* Loading and Empty States */
-.loading-container, .error-container {
+.loading-container,
+.error-container {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1710,16 +1572,16 @@ function formatDate(date) {
   .table-container {
     overflow-x: auto;
   }
-  
+
   .dossiers-table {
     min-width: 1200px;
   }
-  
+
   .filters-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
-  
+
   .stats-grid {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
@@ -1773,7 +1635,7 @@ function formatDate(date) {
   .empty-actions {
     flex-direction: column;
   }
-  
+
   .stats-grid {
     grid-template-columns: 1fr;
   }

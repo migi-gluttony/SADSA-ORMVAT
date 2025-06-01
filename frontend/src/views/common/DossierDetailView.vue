@@ -72,7 +72,7 @@
           </template>
 
           <!-- Agent Commission Actions -->
-          <template v-if="userRole === 'AGENT_COMMISSION'">
+          <template v-if="userRole === 'AGENT_COMMISSION_TERRAIN'">
             <Button 
               v-if="canScheduleTerrainVisit()"
               label="Programmer Visite Terrain" 
@@ -581,13 +581,13 @@ function hasGUCActions() {
 }
 
 function canScheduleTerrainVisit() {
-  if (userRole.value !== 'AGENT_COMMISSION') return false;
+  if (userRole.value !== 'AGENT_COMMISSION_TERRAIN') return false;
   const status = dossierDetail.value?.dossier?.statut;
   return status === 'SUBMITTED' || status === 'Soumis au GUC' || status === 'IN_REVIEW' || status === 'En cours d\'examen';
 }
 
 function canCompleteTerrainVisit() {
-  if (userRole.value !== 'AGENT_COMMISSION') return false;
+  if (userRole.value !== 'AGENT_COMMISSION_TERRAIN') return false;
   // Check if there's an existing terrain visit that can be completed
   return dossierDetail.value?.visitesTerrain?.some(v => v.dateVisite && !v.dateConstat);
 }
@@ -669,7 +669,7 @@ function getBreadcrumbRoot() {
       return 'Mes Dossiers';
     case 'AGENT_GUC':
       return 'Dossiers GUC';
-    case 'AGENT_COMMISSION':
+    case 'AGENT_COMMISSION_TERRAIN':
       return 'Dossiers Commission';
     case 'ADMIN':
       return 'Tous les Dossiers';
@@ -686,7 +686,7 @@ function goBack() {
     case 'AGENT_GUC':
       router.push('/agent_guc/dossiers');
       break;
-    case 'AGENT_COMMISSION':
+    case 'AGENT_COMMISSION_TERRAIN':
       router.push('/agent_commission/dossiers');
       break;
     default:
