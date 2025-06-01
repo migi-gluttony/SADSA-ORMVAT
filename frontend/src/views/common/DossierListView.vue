@@ -16,7 +16,7 @@
             - Tous les dossiers soumis
           </span>
           <span v-else-if="dossiersData.currentUserRole === 'AGENT_COMMISSION_TERRAIN'">
-            - Dossiers pour visite terrain
+            - Dossiers {{ getCommissionTeamDisplayName() }}
           </span>
         </p>
       </div>
@@ -46,8 +46,8 @@
           <div class="stat-label">En attente traitement</div>
         </div>
         <div class="stat-card" v-if="userRole === 'AGENT_COMMISSION_TERRAIN'">
-          <div class="stat-value">{{ dossiersData.statistics.dossiersAttenteTraitement }}</div>
-          <div class="stat-label">Visites à programmer</div>
+          <div class="stat-value">{{ dossiersData.statistics.dossiersEnCommission || 0 }}</div>
+          <div class="stat-label">En commission</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">{{ dossiersData.statistics.dossiersApprouves }}</div>
@@ -134,7 +134,9 @@
         <p v-if="hasActiveFilters">Aucun dossier ne correspond à vos critères de recherche et filtres.</p>
         <p v-else-if="userRole === 'AGENT_ANTENNE'">Vous n'avez pas encore créé de dossier.</p>
         <p v-else-if="userRole === 'AGENT_GUC'">Aucun dossier n'a encore été soumis au GUC.</p>
-        <p v-else-if="userRole === 'AGENT_COMMISSION_TERRAIN'">Aucun dossier n'est en attente de visite terrain.</p>
+        <p v-else-if="userRole === 'AGENT_COMMISSION_TERRAIN'">
+          Aucun dossier n'est assigné à votre équipe ({{ getCommissionTeamDisplayName() }}) pour visite terrain.
+        </p>
         <div class="empty-actions">
           <Button v-if="hasActiveFilters" label="Effacer les filtres" icon="pi pi-filter-slash" @click="clearFilters"
             class="p-button-outlined" />
@@ -159,7 +161,7 @@
             </th>
             <th class="col-project">Type de Projet</th>
             <th v-if="userRole === 'AGENT_GUC'" class="col-antenne">Antenne</th>
-            <th v-if="userRole === 'AGENT_COMMISSION_TERRAIN'" class="col-visite">Visite Terrain</th>
+            <th v-if="userRole === 'AGENT_COMMISSION_TERRAIN'" class="col-visite">Inspection Terrain</th>
             <th class="col-status">
               Statut
               <i class="pi pi-sort-alt sort-icon"></i>
@@ -317,16 +319,28 @@
 
                 <!-- Agent Commission specific actions -->
                 <template v-if="userRole === 'AGENT_COMMISSION_TERRAIN'">
-                  <Button v-if="!dossier.visiteTerrainStatus || dossier.visiteTerrainStatus === 'À programmer'"
-                    icon="pi pi-calendar-plus" @click="scheduleTerrainVisit(dossier)"
-                    class="p-button-info p-button-sm action-btn" v-tooltip.top="'Programmer visite terrain'" />
+                  <Button 
+                    v-if="!dossier.visiteTerrainStatus || dossier.visiteTerrainStatus === 'À programmer'"
+                    icon="pi pi-calendar-plus" 
+                    @click="scheduleTerrainInspection(dossier)"
+                    class="p-button-info p-button-sm action-btn" 
+                    v-tooltip.top="'Programmer inspection terrain'"
+                  />
 
-                  <Button v-if="dossier.visiteTerrainStatus === 'PROGRAMMEE'" icon="pi pi-check-square"
-                    @click="completeTerrainVisit(dossier)" class="p-button-success p-button-sm action-btn"
-                    v-tooltip.top="'Compléter visite'" />
+                  <Button 
+                    v-if="dossier.visiteTerrainStatus === 'PROGRAMMEE'" 
+                    icon="pi pi-check-square"
+                    @click="completeTerrainInspection(dossier)" 
+                    class="p-button-success p-button-sm action-btn"
+                    v-tooltip.top="'Finaliser inspection'"
+                  />
 
-                  <Button icon="pi pi-comment" @click="showAddNoteDialog(dossier)"
-                    class="p-button-outlined p-button-sm action-btn" v-tooltip.top="'Ajouter note'" />
+                  <Button 
+                    icon="pi pi-comment" 
+                    @click="showAddNoteDialog(dossier)"
+                    class="p-button-outlined p-button-sm action-btn" 
+                    v-tooltip.top="'Ajouter note'"
+                  />
                 </template>
               </div>
             </td>
@@ -454,12 +468,27 @@ function getPageTitle() {
     case 'AGENT_GUC':
       return 'Dossiers - Guichet Unique Central';
     case 'AGENT_COMMISSION_TERRAIN':
-      return 'Dossiers - Commission AHA-AF';
+      return `Dossiers - Commission Vérification Terrain`;
     case 'ADMIN':
       return 'Tous les Dossiers';
     default:
       return 'Dossiers';
   }
+}
+
+function getCommissionTeamDisplayName() {
+  const currentUser = AuthService.getCurrentUser();
+  const equipe = currentUser?.equipeCommission;
+  
+  if (!equipe) return 'Commission Générale';
+  
+  const teamNames = {
+    'FILIERES_VEGETALES': 'Équipe Filières Végétales',
+    'FILIERES_ANIMALES': 'Équipe Filières Animales', 
+    'AMENAGEMENT_HYDRO_AGRICOLE': 'Équipe Aménagement Hydro-Agricole'
+  };
+  
+  return teamNames[equipe] || equipe;
 }
 
 function getStatusOptions() {
@@ -721,12 +750,12 @@ function showActionDialog(action, dossier) {
 }
 
 // Commission-specific action methods
-function scheduleTerrainVisit(dossier) {
+function scheduleTerrainInspection(dossier) {
   // Navigate to dossier detail where scheduling can be done
   viewDossierDetail(dossier.id);
 }
 
-function completeTerrainVisit(dossier) {
+function completeTerrainInspection(dossier) {
   // Navigate to dossier detail where completion can be done
   viewDossierDetail(dossier.id);
 }

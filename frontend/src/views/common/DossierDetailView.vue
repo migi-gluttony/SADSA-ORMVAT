@@ -74,15 +74,15 @@
           <!-- Agent Commission Actions -->
           <template v-if="userRole === 'AGENT_COMMISSION_TERRAIN'">
             <Button 
-              v-if="canScheduleTerrainVisit()"
-              label="Programmer Visite Terrain" 
+              v-if="canScheduleTerrainInspection()"
+              label="Programmer Inspection Terrain" 
               icon="pi pi-calendar-plus" 
               @click="showScheduleVisitDialog"
               class="p-button-info"
             />
             <Button 
-              v-if="canCompleteTerrainVisit()"
-              label="Compléter Visite" 
+              v-if="canCompleteTerrainInspection()"
+              label="Finaliser Inspection" 
               icon="pi pi-check-square" 
               @click="showCompleteVisitDialog"
               class="p-button-success"
@@ -580,13 +580,13 @@ function hasGUCActions() {
   return status === 'SUBMITTED' || status === 'Soumis au GUC' || status === 'IN_REVIEW' || status === 'En cours d\'examen';
 }
 
-function canScheduleTerrainVisit() {
+function canScheduleTerrainInspection() {
   if (userRole.value !== 'AGENT_COMMISSION_TERRAIN') return false;
   const status = dossierDetail.value?.dossier?.statut;
   return status === 'SUBMITTED' || status === 'Soumis au GUC' || status === 'IN_REVIEW' || status === 'En cours d\'examen';
 }
 
-function canCompleteTerrainVisit() {
+function canCompleteTerrainInspection() {
   if (userRole.value !== 'AGENT_COMMISSION_TERRAIN') return false;
   // Check if there's an existing terrain visit that can be completed
   return dossierDetail.value?.visitesTerrain?.some(v => v.dateVisite && !v.dateConstat);
@@ -670,7 +670,17 @@ function getBreadcrumbRoot() {
     case 'AGENT_GUC':
       return 'Dossiers GUC';
     case 'AGENT_COMMISSION_TERRAIN':
-      return 'Dossiers Commission';
+      const currentUser = AuthService.getCurrentUser();
+      const equipe = currentUser?.equipeCommission;
+      if (equipe) {
+        const teamNames = {
+          'FILIERES_VEGETALES': 'Commission Filières Végétales',
+          'FILIERES_ANIMALES': 'Commission Filières Animales',
+          'AMENAGEMENT_HYDRO_AGRICOLE': 'Commission Aménagement'
+        };
+        return teamNames[equipe] || 'Commission Terrain';
+      }
+      return 'Commission Terrain';
     case 'ADMIN':
       return 'Tous les Dossiers';
     default:
@@ -706,7 +716,7 @@ function getWorkflowLocationText() {
     case 'GUC':
       return 'Guichet Unique Central';
     case 'COMMISSION_AHA_AF':
-      return 'Commission AHA-AF';
+      return 'Commission Vérification Terrain';
     case 'SERVICE_TECHNIQUE':
       return 'Service Technique';
     default:
@@ -769,11 +779,11 @@ function showScheduleVisitDialog() {
 
 function showCompleteVisitDialog() {
   // Navigate to terrain visit completion - would need separate dialog
-  console.log('Complete terrain visit for dossier:', dossierDetail.value?.dossier?.id);
+  console.log('Complete terrain inspection for dossier:', dossierDetail.value?.dossier?.id);
   toast.add({
     severity: 'info',
     summary: 'Info',
-    detail: 'Fonctionnalité de complétion en cours de développement',
+    detail: 'Fonctionnalité de finalisation d\'inspection en cours de développement',
     life: 3000
   });
 }
@@ -1008,7 +1018,7 @@ function getEmplacementLabel(emplacement) {
   const labels = {
     'ANTENNE': 'Antenne',
     'GUC': 'GUC',
-    'COMMISSION_AHA_AF': 'Commission',
+    'COMMISSION_AHA_AF': 'Commission Terrain',
     'SERVICE_TECHNIQUE': 'Service Technique'
   };
   return labels[emplacement] || emplacement;
