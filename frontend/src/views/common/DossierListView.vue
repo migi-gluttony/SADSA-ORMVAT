@@ -30,7 +30,7 @@ import AuthService from '@/services/AuthService';
 // Import role-specific components
 import AntenneListView from '@/components/agent_antenne/dossier_list/AntenneListView.vue';
 import GucListView from '@/components/agent_guc/dossier_list/GucListView.vue';
-import CommissionListView from '@/components/agent_guc/dossier_list/GucListView.vue';
+import CommissionListView from '@/components/agent_commission/dossier_list/CommissionListView.vue';
 
 // PrimeVue components
 import Button from 'primevue/button';

@@ -34,7 +34,7 @@ public class SecurityConfiguration {
                         .requestMatchers("/api/agent_commission/**").hasRole("AGENT_COMMISSION_TERRAIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // Common dossier endpoints - accessible by multiple roles including AGENT_COMMISSION
-                        .requestMatchers("/api/dossiers/**").hasAnyRole("AGENT_ANTENNE", "AGENT_GUC", "AGENT_COMMISSION", "ADMIN")
+                        .requestMatchers("/api/dossiers/**").hasAnyRole("AGENT_ANTENNE", "AGENT_GUC", "AGENT_COMMISSION_TERRAIN", "ADMIN")
                         // Any other request requires authentication
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

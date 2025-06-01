@@ -1,135 +1,249 @@
 <template>
   <Dialog 
-    v-model:visible="dialogVisible" 
-    modal 
+    v-model:visible="localVisible" 
     header="Ajouter une Note"
+    modal 
+    class="add-note-dialog"
     :style="{ width: '600px' }"
     @hide="resetForm"
   >
-    <div class="note-form">
+    <div class="dialog-content">
+      <!-- Dossier Information -->
       <div class="dossier-info">
-        <h4>Dossier: {{ dossier?.reference }}</h4>
-        <p>{{ getAgriculteurName() }} - {{ dossier?.sousRubriqueDesignation }}</p>
-      </div>
-
-      <div class="form-grid">
-        <div class="form-group">
-          <label for="noteSubject">Objet de la note *</label>
-          <InputText 
-            id="noteSubject"
-            v-model="form.objet" 
-            placeholder="Objet de la note..."
-            :class="{ 'p-invalid': errors.objet }"
-            class="w-full"
-          />
-          <small v-if="errors.objet" class="p-error">{{ errors.objet }}</small>
-        </div>
-
-        <div class="form-group">
-          <label for="noteType">Type de note</label>
-          <Select 
-            id="noteType"
-            v-model="form.typeNote" 
-            :options="noteTypes"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Sélectionner le type"
-            class="w-full"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="notePriority">Priorité</label>
-          <Select 
-            id="notePriority"
-            v-model="form.priorite" 
-            :options="priorityOptions"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Sélectionner la priorité"
-            class="w-full"
-          />
-        </div>
-
-        <div v-if="showDestinataireField" class="form-group">
-          <label for="noteDestinataire">Destinataire</label>
-          <Select 
-            id="noteDestinataire"
-            v-model="form.utilisateurDestinataireId" 
-            :options="availableUsers"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Sélectionner un destinataire"
-            class="w-full"
-            filter
-          />
+        <h4><i class="pi pi-folder"></i> Dossier concerné</h4>
+        <div class="info-grid">
+          <div><strong>Référence:</strong> {{ dossier?.reference }}</div>
+          <div><strong>Agriculteur:</strong> {{ dossier?.agriculteurNom }}</div>
+          <div><strong>Statut:</strong> {{ dossier?.statut }}</div>
         </div>
       </div>
 
-      <div class="form-group">
-        <label for="noteContent">Contenu de la note *</label>
-        <Textarea 
-          id="noteContent"
-          v-model="form.contenu" 
-          rows="6" 
-          placeholder="Décrivez votre note en détail..."
-          :class="{ 'p-invalid': errors.contenu }"
-          class="w-full"
-        />
-        <small v-if="errors.contenu" class="p-error">{{ errors.contenu }}</small>
-        <small class="char-count">{{ form.contenu?.length || 0 }} / 1000 caractères</small>
-      </div>
+      <!-- Note Form -->
+      <div class="note-form">
+        <div class="form-grid">
+          <!-- Subject -->
+          <div class="field-group">
+            <label for="objet">Objet de la note *</label>
+            <InputText 
+              id="objet"
+              v-model="formData.objet" 
+              placeholder="Ex: Demande de complément d'information"
+              :class="{ 'p-invalid': errors.objet }"
+            />
+            <small v-if="errors.objet" class="error-message">{{ errors.objet }}</small>
+          </div>
 
-      <div class="form-group">
-        <div class="checkbox-item">
-          <Checkbox 
-            id="requiresResponse"
-            v-model="form.requiresResponse" 
-            :binary="true"
+          <!-- Priority -->
+          <div class="field-group">
+            <label for="priorite">Priorité</label>
+            <Select 
+              id="priorite"
+              v-model="formData.priorite" 
+              :options="prioriteOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Sélectionner la priorité"
+            />
+          </div>
+
+          <!-- Type -->
+          <div class="field-group">
+            <label for="typeNote">Type de note</label>
+            <Select 
+              id="typeNote"
+              v-model="formData.typeNote" 
+              :options="typeNoteOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Sélectionner le type"
+            />
+          </div>
+
+          <!-- Visibility -->
+          <div class="field-group">
+            <label for="visibilite">Visibilité</label>
+            <Select 
+              id="visibilite"
+              v-model="formData.visibilite" 
+              :options="visibiliteOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Qui peut voir cette note"
+            />
+          </div>
+        </div>
+
+        <!-- Content -->
+        <div class="field-group">
+          <label for="contenu">Contenu de la note *</label>
+          <Textarea 
+            id="contenu"
+            v-model="formData.contenu" 
+            rows="4"
+            placeholder="Décrivez votre note, observation ou demande..."
+            :class="{ 'p-invalid': errors.contenu }"
           />
-          <label for="requiresResponse">Cette note nécessite une réponse</label>
+          <small v-if="errors.contenu" class="error-message">{{ errors.contenu }}</small>
+        </div>
+
+        <!-- Recipients (for notifications) -->
+        <div v-if="recipientOptions.length > 0" class="field-group">
+          <label for="destinataires">Notifier les personnes suivantes</label>
+          <MultiSelect 
+            id="destinataires"
+            v-model="formData.destinataires" 
+            :options="recipientOptions"
+            optionLabel="nom"
+            optionValue="id"
+            placeholder="Sélectionner les destinataires"
+            :maxSelectedLabels="3"
+            selectedItemsLabel="{0} personnes sélectionnées"
+          />
+          <small class="field-help">Ces personnes recevront une notification par email</small>
+        </div>
+
+        <!-- Tags -->
+        <div class="field-group">
+          <label for="tags">Mots-clés (optionnel)</label>
+          <Chips 
+            id="tags"
+            v-model="formData.tags" 
+            placeholder="Ajouter des mots-clés pour faciliter la recherche"
+            :max="5"
+          />
+          <small class="field-help">Appuyez sur Entrée pour ajouter un mot-clé</small>
+        </div>
+
+        <!-- Attachments -->
+        <div class="field-group">
+          <label for="attachments">Pièces jointes (optionnel)</label>
+          <FileUpload 
+            id="attachments"
+            mode="advanced"
+            :multiple="true"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+            :maxFileSize="5000000"
+            :fileLimit="3"
+            @select="onFilesSelected"
+            @remove="onFileRemoved"
+            :customUpload="true"
+            :auto="false"
+            chooseLabel="Choisir des fichiers"
+            uploadLabel="Joindre"
+            cancelLabel="Annuler"
+          >
+            <template #empty>
+              <div class="upload-empty">
+                <i class="pi pi-file"></i>
+                <p>Glissez-déposez des fichiers ici ou cliquez pour sélectionner.</p>
+                <p class="upload-help">Maximum 3 fichiers, 5MB par fichier</p>
+              </div>
+            </template>
+          </FileUpload>
+        </div>
+
+        <!-- Follow-up Options -->
+        <div class="field-group">
+          <div class="checkbox-options">
+            <div class="checkbox-item">
+              <Checkbox 
+                id="demandeReponse" 
+                v-model="formData.demandeReponse" 
+                binary 
+              />
+              <label for="demandeReponse">Demander une réponse</label>
+            </div>
+            
+            <div class="checkbox-item">
+              <Checkbox 
+                id="rappelAutomatique" 
+                v-model="formData.rappelAutomatique" 
+                binary 
+              />
+              <label for="rappelAutomatique">Rappel automatique si pas de réponse sous 3 jours</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Date limite (if response requested) -->
+        <div v-if="formData.demandeReponse" class="field-group">
+          <label for="dateLimiteReponse">Date limite pour la réponse</label>
+          <Calendar 
+            id="dateLimiteReponse"
+            v-model="formData.dateLimiteReponse" 
+            :minDate="minDate"
+            dateFormat="dd/mm/yy"
+            placeholder="Sélectionner une date limite"
+            :showIcon="true"
+          />
         </div>
       </div>
 
-      <!-- Note template suggestions -->
-      <div v-if="noteTemplates.length > 0" class="note-templates">
-        <h5>Modèles de notes</h5>
-        <div class="template-buttons">
-          <Button 
-            v-for="template in noteTemplates" 
-            :key="template.id"
-            :label="template.name"
-            @click="applyTemplate(template)"
-            class="p-button-outlined p-button-sm template-btn"
-            size="small"
-          />
+      <!-- Preview -->
+      <div v-if="showPreview" class="note-preview">
+        <h4><i class="pi pi-eye"></i> Aperçu de la note</h4>
+        <div class="preview-content">
+          <div class="preview-header">
+            <div class="preview-subject">{{ formData.objet || 'Objet non défini' }}</div>
+            <Tag 
+              :value="formData.priorite || 'NORMALE'" 
+              :severity="getPrioritySeverity(formData.priorite)"
+              class="priority-tag"
+            />
+          </div>
+          <div class="preview-meta">
+            <span><strong>Type:</strong> {{ getTypeLabel(formData.typeNote) }}</span>
+            <span><strong>Visibilité:</strong> {{ getVisibilityLabel(formData.visibilite) }}</span>
+          </div>
+          <div class="preview-body">
+            {{ formData.contenu || 'Contenu non défini' }}
+          </div>
+          <div v-if="formData.tags?.length > 0" class="preview-tags">
+            <strong>Mots-clés:</strong>
+            <Tag 
+              v-for="tag in formData.tags" 
+              :key="tag"
+              :value="tag"
+              severity="info"
+              class="tag-item"
+            />
+          </div>
         </div>
       </div>
     </div>
 
     <template #footer>
-      <Button 
-        label="Annuler" 
-        icon="pi pi-times" 
-        @click="closeDialog"
-        class="p-button-outlined"
-      />
-      <Button 
-        label="Ajouter la Note" 
-        icon="pi pi-check" 
-        @click="submitNote"
-        class="p-button-success"
-        :loading="loading"
-        :disabled="!isFormValid"
-      />
+      <div class="dialog-footer">
+        <Button 
+          label="Annuler" 
+          icon="pi pi-times" 
+          @click="localVisible = false"
+          class="p-button-text"
+        />
+        <Button 
+          :label="showPreview ? 'Modifier' : 'Aperçu'" 
+          :icon="showPreview ? 'pi pi-pencil' : 'pi pi-eye'" 
+          @click="togglePreview"
+          class="p-button-outlined"
+        />
+        <Button 
+          label="Ajouter la note" 
+          icon="pi pi-plus" 
+          @click="addNote"
+          :loading="loading"
+          class="p-button-success"
+          :disabled="!canSubmit"
+        />
+      </div>
     </template>
   </Dialog>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
-import AuthService from '@/services/AuthService';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { useToast } from 'primevue/usetoast';
 import ApiService from '@/services/ApiService';
+import AuthService from '@/services/AuthService';
 
 // PrimeVue components
 import Dialog from 'primevue/dialog';
@@ -137,9 +251,14 @@ import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import Select from 'primevue/select';
+import MultiSelect from 'primevue/multiselect';
+import Calendar from 'primevue/calendar';
 import Checkbox from 'primevue/checkbox';
+import Chips from 'primevue/chips';
+import FileUpload from 'primevue/fileupload';
+import Tag from 'primevue/tag';
 
-// Props & Emits
+// Props
 const props = defineProps({
   visible: {
     type: Boolean,
@@ -151,264 +270,329 @@ const props = defineProps({
   }
 });
 
+// Emits
 const emit = defineEmits(['update:visible', 'note-added']);
+
+const toast = useToast();
 
 // State
 const loading = ref(false);
-const availableUsers = ref([]);
-const errors = ref({});
+const showPreview = ref(false);
+const selectedFiles = ref([]);
+const recipientOptions = ref([]);
 
-const form = ref({
+// Form data
+const formData = reactive({
   objet: '',
   contenu: '',
-  typeNote: 'INFORMATION',
   priorite: 'NORMALE',
-  utilisateurDestinataireId: null,
-  requiresResponse: false
+  typeNote: 'INFORMATION',
+  visibilite: 'EQUIPE',
+  destinataires: [],
+  tags: [],
+  demandeReponse: false,
+  rappelAutomatique: false,
+  dateLimiteReponse: null
 });
 
+// Validation errors
+const errors = reactive({
+  objet: '',
+  contenu: ''
+});
+
+// Options
+const prioriteOptions = ref([
+  { label: 'Haute', value: 'HAUTE' },
+  { label: 'Normale', value: 'NORMALE' },
+  { label: 'Faible', value: 'FAIBLE' }
+]);
+
+const typeNoteOptions = ref([
+  { label: 'Information', value: 'INFORMATION' },
+  { label: 'Question', value: 'QUESTION' },
+  { label: 'Demande de complément', value: 'DEMANDE_COMPLEMENT' },
+  { label: 'Observation', value: 'OBSERVATION' },
+  { label: 'Recommandation', value: 'RECOMMANDATION' },
+  { label: 'Alerte', value: 'ALERTE' }
+]);
+
+const visibiliteOptions = ref([
+  { label: 'Équipe uniquement', value: 'EQUIPE' },
+  { label: 'Service complet', value: 'SERVICE' },
+  { label: 'Tous les intervenants', value: 'TOUS' },
+  { label: 'Privée', value: 'PRIVE' }
+]);
+
 // Computed
-const dialogVisible = computed({
+const localVisible = computed({
   get: () => props.visible,
   set: (value) => emit('update:visible', value)
 });
 
-const currentUser = computed(() => AuthService.getCurrentUser());
-
-const showDestinataireField = computed(() => {
-  return form.value.typeNote === 'QUESTION' || 
-         form.value.typeNote === 'DEMANDE' ||
-         form.value.requiresResponse;
+const minDate = computed(() => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return tomorrow;
 });
 
-const isFormValid = computed(() => {
-  return form.value.objet?.trim() && 
-         form.value.contenu?.trim() && 
-         form.value.contenu.length <= 1000;
+const canSubmit = computed(() => {
+  return formData.objet.trim() && formData.contenu.trim();
 });
 
-// Options
-const noteTypes = ref([
-  { label: 'Information', value: 'INFORMATION' },
-  { label: 'Question', value: 'QUESTION' },
-  { label: 'Demande', value: 'DEMANDE' },
-  { label: 'Observation', value: 'OBSERVATION' },
-  { label: 'Recommandation', value: 'RECOMMANDATION' },
-  { label: 'Problème', value: 'PROBLEME' },
-  { label: 'Suivi', value: 'SUIVI' }
-]);
-
-const priorityOptions = ref([
-  { label: 'Faible', value: 'FAIBLE' },
-  { label: 'Normale', value: 'NORMALE' },
-  { label: 'Haute', value: 'HAUTE' }
-]);
-
-const noteTemplates = ref([
-  {
-    id: 1,
-    name: 'Documents manquants',
-    objet: 'Documents manquants',
-    contenu: 'Les documents suivants sont manquants ou incomplets :\n\n- \n- \n\nMerci de compléter le dossier.',
-    typeNote: 'PROBLEME',
-    priorite: 'NORMALE'
-  },
-  {
-    id: 2,
-    name: 'Validation OK',
-    objet: 'Dossier validé',
-    contenu: 'Le dossier a été vérifié et validé. Tous les documents sont conformes et complets.',
-    typeNote: 'INFORMATION',
-    priorite: 'NORMALE'
-  },
-  {
-    id: 3,
-    name: 'Demande de clarification',
-    objet: 'Clarification nécessaire',
-    contenu: 'Des clarifications sont nécessaires concernant :\n\n- \n\nMerci de fournir des précisions.',
-    typeNote: 'QUESTION',
-    priorite: 'NORMALE'
-  }
-]);
-
-// Watchers
-watch(() => props.visible, (newValue) => {
-  if (newValue) {
-    loadAvailableUsers();
-  }
-});
-
-watch(() => form.value.typeNote, (newType) => {
-  // Auto-adjust priority based on note type
-  if (newType === 'PROBLEME') {
-    form.value.priorite = 'HAUTE';
-  } else if (newType === 'QUESTION' || newType === 'DEMANDE') {
-    form.value.requiresResponse = true;
+// Watch for dialog opening
+watch(() => props.visible, (newVisible) => {
+  if (newVisible && props.dossier) {
+    loadRecipients();
+    initializeForm();
   }
 });
 
 // Methods
-async function loadAvailableUsers() {
+async function loadRecipients() {
   try {
-    // Load users based on current user role and dossier context
-    const userRole = currentUser.value?.role;
-    
-    if (userRole === 'AGENT_GUC') {
-      // GUC can send notes to antenne agents
-      const response = await ApiService.get('/users/antenne-agents', {
-        antenneId: props.dossier?.antenneId
-      });
-      availableUsers.value = response.map(user => ({
-        label: `${user.prenom} ${user.nom} (${user.antenne?.designation})`,
-        value: user.id
-      }));
-    } else if (userRole === 'AGENT_ANTENNE') {
-      // Antenne can send notes to GUC agents
-      const response = await ApiService.get('/users/guc-agents');
-      availableUsers.value = response.map(user => ({
-        label: `${user.prenom} ${user.nom} (GUC)`,
-        value: user.id
-      }));
-    }
-  } catch (error) {
-    console.error('Erreur lors du chargement des utilisateurs:', error);
-    availableUsers.value = [];
+    const response = await ApiService.get(`/dossiers/${props.dossier.id}/participants`);
+    recipientOptions.value = response.filter(user => 
+      user.id !== AuthService.getCurrentUser()?.id
+    );
+  } catch (err) {
+    console.error('Error loading recipients:', err);
+    recipientOptions.value = [];
   }
 }
 
-function getAgriculteurName() {
-  if (!props.dossier) return '';
-  return `${props.dossier.agriculteurPrenom || ''} ${props.dossier.agriculteurNom || ''}`.trim();
-}
+function initializeForm() {
+  // Reset form
+  Object.assign(formData, {
+    objet: '',
+    contenu: '',
+    priorite: 'NORMALE',
+    typeNote: 'INFORMATION',
+    visibilite: 'EQUIPE',
+    destinataires: [],
+    tags: [],
+    demandeReponse: false,
+    rappelAutomatique: false,
+    dateLimiteReponse: null
+  });
 
-function applyTemplate(template) {
-  form.value.objet = template.objet;
-  form.value.contenu = template.contenu;
-  form.value.typeNote = template.typeNote;
-  form.value.priorite = template.priorite;
+  // Clear errors
+  Object.keys(errors).forEach(key => {
+    errors[key] = '';
+  });
+
+  selectedFiles.value = [];
+  showPreview.value = false;
 }
 
 function validateForm() {
-  errors.value = {};
+  let isValid = true;
   
-  if (!form.value.objet?.trim()) {
-    errors.value.objet = 'L\'objet est requis';
+  // Clear previous errors
+  Object.keys(errors).forEach(key => {
+    errors[key] = '';
+  });
+
+  // Required fields validation
+  if (!formData.objet.trim()) {
+    errors.objet = 'L\'objet est requis';
+    isValid = false;
   }
-  
-  if (!form.value.contenu?.trim()) {
-    errors.value.contenu = 'Le contenu est requis';
-  } else if (form.value.contenu.length > 1000) {
-    errors.value.contenu = 'Le contenu ne doit pas dépasser 1000 caractères';
+
+  if (!formData.contenu.trim()) {
+    errors.contenu = 'Le contenu est requis';
+    isValid = false;
   }
-  
-  return Object.keys(errors.value).length === 0;
+
+  return isValid;
 }
 
-async function submitNote() {
-  if (!validateForm()) return;
-  
+function togglePreview() {
+  if (!showPreview.value && !validateForm()) {
+    return;
+  }
+  showPreview.value = !showPreview.value;
+}
+
+function onFilesSelected(event) {
+  selectedFiles.value = [...event.files];
+}
+
+function onFileRemoved(event) {
+  const index = selectedFiles.value.findIndex(file => file.name === event.file.name);
+  if (index > -1) {
+    selectedFiles.value.splice(index, 1);
+  }
+}
+
+async function addNote() {
+  if (!validateForm()) {
+    return;
+  }
+
   try {
     loading.value = true;
-    
-    const noteData = {
+
+    const payload = {
       dossierId: props.dossier.id,
-      objet: form.value.objet.trim(),
-      contenu: form.value.contenu.trim(),
-      typeNote: form.value.typeNote,
-      priorite: form.value.priorite,
-      utilisateurDestinataireId: form.value.utilisateurDestinataireId,
-      requiresResponse: form.value.requiresResponse
+      objet: formData.objet.trim(),
+      contenu: formData.contenu.trim(),
+      priorite: formData.priorite,
+      typeNote: formData.typeNote,
+      visibilite: formData.visibilite,
+      destinataires: formData.destinataires,
+      tags: formData.tags,
+      demandeReponse: formData.demandeReponse,
+      rappelAutomatique: formData.rappelAutomatique,
+      dateLimiteReponse: formData.dateLimiteReponse?.toISOString() || null,
+      attachments: selectedFiles.value
     };
-    
-    await ApiService.post(`/dossiers/${props.dossier.id}/notes`, noteData);
-    
-    emit('note-added');
-    closeDialog();
-    
-  } catch (error) {
-    console.error('Erreur lors de l\'ajout de la note:', error);
-    
-    if (error.response?.data?.fieldErrors) {
-      errors.value = error.response.data.fieldErrors;
-    } else {
-      // Show general error - this would typically be handled by a toast in the parent
+
+    const response = await ApiService.post('/notes', payload);
+
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Succès',
+        detail: 'Note ajoutée avec succès',
+        life: 4000
+      });
+
+      emit('note-added', response.data);
+      localVisible.value = false;
     }
+
+  } catch (err) {
+    console.error('Error adding note:', err);
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: err.message || 'Impossible d\'ajouter la note',
+      life: 4000
+    });
   } finally {
     loading.value = false;
   }
 }
 
-function resetForm() {
-  form.value = {
-    objet: '',
-    contenu: '',
-    typeNote: 'INFORMATION',
-    priorite: 'NORMALE',
-    utilisateurDestinataireId: null,
-    requiresResponse: false
+function getPrioritySeverity(priority) {
+  const severityMap = {
+    'HAUTE': 'danger',
+    'NORMALE': 'info',
+    'FAIBLE': 'secondary'
   };
-  errors.value = {};
+  return severityMap[priority] || 'info';
 }
 
-function closeDialog() {
-  emit('update:visible', false);
+function getTypeLabel(type) {
+  const option = typeNoteOptions.value.find(opt => opt.value === type);
+  return option ? option.label : type;
+}
+
+function getVisibilityLabel(visibility) {
+  const option = visibiliteOptions.value.find(opt => opt.value === visibility);
+  return option ? option.label : visibility;
+}
+
+function resetForm() {
+  if (!loading.value) {
+    initializeForm();
+  }
 }
 </script>
 
 <style scoped>
-.note-form {
-  padding: 0;
+:deep(.add-note-dialog .p-dialog-header) {
+  background: var(--primary-color);
+  color: white;
 }
 
+:deep(.add-note-dialog .p-dialog-header .p-dialog-title) {
+  font-weight: 600;
+}
+
+:deep(.add-note-dialog .p-dialog-header .p-dialog-header-icon) {
+  color: white;
+}
+
+.dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* Dossier Information */
 .dossier-info {
   background: var(--section-background);
+  border-radius: 8px;
   padding: 1rem;
-  border-radius: var(--border-radius-sm);
   border: 1px solid var(--card-border);
-  margin-bottom: 1.5rem;
 }
 
 .dossier-info h4 {
-  margin: 0 0 0.5rem 0;
   color: var(--primary-color);
+  margin: 0 0 1rem 0;
   font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.dossier-info p {
-  margin: 0;
-  color: var(--text-secondary);
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
   font-size: 0.9rem;
 }
 
+/* Form */
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
-.form-group {
-  margin-bottom: 1.5rem;
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
-.form-group label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
+.field-group label {
+  font-weight: 500;
   color: var(--text-color);
   font-size: 0.9rem;
 }
 
-.form-group .w-full {
+.field-group .p-inputtext,
+.field-group .p-textarea,
+.field-group .p-select,
+.field-group .p-multiselect,
+.field-group .p-calendar,
+.field-group .p-chips {
   width: 100%;
 }
 
-.char-count {
-  display: block;
-  text-align: right;
-  color: var(--text-muted);
-  font-size: 0.75rem;
+.error-message {
+  color: var(--danger-color);
+  font-size: 0.8rem;
   margin-top: 0.25rem;
+}
+
+.field-help {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+.checkbox-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .checkbox-item {
@@ -419,145 +603,145 @@ function closeDialog() {
 
 .checkbox-item label {
   margin: 0;
-  font-weight: 400;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   cursor: pointer;
 }
 
-.note-templates {
+/* File Upload */
+:deep(.p-fileupload .p-fileupload-content) {
   background: var(--section-background);
-  border: 1px solid var(--card-border);
-  border-radius: var(--border-radius-sm);
-  padding: 1rem;
-  margin-top: 1.5rem;
+  border: 1px dashed var(--card-border);
+  border-radius: 8px;
 }
 
-.note-templates h5 {
-  margin: 0 0 0.75rem 0;
-  color: var(--text-color);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.template-buttons {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.template-btn {
-  font-size: 0.8rem;
-  padding: 0.25rem 0.75rem;
-}
-
-/* Validation styles */
-:deep(.p-invalid) {
-  border-color: var(--danger-color) !important;
-}
-
-:deep(.p-invalid:focus) {
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2) !important;
-}
-
-.p-error {
-  color: var(--danger-color);
-  font-size: 0.8rem;
-  margin-top: 0.25rem;
-}
-
-/* Dialog styling */
-:deep(.p-dialog-content) {
+.upload-empty {
+  text-align: center;
   padding: 1.5rem;
-}
-
-:deep(.p-dialog-footer) {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid var(--card-border);
-  background: var(--section-background);
-}
-
-:deep(.p-dialog-footer .p-button) {
-  margin-left: 0.5rem;
-}
-
-:deep(.p-dialog-footer .p-button:first-child) {
-  margin-left: 0;
-}
-
-/* Responsive design */
-@media (max-width: 768px) {
-  .form-grid {
-    grid-template-columns: 1fr;
-    gap: 0;
-  }
-  
-  .template-buttons {
-    flex-direction: column;
-  }
-  
-  .template-btn {
-    width: 100%;
-    justify-content: center;
-  }
-}
-
-/* Dark mode adjustments */
-.dark-mode .dossier-info {
-  background: var(--clr-surface-a20);
-  border-color: var(--clr-surface-a30);
-}
-
-.dark-mode .note-templates {
-  background: var(--clr-surface-a20);
-  border-color: var(--clr-surface-a30);
-}
-
-.dark-mode .dossier-info h4,
-.dark-mode .note-templates h5 {
-  color: var(--text-color);
-}
-
-.dark-mode .dossier-info p {
   color: var(--text-secondary);
 }
 
-/* Focus states */
-:deep(.p-inputtext:focus),
-:deep(.p-textarea:focus),
-:deep(.p-dropdown:focus) {
-  border-color: var(--primary-color) !important;
-  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2) !important;
+.upload-empty i {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  display: block;
+  color: var(--primary-color);
 }
 
-/* Select dropdown styling */
-:deep(.p-dropdown-panel) {
-  box-shadow: var(--shadow-lg);
+.upload-empty p {
+  margin: 0.25rem 0;
+}
+
+.upload-help {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Preview */
+.note-preview {
+  background: var(--section-background);
+  border-radius: 8px;
+  padding: 1rem;
   border: 1px solid var(--card-border);
 }
 
-:deep(.p-dropdown-item:hover) {
-  background: var(--section-background);
+.note-preview h4 {
+  color: var(--primary-color);
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-:deep(.p-dropdown-item.p-highlight) {
-  background: var(--primary-color);
-  color: var(--text-on-primary);
+.preview-content {
+  background: var(--background-color);
+  border-radius: 6px;
+  padding: 1rem;
+  border: 1px solid var(--card-border);
 }
 
-/* Textarea resize */
-:deep(.p-textarea) {
-  resize: vertical;
-  min-height: 120px;
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--card-border);
 }
 
-/* Character limit warning */
-.char-count.warning {
-  color: var(--warning-color);
-  font-weight: 500;
-}
-
-.char-count.error {
-  color: var(--danger-color);
+.preview-subject {
   font-weight: 600;
+  color: var(--text-color);
+  font-size: 1rem;
+}
+
+.priority-tag {
+  font-size: 0.7rem !important;
+}
+
+.preview-meta {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.preview-body {
+  color: var(--text-color);
+  line-height: 1.6;
+  margin-bottom: 0.75rem;
+  white-space: pre-wrap;
+}
+
+.preview-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+}
+
+.tag-item {
+  font-size: 0.7rem !important;
+  padding: 0.125rem 0.375rem !important;
+}
+
+/* Dialog Footer */
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  :deep(.add-note-dialog) {
+    width: 95vw !important;
+    max-width: none !important;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-header {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+
+  .preview-meta {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .dialog-footer {
+    flex-direction: column;
+  }
 }
 </style>
