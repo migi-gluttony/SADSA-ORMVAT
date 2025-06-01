@@ -9,16 +9,16 @@ import CreateDossierView from '@/views/agent_antenne/CreateDossierView.vue'
 import DossierListView from '@/views/common/DossierListView.vue'
 import DossierDetailView from '@/views/common/DossierDetailView.vue'
 import AdminDocumentRequisView from '@/views/admin/AdminDocumentRequisView.vue'
-import DocumentFillingView from '@/views/agent_antenne/DocumentFillingView.vue'
+import DocumentFillingView from '@/components/agent_antenne/document_filling/DocumentFillingView.vue'
 import ProfileView from '@/views/common/ProfileView.vue'
-import TerrainVisitsView from '@/views/commission/TerrainVisitsView.vue'
+import TerrainVisitsView from '@/views/agent_commission/TerrainVisitsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      name: 'landing',  // ✅ Fixed: Added proper name
+      name: 'landing',
       component: LandingPage,
       meta: { guest: true }
     },

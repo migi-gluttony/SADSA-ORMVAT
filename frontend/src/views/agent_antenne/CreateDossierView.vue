@@ -494,7 +494,7 @@
 <script setup>
 import { ref, onMounted, computed, watch, onBeforeUnmount, nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import PrintableReceipt from '@/components/agent_antenne/PrintableReceipt.vue';
+import PrintableReceipt from '@/components/agent_antenne/dossier_create/PrintableReceipt.vue';
 import ApiService from '@/services/ApiService';
 
 // PrimeVue components

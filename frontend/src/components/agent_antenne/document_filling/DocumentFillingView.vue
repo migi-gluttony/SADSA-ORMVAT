@@ -255,7 +255,7 @@ import { useRoute } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 import ApiService from '@/services/ApiService';
-import DynamicForm from '@/components/agent_antenne/DynamicForm.vue';
+import DynamicForm from '@/components/agent_antenne/document_filling/DynamicForm.vue';
 
 // PrimeVue Components
 import Button from 'primevue/button';
