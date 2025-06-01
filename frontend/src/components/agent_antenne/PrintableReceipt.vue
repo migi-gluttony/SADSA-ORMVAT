@@ -24,6 +24,8 @@
       <!-- Document Title -->
       <div class="document-title">
         <h1>Système Automatisé de Demande de Subventions Agricoles (SADSA)</h1>
+        <h2>Récépissé de Dépôt de Dossier</h2>
+        <h3 v-if="receipt.reference">Référence: {{ receipt.reference }}</h3>
       </div>
       
       <!-- Receipt Content -->
@@ -64,11 +66,11 @@
               </tr>
               <tr>
                 <td class="label">CDA :</td>
-                <td class="value">{{ receipt.cdaNom }}</td>
+                <td class="value">{{ receipt.cdaNom || receipt.cdaName }}</td>
               </tr>
               <tr>
                 <td class="label">Antenne :</td>
-                <td class="value">{{ receipt.antenne }}</td>
+                <td class="value">{{ receipt.antenne || receipt.antenneName }}</td>
               </tr>
               <tr>
                 <td class="label">Date de dépôt :</td>
@@ -133,7 +135,7 @@
           <p>Email : sadsa@ormvatadla.ma</p>
         </div>
         <div class="signature-area">
-          <p>Fait à {{ receipt.antenne }}, le {{ formatDate(receipt.dateDepot) }}</p>
+          <p>Fait à {{ receipt.antenne || receipt.antenneName }}, le {{ formatDate(receipt.dateDepot) }}</p>
           <div class="signature">
             <p>Cachet et Signature</p>
             <div class="signature-line"></div>
@@ -452,4 +454,4 @@ function formatDate(date) {
     box-shadow: 0 0 20px rgba(0,0,0,0.1);
   }
 }
-</style>
+</style>  

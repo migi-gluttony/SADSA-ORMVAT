@@ -40,6 +40,10 @@ public class Utilisateur implements UserDetails {
     @Column(nullable = false)
     private UserRole role;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "equipe_commission")
+    private EquipeCommission equipeCommission;
+
     @Column
     private String statut;
 
@@ -56,13 +60,56 @@ public class Utilisateur implements UserDetails {
     @JoinColumn(name = "antenne_id")
     private Antenne antenne;
 
-    // Update Role enum
+    // Updated Role enum with neutral commission name
     public enum UserRole {
         ADMIN,
         AGENT_ANTENNE,
         AGENT_GUC,
-        AGENT_COMMISSION,
-        COMMISSION_AHA_AF
+        AGENT_COMMISSION_TERRAIN, // Renamed from COMMISSION_AHA_AF
+        SERVICE_TECHNIQUE
+    }
+
+    // New enum for commission teams based on project types
+    public enum EquipeCommission {
+        FILIERES_VEGETALES("Équipe Filières Végétales", "Inspection terrain pour projets de production végétale"),
+        FILIERES_ANIMALES("Équipe Filières Animales", "Inspection terrain pour projets de production animale"),
+        AMENAGEMENT_HYDRO_AGRICOLE("Équipe Aménagement Hydro-Agricole", "Inspection terrain pour projets d'infrastructure hydro-agricole");
+
+        private final String designation;
+        private final String description;
+
+        EquipeCommission(String designation, String description) {
+            this.designation = designation;
+            this.description = description;
+        }
+
+        public String getDesignation() {
+            return designation;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        // Get team based on rubrique ID
+        public static EquipeCommission getTeamForRubrique(Long rubriqueId) {
+            switch (rubriqueId.intValue()) {
+                case 1: return FILIERES_VEGETALES;
+                case 2: return FILIERES_ANIMALES;
+                case 3: return AMENAGEMENT_HYDRO_AGRICOLE;
+                default: return FILIERES_VEGETALES; // Default fallback
+            }
+        }
+
+        // Get team display name for UI
+        public String getDisplayName() {
+            switch (this) {
+                case FILIERES_VEGETALES: return "Filières Végétales";
+                case FILIERES_ANIMALES: return "Filières Animales";
+                case AMENAGEMENT_HYDRO_AGRICOLE: return "Aménagement Hydro-Agricole";
+                default: return this.designation;
+            }
+        }
     }
 
     @Override
@@ -98,5 +145,15 @@ public class Utilisateur implements UserDetails {
     @Override
     public boolean isEnabled() {
         return "actif".equalsIgnoreCase(statut);
+    }
+
+    // Helper method to check if user is commission agent
+    public boolean isCommissionAgent() {
+        return this.role == UserRole.AGENT_COMMISSION_TERRAIN;
+    }
+
+    // Helper method to get team display info
+    public String getEquipeDisplayName() {
+        return equipeCommission != null ? equipeCommission.getDisplayName() : null;
     }
 }

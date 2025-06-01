@@ -111,7 +111,23 @@ public class TerrainVisitService {
     public VisitListResponse getTerrainVisits(VisitFilterRequest filterRequest, String userEmail) {
         try {
             Utilisateur utilisateur = getCommissionAgent(userEmail);
-            List<VisiteTerrain> allVisits = visiteTerrainRepository.findByUtilisateurCommissionId(utilisateur.getId());
+            
+            // Filter visits based on user's team assignment
+            List<VisiteTerrain> allVisits;
+            if (utilisateur.getEquipeCommission() != null) {
+                // Get visits only for this agent's team project type
+                allVisits = visiteTerrainRepository.findByUtilisateurCommissionId(utilisateur.getId())
+                        .stream()
+                        .filter(visite -> {
+                            Long rubriqueId = visite.getDossier().getSousRubrique().getRubrique().getId();
+                            Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
+                            return equipeRequise.equals(utilisateur.getEquipeCommission());
+                        })
+                        .collect(Collectors.toList());
+            } else {
+                // Fallback: see all visits assigned to this agent (for admins or unassigned agents)
+                allVisits = visiteTerrainRepository.findByUtilisateurCommissionId(utilisateur.getId());
+            }
 
             // Apply filters
             List<VisiteTerrain> filteredVisits = applyFilters(allVisits, filterRequest);
@@ -167,6 +183,17 @@ public class TerrainVisitService {
                 throw new RuntimeException("Accès non autorisé à cette visite");
             }
 
+            // Additional check for team compatibility
+            if (utilisateur.getEquipeCommission() != null) {
+                Long rubriqueId = visite.getDossier().getSousRubrique().getRubrique().getId();
+                Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
+                if (!equipeRequise.equals(utilisateur.getEquipeCommission()) && 
+                    !utilisateur.getRole().equals(Utilisateur.UserRole.ADMIN)) {
+                    throw new RuntimeException("Cette visite n'est pas assignée à votre équipe (" + 
+                            utilisateur.getEquipeCommission().getDisplayName() + ")");
+                }
+            }
+
             return mapToVisiteTerrainResponse(visite, utilisateur);
 
         } catch (Exception e) {
@@ -190,6 +217,18 @@ public class TerrainVisitService {
                 throw new RuntimeException("Le dossier n'est pas dans le bon statut pour une visite terrain");
             }
 
+            // Check if agent's team matches dossier's project type
+            if (utilisateur.getEquipeCommission() != null) {
+                Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
+                Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
+                if (!equipeRequise.equals(utilisateur.getEquipeCommission()) && 
+                    !utilisateur.getRole().equals(Utilisateur.UserRole.ADMIN)) {
+                    throw new RuntimeException("Ce dossier n'est pas assigné à votre équipe (" + 
+                            utilisateur.getEquipeCommission().getDisplayName() + 
+                            "). Il nécessite l'équipe " + equipeRequise.getDisplayName());
+                }
+            }
+
             // Create new terrain visit
             VisiteTerrain visite = new VisiteTerrain();
             visite.setDossier(dossier);
@@ -207,11 +246,13 @@ public class TerrainVisitService {
             dossierRepository.save(dossier);
 
             // Update workflow
-            updateWorkflowForTerrainVisit(dossier, utilisateur, "Visite terrain programmée");
+            updateWorkflowForTerrainVisit(dossier, utilisateur, "Visite terrain programmée par " + 
+                    (utilisateur.getEquipeCommission() != null ? utilisateur.getEquipeCommission().getDisplayName() : "Commission"));
 
             // Create audit trail
             createAuditTrail("VISITE_TERRAIN_PROGRAMMEE", dossier, utilisateur, 
-                    "Visite terrain programmée pour le " + request.getDateVisite());
+                    "Visite terrain programmée pour le " + request.getDateVisite() + 
+                    " par " + (utilisateur.getEquipeCommission() != null ? utilisateur.getEquipeCommission().getDisplayName() : "Commission"));
 
             return TerrainVisitActionResponse.builder()
                     .success(true)
@@ -312,9 +353,12 @@ public class TerrainVisitService {
             updateWorkflowForVisitCompletion(dossier, utilisateur, request.getApprouve(), 
                     request.getObservations());
 
-            // Create audit trail
+            // Create audit trail with team information
             String action = request.getApprouve() ? "VISITE_TERRAIN_APPROUVEE" : "VISITE_TERRAIN_REJETEE";
-            createAuditTrail(action, dossier, utilisateur, request.getObservations());
+            String description = (request.getApprouve() ? "Terrain approuvé" : "Terrain rejeté") + 
+                    " par " + (utilisateur.getEquipeCommission() != null ? utilisateur.getEquipeCommission().getDisplayName() : "Commission") +
+                    ". " + request.getObservations();
+            createAuditTrail(action, dossier, utilisateur, description);
 
             return TerrainVisitActionResponse.builder()
                     .success(true)
@@ -386,7 +430,8 @@ public class TerrainVisitService {
 
             if (photosUploaded > 0) {
                 createAuditTrail("PHOTOS_VISITE_AJOUTEES", visite.getDossier(), utilisateur,
-                        photosUploaded + " photo(s) ajoutée(s) à la visite terrain");
+                        photosUploaded + " photo(s) ajoutée(s) à la visite terrain par " + 
+                        (utilisateur.getEquipeCommission() != null ? utilisateur.getEquipeCommission().getDisplayName() : "Commission"));
             }
 
             return TerrainVisitActionResponse.builder()
@@ -434,7 +479,8 @@ public class TerrainVisitService {
             photoVisiteRepository.delete(photo);
 
             createAuditTrail("PHOTO_VISITE_SUPPRIMEE", visite.getDossier(), utilisateur,
-                    "Photo supprimée: " + photo.getNomFichier());
+                    "Photo supprimée: " + photo.getNomFichier() + " par " + 
+                    (utilisateur.getEquipeCommission() != null ? utilisateur.getEquipeCommission().getDisplayName() : "Commission"));
 
             return TerrainVisitActionResponse.builder()
                     .success(true)
@@ -455,9 +501,9 @@ public class TerrainVisitService {
         Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
-        if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION) &&
+        if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION_TERRAIN) &&
             !utilisateur.getRole().equals(Utilisateur.UserRole.ADMIN)) {
-            throw new RuntimeException("Accès non autorisé - rôle commission requis");
+            throw new RuntimeException("Accès non autorisé - rôle Commission de Vérification Terrain requis");
         }
 
         return utilisateur;
@@ -469,17 +515,37 @@ public class TerrainVisitService {
     }
 
     private boolean canModifyVisit(VisiteTerrain visite, Utilisateur user) {
-        return (user.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION) &&
+        boolean isAssignedAgent = user.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION_TERRAIN) &&
                 visite.getUtilisateurCommission().getId().equals(user.getId()) &&
-                visite.getDateConstat() == null) ||
-                user.getRole().equals(Utilisateur.UserRole.ADMIN);
+                visite.getDateConstat() == null;
+        
+        boolean isAdmin = user.getRole().equals(Utilisateur.UserRole.ADMIN);
+        
+        // Additional check for team compatibility
+        if (isAssignedAgent && user.getEquipeCommission() != null) {
+            Long rubriqueId = visite.getDossier().getSousRubrique().getRubrique().getId();
+            Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
+            return equipeRequise.equals(user.getEquipeCommission());
+        }
+        
+        return isAssignedAgent || isAdmin;
     }
 
     private boolean canCompleteVisit(VisiteTerrain visite, Utilisateur user) {
-        return (user.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION) &&
+        boolean isAssignedAgent = user.getRole().equals(Utilisateur.UserRole.AGENT_COMMISSION_TERRAIN) &&
                 visite.getUtilisateurCommission().getId().equals(user.getId()) &&
-                visite.getDateConstat() == null) ||
-                user.getRole().equals(Utilisateur.UserRole.ADMIN);
+                visite.getDateConstat() == null;
+        
+        boolean isAdmin = user.getRole().equals(Utilisateur.UserRole.ADMIN);
+        
+        // Additional check for team compatibility
+        if (isAssignedAgent && user.getEquipeCommission() != null) {
+            Long rubriqueId = visite.getDossier().getSousRubrique().getRubrique().getId();
+            Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
+            return equipeRequise.equals(user.getEquipeCommission());
+        }
+        
+        return isAssignedAgent || isAdmin;
     }
 
     private boolean isVisiteOverdue(VisiteTerrain visite) {
@@ -744,13 +810,16 @@ public class TerrainVisitService {
         return UUID.randomUUID().toString() + extension;
     }
 
-    // Workflow and audit methods remain the same as in the original service
+    // Workflow and audit methods with team information
     private void updateWorkflowForTerrainVisit(Dossier dossier, Utilisateur utilisateur, String commentaire) {
         List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
         
+        String teamInfo = utilisateur.getEquipeCommission() != null ? 
+                " - " + utilisateur.getEquipeCommission().getDisplayName() : "";
+        
         if (!workflows.isEmpty()) {
             WorkflowInstance current = workflows.get(0);
-            current.setEtapeDesignation("Commission AHA-AF - Visite Terrain");
+            current.setEtapeDesignation("Commission Vérification Terrain - Visite Programmée" + teamInfo);
             current.setEmplacementActuel(WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
             current.setDateEntree(LocalDateTime.now());
             workflowInstanceRepository.save(current);
@@ -758,7 +827,7 @@ public class TerrainVisitService {
 
         HistoriqueWorkflow history = new HistoriqueWorkflow();
         history.setDossier(dossier);
-        history.setEtapeDesignation("Visite Terrain Programmée");
+        history.setEtapeDesignation("Visite Terrain Programmée" + teamInfo);
         history.setEmplacementType(WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
         history.setDateEntree(LocalDateTime.now());
         history.setUtilisateur(utilisateur);
@@ -769,9 +838,12 @@ public class TerrainVisitService {
     private void updateWorkflowForVisitCompletion(Dossier dossier, Utilisateur utilisateur, Boolean approuve, String commentaire) {
         List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
         
+        String teamInfo = utilisateur.getEquipeCommission() != null ? 
+                " - " + utilisateur.getEquipeCommission().getDisplayName() : "";
+        
         if (!workflows.isEmpty()) {
             WorkflowInstance current = workflows.get(0);
-            current.setEtapeDesignation(approuve ? "Terrain Approuvé" : "Terrain Rejeté");
+            current.setEtapeDesignation((approuve ? "Terrain Approuvé" : "Terrain Rejeté") + teamInfo);
             current.setEmplacementActuel(WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
             current.setDateEntree(LocalDateTime.now());
             workflowInstanceRepository.save(current);
@@ -779,7 +851,7 @@ public class TerrainVisitService {
 
         HistoriqueWorkflow history = new HistoriqueWorkflow();
         history.setDossier(dossier);
-        history.setEtapeDesignation(approuve ? "Terrain Approuvé" : "Terrain Rejeté");
+        history.setEtapeDesignation((approuve ? "Terrain Approuvé" : "Terrain Rejeté") + teamInfo);
         history.setEmplacementType(WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
         history.setDateEntree(LocalDateTime.now());
         history.setUtilisateur(utilisateur);

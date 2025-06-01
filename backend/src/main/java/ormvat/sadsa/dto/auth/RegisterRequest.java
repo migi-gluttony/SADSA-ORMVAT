@@ -3,6 +3,7 @@ package ormvat.sadsa.dto.auth;
 import lombok.Data;
 import ormvat.sadsa.model.Utilisateur;
 import ormvat.sadsa.model.Utilisateur.UserRole;
+import ormvat.sadsa.model.Utilisateur.EquipeCommission;
 
 @Data
 public class RegisterRequest {
@@ -12,5 +13,6 @@ public class RegisterRequest {
     private String telephone;
     private String motDePasse;
     private UserRole role;
-    private Long antenneId; // Optional: CDA assignment for users
+    private Long antenneId;
+    private EquipeCommission equipeCommission; // For commission agents only
 }

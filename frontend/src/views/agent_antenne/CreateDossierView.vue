@@ -22,7 +22,57 @@
     <div v-if="currentStep === 1" class="step-content">
       <div class="component-card">
         <h2><i class="pi pi-tags"></i> Sélectionnez le type de projet</h2>
-        <div class="project-types-grid">
+        
+        <!-- Project Type Search Bar -->
+        <div class="search-section">
+          <div class="search-container">
+            <InputText 
+              v-model="projectSearchTerm" 
+              placeholder="Rechercher un type de projet..." 
+              @input="searchProjectTypes"
+              class="search-input"
+            />
+            <i class="pi pi-search search-icon"></i>
+          </div>
+          <Button 
+            v-if="projectSearchTerm" 
+            icon="pi pi-times" 
+            @click="clearProjectSearch"
+            class="p-button-text clear-search-btn"
+            v-tooltip.top="'Effacer la recherche'"
+          />
+        </div>
+
+        <!-- Search Results -->
+        <div v-if="searchResults.length > 0 && projectSearchTerm" class="search-results">
+          <h3>Résultats de recherche ({{ searchResults.length }})</h3>
+          <div class="search-results-grid">
+            <div 
+              v-for="sousRubrique in searchResults"
+              :key="sousRubrique.id"
+              class="project-type search-result"
+              :class="{ selected: selectedSousRubrique?.id === sousRubrique.id }"
+              @click="selectSousRubrique(sousRubrique)"
+            >
+              <div class="project-icon">
+                <i class="pi pi-folder"></i>
+              </div>
+              <div class="project-info">
+                <h4>{{ sousRubrique.designation }}</h4>
+                <p>{{ sousRubrique.description || 'Description du projet' }}</p>
+                <div v-if="sousRubrique.documentsRequis?.length > 0" class="documents-list">
+                  <small><strong>Documents requis:</strong></small>
+                  <ul>
+                    <li v-for="doc in sousRubrique.documentsRequis" :key="doc">{{ doc }}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- All Project Types -->
+        <div v-show="!projectSearchTerm || searchResults.length === 0" class="project-types-grid">
           <div 
             v-for="rubrique in rubriques" 
             :key="rubrique.id"
@@ -65,14 +115,48 @@
         <div class="form-grid">
           <div class="form-group">
             <label for="cin" class="required">CIN</label>
-            <InputText 
-              id="cin" 
-              v-model="formData.agriculteur.cin" 
-              placeholder="Numéro d'identité nationale"
-              @blur="searchAgriculteur"
-              :class="{ 'p-invalid': validationErrors.cin }"
-            />
+            <div class="cin-input-group">
+              <InputText 
+                id="cin" 
+                v-model="formData.agriculteur.cin" 
+                placeholder="Numéro d'identité nationale"
+                @input="onCinInput"
+                :class="{ 'p-invalid': validationErrors.cin }"
+                class="cin-input"
+              />
+              <Button 
+                label="Vérifier" 
+                icon="pi pi-search" 
+                @click="checkFarmerExists"
+                :loading="farmerCheckStatus.checking"
+                :disabled="!formData.agriculteur.cin || formData.agriculteur.cin.trim().length < 5"
+                class="p-button-outlined check-btn"
+                size="small"
+              />
+            </div>
             <small class="p-error">{{ validationErrors.cin }}</small>
+            
+            <!-- Farmer Found Information -->
+            <div v-if="farmerCheckStatus.found && farmerCheckStatus.data" class="farmer-info-card">
+              <div class="farmer-info-header">
+                <i class="pi pi-user"></i>
+                <strong>Agriculteur existant</strong>
+              </div>
+              <div class="farmer-details">
+                <p><strong>Nom:</strong> {{ farmerCheckStatus.data.nom }} {{ farmerCheckStatus.data.prenom }}</p>
+                <p><strong>Téléphone:</strong> {{ farmerCheckStatus.data.telephone }}</p>
+                <p v-if="farmerCheckStatus.previousDossiers.length > 0">
+                  <strong>Dossiers précédents:</strong> {{ farmerCheckStatus.previousDossiers.length }}
+                </p>
+              </div>
+              <Button 
+                label="Utiliser ces informations" 
+                icon="pi pi-check" 
+                @click="useFarmerData"
+                class="p-button-sm p-button-success"
+                size="small"
+              />
+            </div>
           </div>
 
           <div class="form-group">
@@ -384,11 +468,14 @@
             <div class="recepisse-row">
               <strong>SABA:</strong> {{ recepisse.saba }}
             </div>
+            <div v-if="recepisse.reference" class="recepisse-row">
+              <strong>Référence:</strong> {{ recepisse.reference }}
+            </div>
             <div class="recepisse-row">
               <strong>Montant demandé:</strong> {{ formatCurrency(recepisse.montantDemande) }}
             </div>
             <div class="recepisse-row">
-              <strong>Antenne:</strong> {{ recepisse.antenneName }}
+              <strong>Antenne:</strong> {{ recepisse.antenneName || recepisse.antenne }}
             </div>
           </div>
         </div>
@@ -492,6 +579,19 @@ const selectedCercle = ref(null);
 const validationErrors = ref({});
 const showRecepisse = ref(false);
 const recepisse = ref(null);
+
+// Search functionality
+const projectSearchTerm = ref('');
+const searchResults = ref([]);
+const isSearching = ref(false);
+
+// Farmer checking
+const farmerCheckStatus = ref({
+  checking: false,
+  found: false,
+  data: null,
+  previousDossiers: []
+});
 
 // Computed properties
 const isBasicInfoValid = computed(() => {
@@ -985,7 +1085,8 @@ async function generateRecepisse() {
     return;
   }
   
-  // Générer un récépissé temporaire
+  // Générer un récépissé temporaire avec référence
+  const tempReference = generateTempReference();
   const tempRecepisse = {
     numeroRecepisse: `R-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`,
     dateDepot: new Date(),
@@ -994,13 +1095,26 @@ async function generateRecepisse() {
     telephone: formData.value.agriculteur.telephone,
     typeProduit: selectedSousRubrique.value?.designation || '',
     saba: formData.value.dossier.saba,
+    reference: tempReference, // Add reference
     montantDemande: formData.value.dossier.montantDemande,
+    antenne: getSelectedAntenneName(),
     antenneName: getSelectedAntenneName(),
+    cdaNom: getSelectedAntenneName(),
     cdaName: getSelectedAntenneName()
   };
   
   recepisse.value = tempRecepisse;
   showRecepisse.value = true;
+}
+
+// Generate temporary reference for preview
+function generateTempReference() {
+  const annee = new Date().getFullYear();
+  const antenneCode = userAntenne.value ? String(userAntenne.value.id).padStart(3, '0') : '001';
+  const sousRubriqueCode = selectedSousRubrique.value ? String(selectedSousRubrique.value.id).padStart(2, '0') : '01';
+  const sequence = String(Date.now()).slice(-6);
+  
+  return `DOS-${annee}-${antenneCode}-${sousRubriqueCode}-${sequence}`;
 }
 
 function printRecepisse() {
@@ -1021,15 +1135,145 @@ function printRecepisse() {
   }
 }
 
-async function searchAgriculteur() {
-  if (formData.value.agriculteur.cin.length >= 8) {
+async function checkFarmerExists() {
+  if (!formData.value.agriculteur.cin || formData.value.agriculteur.cin.trim().length < 5) {
+    farmerCheckStatus.value = { checking: false, found: false, data: null, previousDossiers: [] };
+    return;
+  }
+
+  try {
+    farmerCheckStatus.value.checking = true;
+    console.log('Checking farmer with CIN:', formData.value.agriculteur.cin); // Debug log
+    
+    const response = await ApiService.get(`/agent_antenne/dossiers/check-farmer/${formData.value.agriculteur.cin.trim()}`);
+    console.log('Farmer check response:', response); // Debug log
+    
+    if (response.exists) {
+      farmerCheckStatus.value = {
+        checking: false,
+        found: true,
+        data: response.agriculteur,
+        previousDossiers: response.previousDossiers || []
+      };
+      
+      toast.add({
+        severity: 'info',
+        summary: 'Agriculteur trouvé',
+        detail: `${response.agriculteur.prenom} ${response.agriculteur.nom} - ${response.previousDossiers?.length || 0} dossier(s) précédent(s)`,
+        life: 4000
+      });
+    } else {
+      farmerCheckStatus.value = {
+        checking: false,
+        found: false,
+        data: null,
+        previousDossiers: []
+      };
+      
+      toast.add({
+        severity: 'warn',
+        summary: 'Agriculteur non trouvé',
+        detail: 'Aucun agriculteur trouvé avec ce CIN. Veuillez saisir les informations.',
+        life: 3000
+      });
+    }
+  } catch (error) {
+    console.error('Erreur lors de la vérification de l\'agriculteur:', error);
+    console.error('Error details:', error.response || error); // More detailed error log
+    farmerCheckStatus.value.checking = false;
+    
+    let errorMessage = 'Erreur lors de la vérification de l\'agriculteur';
+    if (error.response?.status === 403) {
+      errorMessage = 'Accès non autorisé à cette fonctionnalité';
+    } else if (error.response?.status === 404) {
+      errorMessage = 'Service de vérification non disponible';
+    }
+    
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: errorMessage,
+      life: 3000
+    });
+  }
+}
+
+function onCinInput() {
+  // Reset farmer check status when CIN is modified
+  farmerCheckStatus.value = { checking: false, found: false, data: null, previousDossiers: [] };
+}
+
+function useFarmerData() {
+  if (farmerCheckStatus.value.data) {
+    const farmer = farmerCheckStatus.value.data;
+    formData.value.agriculteur.nom = farmer.nom;
+    formData.value.agriculteur.prenom = farmer.prenom;
+    formData.value.agriculteur.telephone = farmer.telephone;
+    
+    if (farmer.communeRuraleId) {
+      formData.value.agriculteur.communeRuraleId = farmer.communeRuraleId;
+      // Load geographic data if needed
+      loadGeographicDataForFarmer(farmer);
+    }
+    
+    if (farmer.douarId) {
+      formData.value.agriculteur.douarId = farmer.douarId;
+    }
+    
+    toast.add({
+      severity: 'success',
+      summary: 'Informations utilisées',
+      detail: 'Les informations de l\'agriculteur ont été pré-remplies',
+      life: 3000
+    });
+  }
+}
+
+async function loadGeographicDataForFarmer(farmer) {
+  // This function would need to determine province and cercle from the commune
+  // For now, we'll just set the commune and load the douars
+  if (farmer.communeRuraleId) {
+    await loadDouars(farmer.communeRuraleId);
+  }
+}
+
+// Project search functionality
+let searchTimeout = null;
+
+async function searchProjectTypes() {
+  if (!projectSearchTerm.value || projectSearchTerm.value.length < 3) {
+    searchResults.value = [];
+    return;
+  }
+
+  if (searchTimeout) clearTimeout(searchTimeout);
+  
+  searchTimeout = setTimeout(async () => {
     try {
-      console.log('Recherche agriculteur:', formData.value.agriculteur.cin);
-      // TODO: Implement agriculteur search when backend endpoint is available
+      isSearching.value = true;
+      const response = await ApiService.get('/agent_antenne/dossiers/search-project-types', {
+        searchTerm: projectSearchTerm.value
+      });
+      
+      searchResults.value = response || [];
     } catch (error) {
       console.error('Erreur lors de la recherche:', error);
+      searchResults.value = [];
+      toast.add({
+        severity: 'error',
+        summary: 'Erreur',
+        detail: 'Erreur lors de la recherche de projets',
+        life: 3000
+      });
+    } finally {
+      isSearching.value = false;
     }
-  }
+  }, 300);
+}
+
+function clearProjectSearch() {
+  projectSearchTerm.value = '';
+  searchResults.value = [];
 }
 
 function handleSearch(query) {
@@ -1217,6 +1461,116 @@ function formatDate(date) {
 .step.active .step-label {
   color: var(--primary-color);
   font-weight: 600;
+}
+
+/* Search Section */
+.search-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.search-container {
+  position: relative;
+  flex: 1;
+  max-width: 500px;
+}
+
+.search-input {
+  width: 100%;
+  padding-right: 2.5rem;
+  font-size: 1rem;
+}
+
+.search-icon {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.clear-search-btn {
+  padding: 0.5rem;
+  min-width: auto;
+}
+
+/* Search Results */
+.search-results {
+  margin-bottom: 2rem;
+}
+
+.search-results h3 {
+  color: var(--primary-color);
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  font-family: 'Poppins', sans-serif;
+}
+
+.search-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 1rem;
+}
+
+.search-result {
+  border: 2px solid var(--primary-color);
+  background: var(--clr-surface-tonal-a0);
+}
+
+/* CIN Input with Check Button */
+.cin-input-group {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.cin-input {
+  flex: 1;
+}
+
+.check-btn {
+  flex-shrink: 0;
+  min-width: auto;
+  white-space: nowrap;
+}
+
+/* Farmer Info Card */
+.farmer-info-card {
+  background: var(--clr-surface-tonal-a0);
+  border: 1px solid var(--success-color);
+  border-radius: var(--border-radius-lg);
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.farmer-info-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--success-color);
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.farmer-info-header i {
+  font-size: 1.1rem;
+}
+
+.farmer-details {
+  margin-bottom: 1rem;
+}
+
+.farmer-details p {
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+  color: var(--text-color);
+}
+
+.farmer-details strong {
+  color: var(--primary-color);
 }
 
 /* Project Types */

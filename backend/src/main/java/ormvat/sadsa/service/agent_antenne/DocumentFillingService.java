@@ -309,7 +309,7 @@ public class DocumentFillingService {
                         dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId());
             case AGENT_GUC:
                 return !dossier.getStatus().equals(Dossier.DossierStatus.DRAFT);
-            case AGENT_COMMISSION:
+            case AGENT_COMMISSION_TERRAIN:
                 return dossier.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
                         dossier.getStatus().equals(Dossier.DossierStatus.IN_REVIEW) ||
                         dossier.getStatus().equals(Dossier.DossierStatus.APPROVED) ||

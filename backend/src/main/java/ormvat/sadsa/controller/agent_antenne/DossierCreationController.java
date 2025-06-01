@@ -48,7 +48,7 @@ public class DossierCreationController {
     public ResponseEntity<AgriculteurCheckResponse> checkFarmerExists(@PathVariable String cin) {
         try {
             log.info("Vérification de l'existence de l'agriculteur avec CIN: {}", cin);
-            
+                
             AgriculteurCheckResponse response = dossierService.checkFarmerExists(cin);
             return ResponseEntity.ok(response);
             

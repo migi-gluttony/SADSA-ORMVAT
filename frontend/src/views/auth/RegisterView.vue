@@ -142,6 +142,30 @@
             </small>
           </div>
 
+          <!-- Équipe Commission Selection - Only show for AGENT_COMMISSION_TERRAIN -->
+          <div v-if="role === 'AGENT_COMMISSION_TERRAIN'" class="form-group">
+            <label for="equipe" class="form-label">
+              <i class="pi pi-users"></i>
+              Équipe de Commission
+            </label>
+            <Dropdown 
+              id="equipe" 
+              v-model="equipeCommission" 
+              :options="equipeOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Sélectionnez votre équipe"
+              class="form-input dropdown-input"
+              :class="{ 'p-invalid': validationErrors.equipeCommission }"
+              aria-describedby="equipe-error"
+            />
+            <small id="equipe-error" class="p-error form-error">{{ validationErrors.equipeCommission }}</small>
+            <small class="form-help">
+              <i class="pi pi-info-circle"></i>
+              L'équipe spécialisée selon le type de projet
+            </small>
+          </div>
+
           <div class="form-group">
             <label for="password" class="form-label">
               <i class="pi pi-lock"></i>
@@ -241,9 +265,10 @@ const password = ref('');
 const confirmPassword = ref('');
 const role = ref('');
 const antenneId = ref(null);
+const equipeCommission = ref(null);
 const loading = ref(false);
 const errorMessage = ref('');
-const successMessage = ref(''); // Fixed: Added missing ref
+const successMessage = ref('');
 
 const validationErrors = ref({
   nom: '',
@@ -253,14 +278,15 @@ const validationErrors = ref({
   password: '',
   confirmPassword: '',
   role: '',
-  antenneId: '' // Fixed: Changed from cdaId to antenneId
+  antenneId: '',
+  equipeCommission: ''
 });
 
 const roleOptions = ref([
   { label: 'Agent d\'Antenne (CDA)', value: 'AGENT_ANTENNE' },
   { label: 'Agent Guichet Unique Central', value: 'AGENT_GUC' },
-  { label: 'Agent de Commission Technique', value: 'AGENT_COMMISSION' },
-  { label: 'Commission AHA-AF', value: 'COMMISSION_AHA_AF' },
+  { label: 'Agent Commission Terrain', value: 'AGENT_COMMISSION_TERRAIN' },
+  { label: 'Service Technique', value: 'SERVICE_TECHNIQUE' },
   { label: 'Administrateur', value: 'ADMIN' }
 ]);
 
@@ -272,6 +298,12 @@ const antenneOptions = ref([
   { label: 'Antenne Afourer - CDA Afourer', value: 5 }
 ]);
 
+const equipeOptions = ref([
+  { label: 'Équipe Filières Végétales', value: 'FILIERES_VEGETALES' },
+  { label: 'Équipe Filières Animales', value: 'FILIERES_ANIMALES' },
+  { label: 'Équipe Aménagement Hydro-Agricole', value: 'AMENAGEMENT_HYDRO_AGRICOLE' }
+]);
+
 onMounted(() => {
   if (AuthService.isAuthenticated()) {
     router.push('/dashboard');
@@ -279,9 +311,11 @@ onMounted(() => {
 });
 
 const onRoleChange = () => {
-  // Reset antenne selection when role changes
+  // Reset selections when role changes
   antenneId.value = null;
+  equipeCommission.value = null;
   validationErrors.value.antenneId = '';
+  validationErrors.value.equipeCommission = '';
 };
 
 const validateForm = () => {
@@ -294,7 +328,8 @@ const validateForm = () => {
     password: '',
     confirmPassword: '',
     role: '',
-    antenneId: '' // Fixed: Changed from cdaId to antenneId
+    antenneId: '',
+    equipeCommission: ''
   };
 
   // Nom validation
@@ -348,9 +383,15 @@ const validateForm = () => {
     isValid = false;
   }
 
-  // Antenne validation for AGENT_ANTENNE - Fixed: Changed from cdaId to antenneId
+  // Antenne validation for AGENT_ANTENNE
   if (role.value === 'AGENT_ANTENNE' && !antenneId.value) {
     validationErrors.value.antenneId = 'L\'antenne est requise pour les agents d\'antenne';
+    isValid = false;
+  }
+
+  // Équipe validation for AGENT_COMMISSION_TERRAIN
+  if (role.value === 'AGENT_COMMISSION_TERRAIN' && !equipeCommission.value) {
+    validationErrors.value.equipeCommission = 'L\'équipe est requise pour les agents de commission';
     isValid = false;
   }
 
@@ -375,7 +416,8 @@ const handleRegister = async () => {
       telephone: telephone.value || null,
       motDePasse: password.value,
       role: role.value,
-      antenneId: role.value === 'AGENT_ANTENNE' ? antenneId.value : null
+      antenneId: role.value === 'AGENT_ANTENNE' ? antenneId.value : null,
+      equipeCommission: role.value === 'AGENT_COMMISSION_TERRAIN' ? equipeCommission.value : null
     };
 
     // Call the AuthService register method
@@ -400,6 +442,7 @@ const handleRegister = async () => {
     confirmPassword.value = '';
     role.value = '';
     antenneId.value = null;
+    equipeCommission.value = null;
     
     // Redirect to login after 3 seconds
     setTimeout(() => {
@@ -412,7 +455,7 @@ const handleRegister = async () => {
     // Handle specific error messages from the backend
     if (error.message) {
       errorMessage.value = error.message;
-    } else if (error.response?.data?.message) { // Fixed: Better error handling
+    } else if (error.response?.data?.message) {
       errorMessage.value = error.response.data.message;
     } else {
       errorMessage.value = 'Une erreur inattendue s\'est produite. Veuillez réessayer.';
@@ -431,7 +474,6 @@ const handleRegister = async () => {
 </script>
 
 <style scoped>
-/* ... same styles as before ... */
 :root {
   --primary-color: #01723e;
   --primary-color-rgb: 1, 114, 62;

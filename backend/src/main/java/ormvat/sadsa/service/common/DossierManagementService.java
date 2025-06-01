@@ -210,7 +210,7 @@ public class DossierManagementService {
     }
 
     /**
-     * Send dossier to Commission (Agent GUC action)
+     * Send dossier to Commission (Agent GUC action) with team-based routing
      */
     @Transactional
     public DossierActionResponse sendDossierToCommission(SendToCommissionRequest request, String userEmail) {
@@ -219,27 +219,58 @@ public class DossierManagementService {
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
             if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_GUC)) {
-                throw new RuntimeException("Seul un agent GUC peut envoyer un dossier à la commission");
+                throw new RuntimeException("Seul un agent GUC peut envoyer un dossier à la Commission de Vérification Terrain");
             }
 
             Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
+            // Determine appropriate commission team based on project type
+            Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
+            Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
+            
+            // Find available commission agents for this project type
+            List<Utilisateur> agentsCommission = utilisateurRepository.findByRole(Utilisateur.UserRole.AGENT_COMMISSION_TERRAIN)
+                    .stream()
+                    .filter(agent -> agent.getEquipeCommission() == equipeRequise)
+                    .filter(agent -> agent.getActif())
+                    .collect(Collectors.toList());
+
+            if (agentsCommission.isEmpty()) {
+                throw new RuntimeException("Aucun agent de la " + equipeRequise.getDisplayName() + 
+                        " n'est disponible pour traiter ce type de projet");
+            }
+
+            // For now, assign to first available agent (could implement load balancing later)
+            Utilisateur agentAssigne = agentsCommission.get(0);
+
             // Update dossier status
             dossier.setStatus(Dossier.DossierStatus.IN_REVIEW);
             dossierRepository.save(dossier);
 
-            // Update workflow to Commission
-            updateWorkflowForCommission(dossier, utilisateur, request);
+            // Update workflow to Commission with team info
+            updateWorkflowForCommission(dossier, utilisateur, request, agentAssigne, equipeRequise);
 
-            // Create audit trail
-            createAuditTrail("ENVOI_COMMISSION", dossier, utilisateur, request.getCommentaire());
+            // Create audit trail with team information
+            String commentaireDetaille = String.format("Dossier envoyé à la Commission de Vérification Terrain - %s. Agent assigné: %s %s. Commentaire: %s",
+                    equipeRequise.getDisplayName(),
+                    agentAssigne.getPrenom(), 
+                    agentAssigne.getNom(),
+                    request.getCommentaire());
+            
+            createAuditTrail("ENVOI_COMMISSION_TERRAIN", dossier, utilisateur, commentaireDetaille);
 
             return DossierActionResponse.builder()
                     .success(true)
-                    .message("Dossier envoyé à la commission avec succès")
+                    .message(String.format("Dossier envoyé à la Commission de Vérification Terrain (%s) avec succès", 
+                            equipeRequise.getDisplayName()))
                     .newStatut(dossier.getStatus().name())
                     .dateAction(LocalDateTime.now())
+                    .additionalData(Map.of(
+                            "equipeAssignee", equipeRequise.getDisplayName(),
+                            "agentAssigne", agentAssigne.getPrenom() + " " + agentAssigne.getNom(),
+                            "typeProjet", dossier.getSousRubrique().getRubrique().getDesignation()
+                    ))
                     .build();
 
         } catch (Exception e) {
@@ -424,13 +455,29 @@ public class DossierManagementService {
                         .filter(d -> !d.getStatus().equals(Dossier.DossierStatus.DRAFT))
                         .collect(Collectors.toList());
 
-            case AGENT_COMMISSION:
-                return dossierRepository.findAll().stream()
-                        .filter(d -> d.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
-                                d.getStatus().equals(Dossier.DossierStatus.IN_REVIEW) ||
-                                d.getStatus().equals(Dossier.DossierStatus.APPROVED) ||
-                                d.getStatus().equals(Dossier.DossierStatus.REJECTED))
-                        .collect(Collectors.toList());
+            case AGENT_COMMISSION_TERRAIN:
+                // Commission agents see dossiers assigned to their team
+                if (utilisateur.getEquipeCommission() != null) {
+                    return dossierRepository.findAll().stream()
+                            .filter(d -> d.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
+                                    d.getStatus().equals(Dossier.DossierStatus.IN_REVIEW) ||
+                                    d.getStatus().equals(Dossier.DossierStatus.APPROVED) ||
+                                    d.getStatus().equals(Dossier.DossierStatus.REJECTED))
+                            .filter(d -> {
+                                Long rubriqueId = d.getSousRubrique().getRubrique().getId();
+                                Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
+                                return equipeRequise.equals(utilisateur.getEquipeCommission());
+                            })
+                            .collect(Collectors.toList());
+                } else {
+                    // If no team assigned, see all commission dossiers (fallback)
+                    return dossierRepository.findAll().stream()
+                            .filter(d -> d.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
+                                    d.getStatus().equals(Dossier.DossierStatus.IN_REVIEW) ||
+                                    d.getStatus().equals(Dossier.DossierStatus.APPROVED) ||
+                                    d.getStatus().equals(Dossier.DossierStatus.REJECTED))
+                            .collect(Collectors.toList());
+                }
 
             case ADMIN:
                 // Admin sees all dossiers
@@ -450,12 +497,21 @@ public class DossierManagementService {
                         dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId());
             case AGENT_GUC:
                 return !dossier.getStatus().equals(Dossier.DossierStatus.DRAFT);
-            case AGENT_COMMISSION:
+            case AGENT_COMMISSION_TERRAIN:
                 // Commission can access submitted dossiers and those in review
-                return dossier.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
+                boolean statusAllowed = dossier.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
                         dossier.getStatus().equals(Dossier.DossierStatus.IN_REVIEW) ||
                         dossier.getStatus().equals(Dossier.DossierStatus.APPROVED) ||
                         dossier.getStatus().equals(Dossier.DossierStatus.REJECTED);
+                
+                // Check if dossier belongs to agent's team
+                if (utilisateur.getEquipeCommission() != null) {
+                    Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
+                    Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
+                    return statusAllowed && equipeRequise.equals(utilisateur.getEquipeCommission());
+                } else {
+                    return statusAllowed;
+                }
             default:
                 return false;
         }
@@ -553,7 +609,7 @@ public class DossierManagementService {
                         .severity("info")
                         .requiresComment(true)
                         .requiresConfirmation(true)
-                        .description("Envoyer le dossier à la Commission AHA-AF pour visite terrain")
+                        .description("Envoyer le dossier à la Commission de Vérification Terrain")
                         .build());
 
                 actions.add(AvailableActionDTO.builder()
@@ -818,12 +874,12 @@ public class DossierManagementService {
     }
 
     private void updateWorkflowForCommission(Dossier dossier, Utilisateur utilisateur,
-            SendToCommissionRequest request) {
+            SendToCommissionRequest request, Utilisateur agentAssigne, Utilisateur.EquipeCommission equipe) {
         List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
 
         if (!workflows.isEmpty()) {
             WorkflowInstance current = workflows.get(0);
-            current.setEtapeDesignation("Commission AHA-AF");
+            current.setEtapeDesignation("Commission Vérification Terrain - " + equipe.getDisplayName());
             current.setEmplacementActuel(WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
             current.setDateEntree(LocalDateTime.now());
             workflowInstanceRepository.save(current);
@@ -831,7 +887,35 @@ public class DossierManagementService {
 
         HistoriqueWorkflow history = new HistoriqueWorkflow();
         history.setDossier(dossier);
-        history.setEtapeDesignation("Envoi à la Commission");
+        history.setEtapeDesignation("Envoi Commission Vérification Terrain - " + equipe.getDisplayName());
+        history.setEmplacementType(WorkflowInstance.EmplacementType.GUC);
+        history.setDateEntree(LocalDateTime.now());
+        history.setUtilisateur(utilisateur);
+        history.setCommentaire(String.format("%s (Assigné à: %s %s)", 
+                request.getCommentaire(), agentAssigne.getPrenom(), agentAssigne.getNom()));
+        historiqueWorkflowRepository.save(history);
+    }
+
+    // Overloaded method for backward compatibility
+    private void updateWorkflowForCommission(Dossier dossier, Utilisateur utilisateur,
+            SendToCommissionRequest request) {
+        // For cases where team assignment isn't available, use default
+        Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
+        Utilisateur.EquipeCommission equipe = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
+        
+        List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
+
+        if (!workflows.isEmpty()) {
+            WorkflowInstance current = workflows.get(0);
+            current.setEtapeDesignation("Commission Vérification Terrain - " + equipe.getDisplayName());
+            current.setEmplacementActuel(WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
+            current.setDateEntree(LocalDateTime.now());
+            workflowInstanceRepository.save(current);
+        }
+
+        HistoriqueWorkflow history = new HistoriqueWorkflow();
+        history.setDossier(dossier);
+        history.setEtapeDesignation("Envoi Commission Vérification Terrain");
         history.setEmplacementType(WorkflowInstance.EmplacementType.GUC);
         history.setDateEntree(LocalDateTime.now());
         history.setUtilisateur(utilisateur);

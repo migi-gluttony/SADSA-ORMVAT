@@ -172,8 +172,7 @@ const getRoleDisplayName = (role) => {
     const roleNames = {
         'AGENT_ANTENNE': 'Agent Antenne',
         'AGENT_GUC': 'Agent GUC',
-        'AGENT_COMMISSION': 'Commission AHA-AF',
-        'SERVICE_TECHNIQUE': 'Service Technique',
+'AGENT_COMMISSION_TERRAIN': 'Commission Vérification Terrain',        'SERVICE_TECHNIQUE': 'Service Technique',
         'ADMIN': 'Administrateur'
     };
     return roleNames[role] || role;
@@ -248,8 +247,7 @@ const menuItems = computed(() => {
                 route: "/agent_guc/dossiers",
             }
         );
-    } else if (role === "AGENT_COMMISSION") {
-        items.push(
+} else if (role === "AGENT_COMMISSION_TERRAIN") {        items.push(
             {
                 label: "Mes Dossiers",
                 icon: "pi pi-folder-open",

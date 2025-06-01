@@ -74,7 +74,7 @@ public class CsvExportService {
                         .filter(d -> !d.getStatus().equals(Dossier.DossierStatus.DRAFT))
                         .collect(java.util.stream.Collectors.toList());
 
-            case AGENT_COMMISSION:
+            case AGENT_COMMISSION_TERRAIN:
                 return dossierRepository.findAll().stream()
                         .filter(d -> d.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
                                 d.getStatus().equals(Dossier.DossierStatus.IN_REVIEW) ||
