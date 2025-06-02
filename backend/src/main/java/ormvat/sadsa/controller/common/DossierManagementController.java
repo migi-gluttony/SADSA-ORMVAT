@@ -10,7 +10,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import ormvat.sadsa.dto.common.DossierManagementDTOs.*;
+import ormvat.sadsa.dto.common.DossierCommonDTOs.*;
+import ormvat.sadsa.dto.agent_antenne.DossierAntenneActionDTOs.*;
+import ormvat.sadsa.dto.agent_guc.DossierGUCActionDTOs.*;
 import ormvat.sadsa.service.common.DossierManagementService;
 import ormvat.sadsa.service.common.CsvExportService;
 

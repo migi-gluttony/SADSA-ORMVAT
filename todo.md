@@ -5,6 +5,10 @@
 - the form data preview should not just show the json it should show it in a prettier form 
 - 
 
+- fix the random steps thing and make it use the ones i put in the db
+
+
+
 # problems 
 ## agent antenne
 - he should be able to edit the dossier info 
