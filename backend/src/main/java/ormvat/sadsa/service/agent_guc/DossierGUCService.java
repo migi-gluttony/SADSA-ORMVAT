@@ -9,6 +9,7 @@ import ormvat.sadsa.dto.agent_guc.DossierGUCActionDTOs.*;
 import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
 import ormvat.sadsa.service.common.DossierCommonService;
+import ormvat.sadsa.service.common.WorkflowService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,12 +24,11 @@ public class DossierGUCService {
 
     private final DossierRepository dossierRepository;
     private final UtilisateurRepository utilisateurRepository;
-    private final WorkflowInstanceRepository workflowInstanceRepository;
-    private final HistoriqueWorkflowRepository historiqueWorkflowRepository;
+    private final WorkflowService workflowService;
     private final DossierCommonService dossierCommonService;
 
     /**
-     * Send dossier to Commission (Agent GUC action) with team-based routing
+     * Send dossier to Commission AHA-AF (Agent GUC action) with team-based routing
      */
     @Transactional
     public DossierActionResponse sendDossierToCommission(SendToCommissionRequest request, String userEmail) {
@@ -37,22 +37,24 @@ public class DossierGUCService {
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
             if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_GUC)) {
-                throw new RuntimeException("Seul un agent GUC peut envoyer un dossier à la Commission de Vérification Terrain");
+                throw new RuntimeException("Seul un agent GUC peut envoyer un dossier à la Commission AHA-AF");
             }
 
             Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+            // Check if user can act on current etape
+            if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
+                throw new RuntimeException("Cette action n'est pas autorisée à l'étape actuelle");
+            }
 
             // Determine appropriate commission team based on project type
             Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
             Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
             
             // Find available commission agents for this project type
-            List<Utilisateur> agentsCommission = utilisateurRepository.findByRole(Utilisateur.UserRole.AGENT_COMMISSION_TERRAIN)
-                    .stream()
-                    .filter(agent -> agent.getEquipeCommission() == equipeRequise)
-                    .filter(agent -> agent.getActif())
-                    .collect(Collectors.toList());
+            List<Utilisateur> agentsCommission = utilisateurRepository.findByRoleAndEquipeCommissionAndActifTrue(
+                    Utilisateur.UserRole.AGENT_COMMISSION_TERRAIN, equipeRequise);
 
             if (agentsCommission.isEmpty()) {
                 throw new RuntimeException("Aucun agent de la " + equipeRequise.getDisplayName() + 
@@ -66,21 +68,26 @@ public class DossierGUCService {
             dossier.setStatus(Dossier.DossierStatus.IN_REVIEW);
             dossierRepository.save(dossier);
 
-            // Update workflow to Commission with team info
-            updateWorkflowForCommission(dossier, utilisateur, request, agentAssigne, equipeRequise);
+            // Move to Commission AHA-AF etape using WorkflowService
+            workflowService.moveToNextEtape(dossier, utilisateur, 
+                String.format("Envoi à la Commission AHA-AF (%s) - Agent assigné: %s %s. %s",
+                        equipeRequise.getDisplayName(), 
+                        agentAssigne.getPrenom(), 
+                        agentAssigne.getNom(),
+                        request.getCommentaire()));
 
             // Create audit trail with team information
-            String commentaireDetaille = String.format("Dossier envoyé à la Commission de Vérification Terrain - %s. Agent assigné: %s %s. Commentaire: %s",
+            String commentaireDetaille = String.format("Dossier envoyé à la Commission AHA-AF - %s. Agent assigné: %s %s. Commentaire: %s",
                     equipeRequise.getDisplayName(),
                     agentAssigne.getPrenom(), 
                     agentAssigne.getNom(),
                     request.getCommentaire());
             
-            dossierCommonService.createAuditTrail("ENVOI_COMMISSION_TERRAIN", dossier, utilisateur, commentaireDetaille);
+            dossierCommonService.createAuditTrail("ENVOI_COMMISSION_AHA_AF", dossier, utilisateur, commentaireDetaille);
 
             return DossierActionResponse.builder()
                     .success(true)
-                    .message(String.format("Dossier envoyé à la Commission de Vérification Terrain (%s) avec succès", 
+                    .message(String.format("Dossier envoyé à la Commission AHA-AF (%s) avec succès", 
                             equipeRequise.getDisplayName()))
                     .newStatut(dossier.getStatus().name())
                     .dateAction(LocalDateTime.now())
@@ -113,15 +120,23 @@ public class DossierGUCService {
             Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
+            // Check if user can act on current etape
+            if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
+                throw new RuntimeException("Cette action n'est pas autorisée à l'étape actuelle");
+            }
+
             // Update dossier status to allow editing at antenne
             dossier.setStatus(Dossier.DossierStatus.RETURNED_FOR_COMPLETION);
             dossierRepository.save(dossier);
 
-            // Update workflow back to Antenne
-            updateWorkflowBackToAntenne(dossier, utilisateur, request);
+            // Return to previous etape (should be AP - Phase Antenne)
+            workflowService.returnToPreviousEtape(dossier, utilisateur, 
+                String.format("Retour à l'antenne - Motif: %s. Commentaire: %s", 
+                        request.getMotif(), request.getCommentaire()));
 
             // Create audit trail
-            dossierCommonService.createAuditTrail("RETOUR_ANTENNE", dossier, utilisateur, request.getCommentaire());
+            dossierCommonService.createAuditTrail("RETOUR_ANTENNE", dossier, utilisateur, 
+                String.format("Motif: %s - %s", request.getMotif(), request.getCommentaire()));
 
             return DossierActionResponse.builder()
                     .success(true)
@@ -152,15 +167,22 @@ public class DossierGUCService {
             Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
+            // Check if user can act on current etape
+            if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
+                throw new RuntimeException("Cette action n'est pas autorisée à l'étape actuelle");
+            }
+
             // Update dossier status
             dossier.setStatus(Dossier.DossierStatus.REJECTED);
             dossierRepository.save(dossier);
 
-            // Update workflow
-            updateWorkflowForRejection(dossier, utilisateur, request);
-
+            // Update workflow - keep current etape but mark as rejected
+            WorkflowService.EtapeInfo currentEtapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            
             // Create audit trail
-            dossierCommonService.createAuditTrail("REJET_DOSSIER", dossier, utilisateur, request.getCommentaire());
+            dossierCommonService.createAuditTrail("REJET_DOSSIER", dossier, utilisateur, 
+                String.format("Rejet à l'étape %s - Motif: %s. Commentaire: %s", 
+                        currentEtapeInfo.getDesignation(), request.getMotif(), request.getCommentaire()));
 
             return DossierActionResponse.builder()
                     .success(true)
@@ -176,6 +198,54 @@ public class DossierGUCService {
     }
 
     /**
+     * Approve dossier and generate final approval (end of AP phase)
+     */
+    @Transactional
+    public DossierActionResponse approveDossier(Long dossierId, String userEmail, String commentaire) {
+        try {
+            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+            if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_GUC)) {
+                throw new RuntimeException("Seul un agent GUC peut approuver un dossier");
+            }
+
+            Dossier dossier = dossierRepository.findById(dossierId)
+                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+            // Check if at final AP etape
+            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            if (!"AP - Phase GUC".equals(etapeInfo.getDesignation()) || etapeInfo.getOrdre() != 4) {
+                throw new RuntimeException("Le dossier n'est pas à l'étape finale d'approbation");
+            }
+
+            // Update dossier status
+            dossier.setStatus(Dossier.DossierStatus.APPROVED);
+            dossier.setDateApprobation(LocalDateTime.now());
+            dossierRepository.save(dossier);
+
+            // Create audit trail for approval
+            dossierCommonService.createAuditTrail("APPROBATION_FINALE", dossier, utilisateur, 
+                "Approbation finale du dossier - Phase AP terminée. " + commentaire);
+
+            return DossierActionResponse.builder()
+                    .success(true)
+                    .message("Dossier approuvé avec succès - Phase d'approbation terminée")
+                    .newStatut(dossier.getStatus().name())
+                    .dateAction(LocalDateTime.now())
+                    .additionalData(Map.of(
+                            "phaseTerminee", "AP",
+                            "prochainEtape", "Attente de démarrage phase RP par l'antenne"
+                    ))
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors de l'approbation du dossier", e);
+            throw new RuntimeException("Erreur lors de l'approbation: " + e.getMessage());
+        }
+    }
+
+    /**
      * Get available actions for Agent GUC
      */
     public List<AvailableActionDTO> getAvailableActionsForGUC() {
@@ -183,12 +253,12 @@ public class DossierGUCService {
 
         actions.add(AvailableActionDTO.builder()
                 .action("send_to_commission")
-                .label("Envoyer à la Commission")
+                .label("Envoyer à la Commission AHA-AF")
                 .icon("pi-forward")
                 .severity("info")
                 .requiresComment(true)
                 .requiresConfirmation(true)
-                .description("Envoyer le dossier à la Commission de Vérification Terrain")
+                .description("Envoyer le dossier à la Commission AHA-AF pour inspection terrain")
                 .build());
 
         actions.add(AvailableActionDTO.builder()
@@ -211,6 +281,16 @@ public class DossierGUCService {
                 .description("Rejeter définitivement le dossier")
                 .build());
 
+        actions.add(AvailableActionDTO.builder()
+                .action("approve")
+                .label("Approuver")
+                .icon("pi-check-circle")
+                .severity("success")
+                .requiresComment(false)
+                .requiresConfirmation(true)
+                .description("Approuver le dossier (fin de phase AP)")
+                .build());
+
         return actions;
     }
 
@@ -218,89 +298,93 @@ public class DossierGUCService {
      * Get available actions for specific dossier and GUC user
      */
     public List<AvailableActionDTO> getAvailableActionsForDossier(Dossier dossier, Utilisateur utilisateur) {
-        List<AvailableActionDTO> allActions = getAvailableActionsForGUC();
-        DossierPermissionsDTO permissions = dossierCommonService.calculatePermissions(dossier, utilisateur);
+        List<AvailableActionDTO> availableActions = new ArrayList<>();
+        
+        try {
+            // Check current etape
+            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            String currentEtape = etapeInfo.getDesignation();
+            
+            // Can only act if user can act on current etape
+            if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
+                return availableActions;
+            }
 
-        return allActions.stream()
-                .filter(action -> {
-                    switch (action.getAction()) {
-                        case "send_to_commission":
-                            return permissions.getPeutEnvoyerCommission();
-                        case "return_to_antenne":
-                            return permissions.getPeutRetournerAntenne();
-                        case "reject":
-                            return permissions.getPeutRejeter();
-                        default:
-                            return true;
+            DossierPermissionsDTO permissions = dossierCommonService.calculatePermissions(dossier, utilisateur);
+
+            // Actions based on current etape
+            if ("AP - Phase GUC".equals(currentEtape)) {
+                if (etapeInfo.getOrdre() == 2) {
+                    // First GUC phase - can send to commission or return
+                    if (permissions.getPeutEnvoyerCommission()) {
+                        availableActions.add(AvailableActionDTO.builder()
+                                .action("send_to_commission")
+                                .label("Envoyer à la Commission AHA-AF")
+                                .icon("pi-forward")
+                                .severity("info")
+                                .requiresComment(true)
+                                .requiresConfirmation(true)
+                                .description("Envoyer pour inspection terrain")
+                                .build());
                     }
-                })
-                .collect(Collectors.toList());
-    }
+                } else if (etapeInfo.getOrdre() == 4) {
+                    // Final GUC phase - can approve or reject
+                    if (permissions.getPeutApprouver()) {
+                        availableActions.add(AvailableActionDTO.builder()
+                                .action("approve")
+                                .label("Approuver")
+                                .icon("pi-check-circle")
+                                .severity("success")
+                                .requiresComment(false)
+                                .requiresConfirmation(true)
+                                .description("Approuver le dossier")
+                                .build());
+                    }
+                }
 
-    // Private helper methods
+                // Common GUC actions
+                if (permissions.getPeutRetournerAntenne()) {
+                    availableActions.add(AvailableActionDTO.builder()
+                            .action("return_to_antenne")
+                            .label("Retourner à l'Antenne")
+                            .icon("pi-undo")
+                            .severity("warning")
+                            .requiresComment(true)
+                            .requiresConfirmation(true)
+                            .description("Retourner pour complétion")
+                            .build());
+                }
 
-    private void updateWorkflowForCommission(Dossier dossier, Utilisateur utilisateur,
-            SendToCommissionRequest request, Utilisateur agentAssigne, Utilisateur.EquipeCommission equipe) {
-        List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
+                if (permissions.getPeutRejeter()) {
+                    availableActions.add(AvailableActionDTO.builder()
+                            .action("reject")
+                            .label("Rejeter")
+                            .icon("pi-times-circle")
+                            .severity("danger")
+                            .requiresComment(true)
+                            .requiresConfirmation(true)
+                            .description("Rejeter le dossier")
+                            .build());
+                }
+            }
 
-        if (!workflows.isEmpty()) {
-            WorkflowInstance current = workflows.get(0);
-            current.setEtapeDesignation("Commission Vérification Terrain - " + equipe.getDisplayName());
-            current.setEmplacementActuel(WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
-            current.setDateEntree(LocalDateTime.now());
-            workflowInstanceRepository.save(current);
+            // RP Phase GUC actions
+            if ("RP - Phase GUC".equals(currentEtape)) {
+                availableActions.add(AvailableActionDTO.builder()
+                        .action("finalize_realization")
+                        .label("Finaliser Réalisation")
+                        .icon("pi-check")
+                        .severity("success")
+                        .requiresComment(false)
+                        .requiresConfirmation(true)
+                        .description("Finaliser la phase de réalisation")
+                        .build());
+            }
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération des actions disponibles", e);
         }
 
-        HistoriqueWorkflow history = new HistoriqueWorkflow();
-        history.setDossier(dossier);
-        history.setEtapeDesignation("Envoi Commission Vérification Terrain - " + equipe.getDisplayName());
-        history.setEmplacementType(WorkflowInstance.EmplacementType.GUC);
-        history.setDateEntree(LocalDateTime.now());
-        history.setUtilisateur(utilisateur);
-        history.setCommentaire(String.format("%s (Assigné à: %s %s)", 
-                request.getCommentaire(), agentAssigne.getPrenom(), agentAssigne.getNom()));
-        historiqueWorkflowRepository.save(history);
-    }
-
-    private void updateWorkflowBackToAntenne(Dossier dossier, Utilisateur utilisateur, ReturnToAntenneRequest request) {
-        List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
-
-        if (!workflows.isEmpty()) {
-            WorkflowInstance current = workflows.get(0);
-            current.setEtapeDesignation("Phase Antenne - Complétion");
-            current.setEmplacementActuel(WorkflowInstance.EmplacementType.ANTENNE);
-            current.setDateEntree(LocalDateTime.now());
-            workflowInstanceRepository.save(current);
-        }
-
-        HistoriqueWorkflow history = new HistoriqueWorkflow();
-        history.setDossier(dossier);
-        history.setEtapeDesignation("Retour à l'Antenne");
-        history.setEmplacementType(WorkflowInstance.EmplacementType.GUC);
-        history.setDateEntree(LocalDateTime.now());
-        history.setUtilisateur(utilisateur);
-        history.setCommentaire(request.getCommentaire());
-        historiqueWorkflowRepository.save(history);
-    }
-
-    private void updateWorkflowForRejection(Dossier dossier, Utilisateur utilisateur, RejectDossierRequest request) {
-        List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
-
-        if (!workflows.isEmpty()) {
-            WorkflowInstance current = workflows.get(0);
-            current.setEtapeDesignation("Rejeté");
-            current.setEmplacementActuel(WorkflowInstance.EmplacementType.GUC);
-            current.setDateEntree(LocalDateTime.now());
-            workflowInstanceRepository.save(current);
-        }
-
-        HistoriqueWorkflow history = new HistoriqueWorkflow();
-        history.setDossier(dossier);
-        history.setEtapeDesignation("Rejet du dossier");
-        history.setEmplacementType(WorkflowInstance.EmplacementType.GUC);
-        history.setDateEntree(LocalDateTime.now());
-        history.setUtilisateur(utilisateur);
-        history.setCommentaire(request.getCommentaire());
-        historiqueWorkflowRepository.save(history);
+        return availableActions;
     }
 }

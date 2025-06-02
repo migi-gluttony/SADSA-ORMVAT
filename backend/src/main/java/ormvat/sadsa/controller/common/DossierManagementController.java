@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
@@ -28,7 +29,7 @@ public class DossierManagementController {
     private final CsvExportService csvExportService;
 
     /**
-     * Get paginated list of dossiers with filtering and search (role-based)
+     * Get paginated list of dossiers with filtering and search (workflow-based)
      */
     @GetMapping
     public ResponseEntity<DossierListResponse> getDossiersList(
@@ -79,34 +80,7 @@ public class DossierManagementController {
     }
 
     /**
-     * Export dossiers to CSV (accessible by all user roles)
-     */
-    @GetMapping("/export/csv")
-    public ResponseEntity<Resource> exportDossiersToCsv(
-            @RequestParam(defaultValue = "all") String exportType,
-            @RequestParam(required = false) String searchTerm,
-            @RequestParam(required = false) String statut,
-            @RequestParam(required = false) Long sousRubriqueId,
-            @RequestParam(required = false) Long antenneId,
-            Authentication authentication) {
-        
-        try {
-            String userEmail = authentication.getName();
-            log.info("Export CSV des dossiers pour l'utilisateur: {}, type: {}", userEmail, exportType);
-
-            return csvExportService.exportDossiersToCsv(userEmail, exportType);
-            
-        } catch (RuntimeException e) {
-            log.error("Erreur lors de l'export CSV: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
-        } catch (Exception e) {
-            log.error("Erreur technique lors de l'export CSV", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    /**
-     * Get detailed dossier information (role-based)
+     * Get detailed dossier information with workflow data
      */
     @GetMapping("/{dossierId}")
     public ResponseEntity<DossierDetailResponse> getDossierDetail(
@@ -137,6 +111,33 @@ public class DossierManagementController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
+
+    /**
+     * Get workflow information for dossier
+     */
+    @GetMapping("/{dossierId}/workflow")
+    public ResponseEntity<DossierManagementService.WorkflowInfoResponse> getWorkflowInfo(
+            @PathVariable Long dossierId,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Récupération des informations de workflow pour le dossier {} par {}", dossierId, userEmail);
+
+            DossierManagementService.WorkflowInfoResponse response = dossierManagementService.getWorkflowInfo(dossierId, userEmail);
+            
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            log.error("Erreur lors de la récupération du workflow {}: {}", dossierId, e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Erreur technique lors de la récupération du workflow {}", dossierId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    // ===== AGENT ANTENNE ACTIONS =====
 
     /**
      * Send dossier to GUC (Agent Antenne action)
@@ -183,6 +184,44 @@ public class DossierManagementController {
             );
         }
     }
+
+    /**
+     * Start realization phase (Agent Antenne action)
+     */
+    @PostMapping("/{dossierId}/start-realization")
+    public ResponseEntity<DossierActionResponse> startRealizationPhase(
+            @PathVariable Long dossierId,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Démarrage de la réalisation pour le dossier {} par {}", dossierId, userEmail);
+
+            DossierActionResponse response = dossierManagementService.startRealizationPhase(dossierId, userEmail);
+            
+            log.info("Phase de réalisation démarrée pour le dossier {}", dossierId);
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            log.error("Erreur lors du démarrage de la réalisation du dossier {}: {}", dossierId, e.getMessage());
+            return ResponseEntity.badRequest().body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build()
+            );
+        } catch (Exception e) {
+            log.error("Erreur technique lors du démarrage de la réalisation du dossier {}", dossierId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message("Erreur technique")
+                    .build()
+            );
+        }
+    }
+
+    // ===== AGENT GUC ACTIONS =====
 
     /**
      * Send dossier to Commission (Agent GUC action)
@@ -302,37 +341,158 @@ public class DossierManagementController {
     }
 
     /**
-     * Update dossier priority (Agent GUC action)
+     * Approve dossier (Agent GUC action)
      */
-    @PostMapping("/{dossierId}/update-priority")
-    public ResponseEntity<DossierActionResponse> updateDossierPriority(
+    @PostMapping("/{dossierId}/approve")
+    public ResponseEntity<DossierActionResponse> approveDossier(
             @PathVariable Long dossierId,
-            @Valid @RequestBody UpdatePrioriteRequest request,
+            @RequestParam(required = false, defaultValue = "") String commentaire,
             Authentication authentication) {
         
         try {
             String userEmail = authentication.getName();
-            log.info("Mise à jour de la priorité du dossier {} par l'utilisateur: {}", dossierId, userEmail);
+            log.info("Approbation du dossier {} par l'utilisateur: {}", dossierId, userEmail);
 
-            request.setDossierId(dossierId);
+            DossierActionResponse response = dossierManagementService.approveDossier(dossierId, userEmail, commentaire);
+            
+            log.info("Dossier {} approuvé avec succès", dossierId);
+            return ResponseEntity.ok(response);
 
-            return ResponseEntity.ok(
+        } catch (RuntimeException e) {
+            log.error("Erreur lors de l'approbation du dossier {}: {}", dossierId, e.getMessage());
+            return ResponseEntity.badRequest().body(
                 DossierActionResponse.builder()
-                    .success(true)
-                    .message("Priorité mise à jour avec succès")
+                    .success(false)
+                    .message(e.getMessage())
                     .build()
             );
-
         } catch (Exception e) {
-            log.error("Erreur lors de la mise à jour de la priorité du dossier {}", dossierId, e);
+            log.error("Erreur technique lors de l'approbation du dossier {}", dossierId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
                 DossierActionResponse.builder()
                     .success(false)
-                    .message("Erreur lors de la mise à jour de la priorité")
+                    .message("Erreur technique")
                     .build()
             );
         }
     }
+
+    // ===== COMMISSION ACTIONS =====
+
+    /**
+     * Approve terrain (Commission action)
+     */
+    @PostMapping("/{dossierId}/approve-terrain")
+    public ResponseEntity<DossierActionResponse> approveTerrain(
+            @PathVariable Long dossierId,
+            @RequestParam(required = false, defaultValue = "") String commentaire,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Approbation du terrain pour le dossier {} par {}", dossierId, userEmail);
+
+            DossierActionResponse response = dossierManagementService.approveTerrain(dossierId, userEmail, commentaire);
+            
+            log.info("Terrain approuvé pour le dossier {}", dossierId);
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            log.error("Erreur lors de l'approbation du terrain {}: {}", dossierId, e.getMessage());
+            return ResponseEntity.badRequest().body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build()
+            );
+        } catch (Exception e) {
+            log.error("Erreur technique lors de l'approbation du terrain {}", dossierId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message("Erreur technique")
+                    .build()
+            );
+        }
+    }
+
+    /**
+     * Reject terrain (Commission action)
+     */
+    @PostMapping("/{dossierId}/reject-terrain")
+    public ResponseEntity<DossierActionResponse> rejectTerrain(
+            @PathVariable Long dossierId,
+            @RequestParam String motif,
+            @RequestParam(required = false, defaultValue = "") String commentaire,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Rejet du terrain pour le dossier {} par {}", dossierId, userEmail);
+
+            DossierActionResponse response = dossierManagementService.rejectTerrain(dossierId, userEmail, motif, commentaire);
+            
+            log.info("Terrain rejeté pour le dossier {}", dossierId);
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            log.error("Erreur lors du rejet du terrain {}: {}", dossierId, e.getMessage());
+            return ResponseEntity.badRequest().body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build()
+            );
+        } catch (Exception e) {
+            log.error("Erreur technique lors du rejet du terrain {}", dossierId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message("Erreur technique")
+                    .build()
+            );
+        }
+    }
+
+    /**
+     * Return to GUC from Commission
+     */
+    @PostMapping("/{dossierId}/return-to-guc")
+    public ResponseEntity<DossierActionResponse> returnToGUCFromCommission(
+            @PathVariable Long dossierId,
+            @RequestParam String motif,
+            @RequestParam(required = false, defaultValue = "") String commentaire,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Retour au GUC depuis commission pour le dossier {} par {}", dossierId, userEmail);
+
+            DossierActionResponse response = dossierManagementService.returnToGUCFromCommission(dossierId, userEmail, motif, commentaire);
+            
+            log.info("Dossier {} retourné au GUC depuis commission", dossierId);
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            log.error("Erreur lors du retour au GUC {}: {}", dossierId, e.getMessage());
+            return ResponseEntity.badRequest().body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build()
+            );
+        } catch (Exception e) {
+            log.error("Erreur technique lors du retour au GUC {}", dossierId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message("Erreur technique")
+                    .build()
+            );
+        }
+    }
+
+    // ===== COMMON ACTIONS =====
 
     /**
      * Delete dossier (role-based)
@@ -420,6 +580,50 @@ public class DossierManagementController {
     }
 
     /**
+     * Process generic workflow action
+     */
+    @PostMapping("/{dossierId}/workflow/{action}")
+    public ResponseEntity<DossierActionResponse> processWorkflowAction(
+            @PathVariable Long dossierId,
+            @PathVariable String action,
+            @RequestBody(required = false) Map<String, Object> parameters,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Action workflow {} sur le dossier {} par {}", action, dossierId, userEmail);
+
+            if (parameters == null) {
+                parameters = Map.of();
+            }
+
+            DossierActionResponse response = dossierManagementService.processWorkflowAction(dossierId, action, parameters, userEmail);
+            
+            log.info("Action workflow {} exécutée avec succès sur le dossier {}", action, dossierId);
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            log.error("Erreur lors de l'action workflow {} sur dossier {}: {}", action, dossierId, e.getMessage());
+            return ResponseEntity.badRequest().body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build()
+            );
+        } catch (Exception e) {
+            log.error("Erreur technique lors de l'action workflow {} sur dossier {}", action, dossierId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message("Erreur technique")
+                    .build()
+            );
+        }
+    }
+
+    // ===== UTILITY ENDPOINTS =====
+
+    /**
      * Get all notes for a dossier (all roles)
      */
     @GetMapping("/{dossierId}/notes")
@@ -431,7 +635,6 @@ public class DossierManagementController {
             String userEmail = authentication.getName();
             log.info("Récupération des notes du dossier {} pour l'utilisateur: {}", dossierId, userEmail);
 
-            // This would be implemented in the service
             DossierDetailResponse dossierDetail = dossierManagementService.getDossierDetail(dossierId, userEmail);
             
             return ResponseEntity.ok(dossierDetail.getNotes());
@@ -446,7 +649,7 @@ public class DossierManagementController {
     }
 
     /**
-     * Get dossier statistics for dashboard (role-based)
+     * Get dossier statistics for dashboard (workflow-based)
      */
     @GetMapping("/stats")
     public ResponseEntity<DossierStatisticsDTO> getDossierStatistics(
@@ -490,6 +693,33 @@ public class DossierManagementController {
 
         } catch (Exception e) {
             log.error("Erreur lors de la récupération des actions disponibles", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Export dossiers to CSV (accessible by all user roles)
+     */
+    @GetMapping("/export/csv")
+    public ResponseEntity<Resource> exportDossiersToCsv(
+            @RequestParam(defaultValue = "all") String exportType,
+            @RequestParam(required = false) String searchTerm,
+            @RequestParam(required = false) String statut,
+            @RequestParam(required = false) Long sousRubriqueId,
+            @RequestParam(required = false) Long antenneId,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Export CSV des dossiers pour l'utilisateur: {}, type: {}", userEmail, exportType);
+
+            return csvExportService.exportDossiersToCsv(userEmail, exportType);
+            
+        } catch (RuntimeException e) {
+            log.error("Erreur lors de l'export CSV: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Erreur technique lors de l'export CSV", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

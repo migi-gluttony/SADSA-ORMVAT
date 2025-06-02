@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ormvat.sadsa.dto.agent_antenne.DossierCreationDTOs.*;
 import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
+import ormvat.sadsa.service.common.WorkflowService;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -22,10 +23,7 @@ public class DossierCreationService {
     private final AgriculteurRepository agriculteurRepository;
     private final RubriqueRepository rubriqueRepository;
     private final SousRubriqueRepository sousRubriqueRepository;
-    private final EtapeRepository etapeRepository;
     private final AuditTrailRepository auditTrailRepository;
-    private final WorkflowInstanceRepository workflowInstanceRepository;
-    private final HistoriqueWorkflowRepository historiqueWorkflowRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final AntenneRepository antenneRepository;
     private final ProvinceRepository provinceRepository;
@@ -33,7 +31,7 @@ public class DossierCreationService {
     private final CommuneRuraleRepository communeRuraleRepository;
     private final DouarRepository douarRepository;
     private final DocumentRequisRepository documentRequisRepository;
-    private final JoursFerieRepository joursFerieRepository;
+    private final WorkflowService workflowService;
 
     /**
      * Get all initialization data needed for dossier creation
@@ -168,7 +166,7 @@ public class DossierCreationService {
     }
 
     /**
-     * Create a new dossier with workflow tracking
+     * Create a new dossier with proper workflow initialization
      */
     @Transactional
     public CreateDossierResponse createDossier(CreateDossierRequest request, String userEmail) {
@@ -186,8 +184,7 @@ public class DossierCreationService {
             SousRubrique sousRubrique = sousRubriqueRepository.findById(request.getDossier().getSousRubriqueId())
                     .orElseThrow(() -> new RuntimeException("Sous-rubrique non trouvée"));
 
-            Etape etapeInitiale = getOrCreateEtape("Phase Antenne");
-
+            // Create dossier
             Dossier dossier = new Dossier();
             dossier.setSaba(request.getDossier().getSaba());
             dossier.setReference(generateReference(antenne, sousRubrique));
@@ -201,7 +198,10 @@ public class DossierCreationService {
 
             Dossier savedDossier = dossierRepository.save(dossier);
 
-            createInitialWorkflow(savedDossier, etapeInitiale, utilisateur);
+            // Initialize workflow using WorkflowService (starts at AP - Phase Antenne)
+            workflowService.initializeWorkflow(savedDossier, utilisateur);
+
+            // Create audit trail
             createAuditTrail("CREATION_DOSSIER", savedDossier, utilisateur, 
                     "Création d'un nouveau dossier avec SABA: " + savedDossier.getSaba());
 
@@ -423,65 +423,6 @@ public class DossierCreationService {
         }
     }
 
-    private void createInitialWorkflow(Dossier dossier, Etape etapeInitiale, Utilisateur utilisateur) {
-        WorkflowInstance workflowInstance = new WorkflowInstance();
-        workflowInstance.setDossier(dossier);
-        workflowInstance.setEtapeDesignation("Phase Antenne");
-        workflowInstance.setEmplacementActuel(WorkflowInstance.EmplacementType.ANTENNE);
-        workflowInstance.setDateEntree(LocalDateTime.now());
-        workflowInstance.setDateLimite(calculateDateLimiteWithHolidays(etapeInitiale));
-        workflowInstance.setEtape(etapeInitiale);
-        workflowInstance.setJoursRestants(etapeInitiale.getDureeJours());
-        workflowInstanceRepository.save(workflowInstance);
-
-        HistoriqueWorkflow historique = new HistoriqueWorkflow();
-        historique.setDossier(dossier);
-        historique.setEtapeDesignation("Phase Antenne");
-        historique.setEmplacementType(WorkflowInstance.EmplacementType.ANTENNE);
-        historique.setDateEntree(LocalDateTime.now());
-        historique.setUtilisateur(utilisateur);
-        historique.setCommentaire("Création du dossier");
-        historique.setEtape(etapeInitiale);
-        historiqueWorkflowRepository.save(historique);
-    }
-
-    /**
-     * Calculate deadline excluding holidays and weekends
-     */
-    private LocalDateTime calculateDateLimiteWithHolidays(Etape etape) {
-        LocalDateTime now = LocalDateTime.now();
-        int dureeJours = etape.getDureeJours() != null ? etape.getDureeJours() : 3;
-        
-        LocalDate currentDate = now.toLocalDate();
-        int workingDaysAdded = 0;
-        
-        // Get holidays for the year
-        LocalDate startOfYear = LocalDate.of(currentDate.getYear(), 1, 1);
-        LocalDate endOfYear = LocalDate.of(currentDate.getYear(), 12, 31);
-        List<JoursFerie> holidays = joursFerieRepository.findByDateBetween(startOfYear, endOfYear);
-        Set<LocalDate> holidayDates = holidays.stream()
-                .map(JoursFerie::getDate)
-                .collect(Collectors.toSet());
-        
-        while (workingDaysAdded < dureeJours) {
-            currentDate = currentDate.plusDays(1);
-            
-            // Skip weekends (Saturday = 6, Sunday = 7)
-            if (currentDate.getDayOfWeek().getValue() == 6 || currentDate.getDayOfWeek().getValue() == 7) {
-                continue;
-            }
-            
-            // Skip holidays
-            if (holidayDates.contains(currentDate)) {
-                continue;
-            }
-            
-            workingDaysAdded++;
-        }
-        
-        return currentDate.atTime(now.getHour(), now.getMinute());
-    }
-
     private SimplifiedRubriqueDTO mapToSimplifiedRubriqueDTO(Rubrique rubrique) {
         List<SimplifiedSousRubriqueDTO> sousRubriquesDTOs = rubrique.getSousRubriques().stream()
                 .map(sr -> SimplifiedSousRubriqueDTO.builder()
@@ -530,21 +471,6 @@ public class DossierCreationService {
         return agriculteurRepository.save(agriculteur);
     }
 
-    private Etape getOrCreateEtape(String designation) {
-        Etape existingEtape = etapeRepository.findByDesignation(designation);
-        if (existingEtape != null) {
-            return existingEtape;
-        }
-
-        Etape etape = new Etape();
-        etape.setDesignation(designation);
-        etape.setDureeJours(3);
-        etape.setOrdre(1);
-        etape.setPhase("APPROBATION");
-        
-        return etapeRepository.save(etape);
-    }
-
     private String generateReference(Antenne antenne, SousRubrique sousRubrique) {
         String annee = String.valueOf(LocalDate.now().getYear());
         String antenneCode = String.format("%03d", antenne.getId());
@@ -585,7 +511,7 @@ public class DossierCreationService {
                 .telephone(dossier.getAgriculteur().getTelephone())
                 .typeProduit(dossier.getSousRubrique().getDesignation())
                 .saba(dossier.getSaba())
-                .reference(dossier.getReference()) // Added reference
+                .reference(dossier.getReference())
                 .montantDemande(request.getDossier().getMontantDemande())
                 .antenneName(dossier.getAntenne().getDesignation())
                 .cdaName(dossier.getAntenne().getCda() != null ? dossier.getAntenne().getCda().getDescription() : "N/A")

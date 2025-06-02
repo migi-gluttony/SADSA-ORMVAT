@@ -9,6 +9,7 @@ import ormvat.sadsa.dto.agent_antenne.DossierAntenneActionDTOs.*;
 import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
 import ormvat.sadsa.service.common.DossierCommonService;
+import ormvat.sadsa.service.common.WorkflowService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,8 +22,7 @@ public class DossierAntenneService {
 
     private final DossierRepository dossierRepository;
     private final UtilisateurRepository utilisateurRepository;
-    private final WorkflowInstanceRepository workflowInstanceRepository;
-    private final HistoriqueWorkflowRepository historiqueWorkflowRepository;
+    private final WorkflowService workflowService;
     private final DossierCommonService dossierCommonService;
 
     /**
@@ -42,16 +42,24 @@ public class DossierAntenneService {
                 throw new RuntimeException("Vous n'avez pas l'autorisation d'envoyer ce dossier");
             }
 
+            // Check if user can act on current etape
+            if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
+                throw new RuntimeException("Cette action n'est pas autorisée à l'étape actuelle");
+            }
+
             // Update dossier status
             dossier.setStatus(Dossier.DossierStatus.SUBMITTED);
             dossier.setDateSubmission(LocalDateTime.now());
             dossierRepository.save(dossier);
 
-            // Update workflow
-            updateWorkflowForGUC(dossier, utilisateur, request.getCommentaire());
+            // Move to next etape using WorkflowService
+            WorkflowService.EtapeInfo currentEtapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            workflowService.moveToNextEtape(dossier, utilisateur, 
+                request.getCommentaire() != null ? request.getCommentaire() : "Envoi au GUC");
 
             // Create audit trail
-            dossierCommonService.createAuditTrail("ENVOI_GUC", dossier, utilisateur, request.getCommentaire());
+            dossierCommonService.createAuditTrail("ENVOI_GUC", dossier, utilisateur, 
+                "Envoi du dossier au GUC depuis l'étape: " + currentEtapeInfo.getDesignation());
 
             return DossierActionResponse.builder()
                     .success(true)
@@ -63,6 +71,61 @@ public class DossierAntenneService {
         } catch (Exception e) {
             log.error("Erreur lors de l'envoi du dossier au GUC", e);
             throw new RuntimeException("Erreur lors de l'envoi: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Handle dossier creation workflow initialization
+     */
+    @Transactional
+    public void initializeDossierWorkflow(Dossier dossier, Utilisateur utilisateur) {
+        try {
+            // Initialize workflow at AP - Phase Antenne
+            workflowService.initializeWorkflow(dossier, utilisateur);
+            
+            // Set initial status
+            dossier.setStatus(Dossier.DossierStatus.DRAFT);
+            dossierRepository.save(dossier);
+
+            log.info("Workflow initialisé pour le dossier {} par l'utilisateur {}", 
+                dossier.getId(), utilisateur.getEmail());
+
+        } catch (Exception e) {
+            log.error("Erreur lors de l'initialisation du workflow", e);
+            throw new RuntimeException("Erreur lors de l'initialisation du workflow: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Handle returned dossier from GUC
+     */
+    @Transactional
+    public DossierActionResponse handleReturnedDossier(Long dossierId, String userEmail) {
+        try {
+            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+            Dossier dossier = dossierRepository.findById(dossierId)
+                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+            // Update dossier status to allow editing
+            dossier.setStatus(Dossier.DossierStatus.RETURNED_FOR_COMPLETION);
+            dossierRepository.save(dossier);
+
+            // Create audit trail
+            dossierCommonService.createAuditTrail("RECEPTION_RETOUR", dossier, utilisateur, 
+                "Réception du dossier retourné par le GUC");
+
+            return DossierActionResponse.builder()
+                    .success(true)
+                    .message("Dossier retourné reçu - modifications possibles")
+                    .newStatut(dossier.getStatus().name())
+                    .dateAction(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors du traitement du dossier retourné", e);
+            throw new RuntimeException("Erreur lors du traitement: " + e.getMessage());
         }
     }
 
@@ -102,6 +165,43 @@ public class DossierAntenneService {
     }
 
     /**
+     * Handle RP phase - when farmer returns with approval
+     */
+    @Transactional
+    public DossierActionResponse startRealizationPhase(Long dossierId, String userEmail) {
+        try {
+            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+            Dossier dossier = dossierRepository.findById(dossierId)
+                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+            // Move to RP - Phase Antenne - 1
+            workflowService.moveToEtape(dossier, "RP - Phase Antenne - 1", utilisateur, 
+                "Début de la phase de réalisation");
+
+            // Update status
+            dossier.setStatus(Dossier.DossierStatus.IN_REVIEW);
+            dossierRepository.save(dossier);
+
+            // Create audit trail
+            dossierCommonService.createAuditTrail("DEBUT_REALISATION", dossier, utilisateur, 
+                "Début de la phase de réalisation du projet");
+
+            return DossierActionResponse.builder()
+                    .success(true)
+                    .message("Phase de réalisation démarrée avec succès")
+                    .newStatut(dossier.getStatus().name())
+                    .dateAction(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors du démarrage de la phase de réalisation", e);
+            throw new RuntimeException("Erreur lors du démarrage: " + e.getMessage());
+        }
+    }
+
+    /**
      * Get available actions for Agent Antenne
      */
     public List<AvailableActionDTO> getAvailableActionsForAntenne() {
@@ -117,6 +217,16 @@ public class DossierAntenneService {
                 .description("Envoyer le dossier au Guichet Unique Central pour traitement")
                 .build());
 
+        actions.add(AvailableActionDTO.builder()
+                .action("start_realization")
+                .label("Démarrer Réalisation")
+                .icon("pi-play")
+                .severity("info")
+                .requiresComment(false)
+                .requiresConfirmation(true)
+                .description("Démarrer la phase de réalisation du projet approuvé")
+                .build());
+
         return actions;
     }
 
@@ -124,19 +234,51 @@ public class DossierAntenneService {
      * Get available actions for specific dossier and antenne user
      */
     public List<AvailableActionDTO> getAvailableActionsForDossier(Dossier dossier, Utilisateur utilisateur) {
-        List<AvailableActionDTO> allActions = getAvailableActionsForAntenne();
-        DossierPermissionsDTO permissions = dossierCommonService.calculatePermissions(dossier, utilisateur);
+        List<AvailableActionDTO> availableActions = new ArrayList<>();
+        
+        try {
+            // Check current etape
+            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            String currentEtape = etapeInfo.getDesignation();
+            
+            // Can only act if user can act on current etape
+            if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
+                return availableActions;
+            }
 
-        return allActions.stream()
-                .filter(action -> {
-                    switch (action.getAction()) {
-                        case "send_to_guc":
-                            return permissions.getPeutEtreEnvoye();
-                        default:
-                            return true;
-                    }
-                })
-                .collect(java.util.stream.Collectors.toList());
+            DossierPermissionsDTO permissions = dossierCommonService.calculatePermissions(dossier, utilisateur);
+
+            // AP - Phase Antenne: Can send to GUC
+            if ("AP - Phase Antenne".equals(currentEtape) && permissions.getPeutEtreEnvoye()) {
+                availableActions.add(AvailableActionDTO.builder()
+                        .action("send_to_guc")
+                        .label("Envoyer au GUC")
+                        .icon("pi-send")
+                        .severity("success")
+                        .requiresComment(false)
+                        .requiresConfirmation(true)
+                        .description("Envoyer le dossier au GUC pour validation")
+                        .build());
+            }
+
+            // RP - Phase Antenne actions
+            if (currentEtape.startsWith("RP - Phase Antenne")) {
+                availableActions.add(AvailableActionDTO.builder()
+                        .action("process_realization")
+                        .label("Traiter Réalisation")
+                        .icon("pi-forward")
+                        .severity("info")
+                        .requiresComment(false)
+                        .requiresConfirmation(true)
+                        .description("Avancer à l'étape suivante de réalisation")
+                        .build());
+            }
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération des actions disponibles", e);
+        }
+
+        return availableActions;
     }
 
     // Private helper methods
@@ -150,27 +292,5 @@ public class DossierAntenneService {
     private boolean canDeleteDossier(Dossier dossier, Utilisateur utilisateur) {
         return dossier.getStatus() == Dossier.DossierStatus.DRAFT &&
                 utilisateur.getRole() == Utilisateur.UserRole.AGENT_ANTENNE;
-    }
-
-    private void updateWorkflowForGUC(Dossier dossier, Utilisateur utilisateur, String commentaire) {
-        List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
-
-        if (!workflows.isEmpty()) {
-            WorkflowInstance current = workflows.get(0);
-            current.setEtapeDesignation("Phase GUC");
-            current.setEmplacementActuel(WorkflowInstance.EmplacementType.GUC);
-            current.setDateEntree(LocalDateTime.now());
-            workflowInstanceRepository.save(current);
-        }
-
-        // Create history entry
-        HistoriqueWorkflow history = new HistoriqueWorkflow();
-        history.setDossier(dossier);
-        history.setEtapeDesignation("Envoi au GUC");
-        history.setEmplacementType(WorkflowInstance.EmplacementType.ANTENNE);
-        history.setDateEntree(LocalDateTime.now());
-        history.setUtilisateur(utilisateur);
-        history.setCommentaire(commentaire);
-        historiqueWorkflowRepository.save(history);
     }
 }

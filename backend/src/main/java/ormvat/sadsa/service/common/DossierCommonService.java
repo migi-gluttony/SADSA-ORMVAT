@@ -20,53 +20,35 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DossierCommonService {
 
-
     private final DossierRepository dossierRepository;
     private final UtilisateurRepository utilisateurRepository;
-    private final WorkflowInstanceRepository workflowInstanceRepository;
-    private final HistoriqueWorkflowRepository historiqueWorkflowRepository;
     private final PieceJointeRepository pieceJointeRepository;
     private final NoteRepository noteRepository;
     private final DocumentRequisRepository documentRequisRepository;
     private final AuditTrailRepository auditTrailRepository;
+    private final WorkflowService workflowService;
 
     /**
-     * Get dossiers for user role
+     * Get dossiers for user role using new workflow system
      */
     public List<Dossier> getDossiersForUserRole(Utilisateur utilisateur, DossierFilterRequest filterRequest) {
         switch (utilisateur.getRole()) {
             case AGENT_ANTENNE:
                 if (utilisateur.getAntenne() != null) {
-                    return dossierRepository.findByAntenneId(utilisateur.getAntenne().getId());
+                    return dossierRepository.findByAntenneId(utilisateur.getAntenne().getId()).stream()
+                            .filter(d -> canUserAccessDossierAtCurrentEtape(d, utilisateur))
+                            .collect(Collectors.toList());
                 }
                 return List.of();
 
             case AGENT_GUC:
                 return dossierRepository.findAll().stream()
                         .filter(d -> !d.getStatus().equals(Dossier.DossierStatus.DRAFT))
+                        .filter(d -> canUserAccessDossierAtCurrentEtape(d, utilisateur))
                         .collect(Collectors.toList());
 
             case AGENT_COMMISSION_TERRAIN:
-                if (utilisateur.getEquipeCommission() != null) {
-                    return dossierRepository.findAll().stream()
-                            .filter(d -> d.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
-                                    d.getStatus().equals(Dossier.DossierStatus.IN_REVIEW) ||
-                                    d.getStatus().equals(Dossier.DossierStatus.APPROVED) ||
-                                    d.getStatus().equals(Dossier.DossierStatus.REJECTED))
-                            .filter(d -> {
-                                Long rubriqueId = d.getSousRubrique().getRubrique().getId();
-                                Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
-                                return equipeRequise.equals(utilisateur.getEquipeCommission());
-                            })
-                            .collect(Collectors.toList());
-                } else {
-                    return dossierRepository.findAll().stream()
-                            .filter(d -> d.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
-                                    d.getStatus().equals(Dossier.DossierStatus.IN_REVIEW) ||
-                                    d.getStatus().equals(Dossier.DossierStatus.APPROVED) ||
-                                    d.getStatus().equals(Dossier.DossierStatus.REJECTED))
-                            .collect(Collectors.toList());
-                }
+                return getCommissionDossiers(utilisateur);
 
             case ADMIN:
                 return dossierRepository.findAll();
@@ -77,7 +59,7 @@ public class DossierCommonService {
     }
 
     /**
-     * Check if user can access dossier
+     * Check if user can access dossier based on current etape
      */
     public boolean canAccessDossier(Dossier dossier, Utilisateur utilisateur) {
         switch (utilisateur.getRole()) {
@@ -89,81 +71,39 @@ public class DossierCommonService {
             case AGENT_GUC:
                 return !dossier.getStatus().equals(Dossier.DossierStatus.DRAFT);
             case AGENT_COMMISSION_TERRAIN:
-                boolean statusAllowed = dossier.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
-                        dossier.getStatus().equals(Dossier.DossierStatus.IN_REVIEW) ||
-                        dossier.getStatus().equals(Dossier.DossierStatus.APPROVED) ||
-                        dossier.getStatus().equals(Dossier.DossierStatus.REJECTED);
-                
-                if (utilisateur.getEquipeCommission() != null) {
-                    Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
-                    Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
-                    return statusAllowed && equipeRequise.equals(utilisateur.getEquipeCommission());
-                } else {
-                    return statusAllowed;
-                }
+                return canCommissionAccessDossier(dossier, utilisateur);
             default:
                 return false;
         }
     }
 
     /**
-     * Apply filters to dossiers list
-     */
-    public List<Dossier> applyFilters(List<Dossier> dossiers, DossierFilterRequest filter) {
-        return dossiers.stream()
-                .filter(d -> filter.getSearchTerm() == null ||
-                        containsSearchTerm(d, filter.getSearchTerm()))
-                .filter(d -> filter.getStatut() == null ||
-                        d.getStatus().name().equals(filter.getStatut()))
-                .filter(d -> filter.getSousRubriqueId() == null ||
-                        d.getSousRubrique().getId().equals(filter.getSousRubriqueId()))
-                .filter(d -> filter.getDateDebutCreation() == null ||
-                        d.getDateCreation().isAfter(filter.getDateDebutCreation()))
-                .filter(d -> filter.getDateFinCreation() == null ||
-                        d.getDateCreation().isBefore(filter.getDateFinCreation()))
-                .filter(d -> filter.getAntenneId() == null ||
-                        d.getAntenne().getId().equals(filter.getAntenneId()))
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Check if dossier contains search term
-     */
-    private boolean containsSearchTerm(Dossier dossier, String searchTerm) {
-        String term = searchTerm.toLowerCase();
-        return (dossier.getSaba() != null && dossier.getSaba().toLowerCase().contains(term)) ||
-                (dossier.getReference() != null && dossier.getReference().toLowerCase().contains(term)) ||
-                (dossier.getAgriculteur().getCin() != null
-                        && dossier.getAgriculteur().getCin().toLowerCase().contains(term)) ||
-                (dossier.getAgriculteur().getNom() != null
-                        && dossier.getAgriculteur().getNom().toLowerCase().contains(term)) ||
-                (dossier.getAgriculteur().getPrenom() != null
-                        && dossier.getAgriculteur().getPrenom().toLowerCase().contains(term));
-    }
-
-    /**
-     * Map to DossierSummaryDTO
+     * Map to DossierSummaryDTO using workflow system
      */
     public DossierSummaryDTO mapToDossierSummaryDTO(Dossier dossier, Utilisateur currentUser) {
-        List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
-        WorkflowInstance currentWorkflow = workflows.isEmpty() ? null : workflows.get(0);
-
         List<PieceJointe> pieceJointes = pieceJointeRepository.findByDossierId(dossier.getId());
         List<DocumentRequis> documentsRequis = documentRequisRepository
                 .findBySousRubriqueId(dossier.getSousRubrique().getId());
 
         double completionPercentage = calculateCompletionPercentage(pieceJointes, documentsRequis);
-        Map<String, Object> workflowInfo = calculateWorkflowInfo(currentWorkflow);
         DossierPermissionsDTO permissions = calculatePermissions(dossier, currentUser);
 
         int notesCount = noteRepository.findByDossierId(dossier.getId()).size();
+
+        // Get current etape information
+        WorkflowService.EtapeInfo etapeInfo = null;
+        try {
+            etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+        } catch (Exception e) {
+            log.warn("Impossible de récupérer l'étape pour le dossier {}: {}", dossier.getId(), e.getMessage());
+        }
 
         return DossierSummaryDTO.builder()
                 .id(dossier.getId())
                 .numeroDossier(dossier.getNumeroDossier())
                 .saba(dossier.getSaba())
                 .reference(dossier.getReference())
-                .statut(getDisplayStatus(dossier.getStatus(), currentWorkflow))
+                .statut(getDisplayStatus(dossier.getStatus(), etapeInfo))
                 .dateCreation(dossier.getDateCreation())
                 .dateSubmission(dossier.getDateSubmission())
                 .agriculteurNom(dossier.getAgriculteur().getNom())
@@ -175,11 +115,11 @@ public class DossierCommonService {
                 .antenneDesignation(dossier.getAntenne().getDesignation())
                 .cdaNom(dossier.getAntenne().getCda() != null ? dossier.getAntenne().getCda().getDescription() : "N/A")
                 .montantSubvention(dossier.getMontantSubvention())
-                .etapeActuelle((String) workflowInfo.get("etapeActuelle"))
-                .emplacementActuel((WorkflowInstance.EmplacementType) workflowInfo.get("emplacementActuel"))
-                .joursRestants((Integer) workflowInfo.get("joursRestants"))
-                .enRetard((Boolean) workflowInfo.get("enRetard"))
-                .dateLimite(currentWorkflow != null ? currentWorkflow.getDateLimite() : null)
+                .etapeActuelle(etapeInfo != null ? etapeInfo.getDesignation() : "Non définie")
+                .emplacementActuel(etapeInfo != null ? etapeInfo.getEmplacementActuel() : null)
+                .joursRestants(etapeInfo != null ? etapeInfo.getJoursRestants() : 0)
+                .enRetard(etapeInfo != null ? etapeInfo.getEnRetard() : false)
+                .dateLimite(etapeInfo != null ? etapeInfo.getDateLimite() : null)
                 .formsCompleted((int) pieceJointes.stream()
                         .filter(pj -> pj.getStatus() == PieceJointe.DocumentStatus.COMPLETE).count())
                 .totalForms(documentsRequis.size())
@@ -193,22 +133,27 @@ public class DossierCommonService {
     }
 
     /**
-     * Calculate dossier permissions based on user role
+     * Calculate dossier permissions based on user role and current etape
      */
     public DossierPermissionsDTO calculatePermissions(Dossier dossier, Utilisateur utilisateur) {
         boolean isDraft = dossier.getStatus() == Dossier.DossierStatus.DRAFT;
         boolean isReturnedForCompletion = dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
-        boolean isSubmitted = dossier.getStatus() == Dossier.DossierStatus.SUBMITTED;
-        boolean isInReview = dossier.getStatus() == Dossier.DossierStatus.IN_REVIEW;
+        boolean canUserActOnCurrentEtape = false;
 
-        boolean canEditAtAntenne = isDraft || isReturnedForCompletion;
+        try {
+            canUserActOnCurrentEtape = workflowService.canUserActOnCurrentEtape(dossier, utilisateur);
+        } catch (Exception e) {
+            log.warn("Impossible de vérifier les permissions pour le dossier {}: {}", dossier.getId(), e.getMessage());
+        }
+
+        boolean canEditAtAntenne = (isDraft || isReturnedForCompletion) && canUserActOnCurrentEtape;
 
         switch (utilisateur.getRole()) {
             case AGENT_ANTENNE:
                 return DossierPermissionsDTO.builder()
                         .peutEtreModifie(canEditAtAntenne)
                         .peutEtreEnvoye(canEditAtAntenne)
-                        .peutEtreSupprime(isDraft)
+                        .peutEtreSupprime(isDraft && canUserActOnCurrentEtape)
                         .peutAjouterNotes(true)
                         .peutRetournerAntenne(false)
                         .peutEnvoyerCommission(false)
@@ -224,10 +169,24 @@ public class DossierCommonService {
                         .peutEtreEnvoye(false)
                         .peutEtreSupprime(false)
                         .peutAjouterNotes(true)
-                        .peutRetournerAntenne(isSubmitted || isInReview)
-                        .peutEnvoyerCommission(isSubmitted)
-                        .peutRejeter(isSubmitted || isInReview)
-                        .peutApprouver(false)
+                        .peutRetournerAntenne(canUserActOnCurrentEtape)
+                        .peutEnvoyerCommission(canUserActOnCurrentEtape)
+                        .peutRejeter(canUserActOnCurrentEtape)
+                        .peutApprouver(canUserActOnCurrentEtape)
+                        .peutVoirDocuments(true)
+                        .peutTelechargerDocuments(true)
+                        .build();
+
+            case AGENT_COMMISSION_TERRAIN:
+                return DossierPermissionsDTO.builder()
+                        .peutEtreModifie(false)
+                        .peutEtreEnvoye(false)
+                        .peutEtreSupprime(false)
+                        .peutAjouterNotes(true)
+                        .peutRetournerAntenne(false)
+                        .peutEnvoyerCommission(false)
+                        .peutRejeter(canUserActOnCurrentEtape)
+                        .peutApprouver(canUserActOnCurrentEtape)
                         .peutVoirDocuments(true)
                         .peutTelechargerDocuments(true)
                         .build();
@@ -263,45 +222,13 @@ public class DossierCommonService {
     }
 
     /**
-     * Calculate completion percentage
+     * Get display status using etape information
      */
-    public double calculateCompletionPercentage(List<PieceJointe> pieceJointes, List<DocumentRequis> documentsRequis) {
-        if (documentsRequis.isEmpty()) return 100.0;
-
-        long completedDocs = pieceJointes.stream()
-                .filter(pj -> pj.getStatus() == PieceJointe.DocumentStatus.COMPLETE)
-                .count();
-
-        return (double) completedDocs / documentsRequis.size() * 100.0;
-    }
-
-    /**
-     * Calculate workflow information
-     */
-    public Map<String, Object> calculateWorkflowInfo(WorkflowInstance workflow) {
-        Map<String, Object> info = new HashMap<>();
-
-        if (workflow != null) {
-            info.put("etapeActuelle", workflow.getEtapeDesignation());
-            info.put("emplacementActuel", workflow.getEmplacementActuel());
-            info.put("joursRestants", workflow.getJoursRestants());
-            info.put("enRetard", workflow.getEnRetard());
-        } else {
-            info.put("etapeActuelle", "Phase Antenne");
-            info.put("emplacementActuel", WorkflowInstance.EmplacementType.ANTENNE);
-            info.put("joursRestants", 3);
-            info.put("enRetard", false);
-        }
-
-        return info;
-    }
-
-    /**
-     * Get display status
-     */
-    public String getDisplayStatus(Dossier.DossierStatus status, WorkflowInstance workflow) {
-        if (workflow != null && workflow.getEtapeDesignation() != null) {
-            return workflow.getEtapeDesignation();
+    public String getDisplayStatus(Dossier.DossierStatus status, WorkflowService.EtapeInfo etapeInfo) {
+        if (etapeInfo != null && etapeInfo.getDesignation() != null) {
+            return etapeInfo.getDesignation() + 
+                   (etapeInfo.getEnRetard() ? " (En retard)" : "") +
+                   " (" + etapeInfo.getPhase() + ")";
         }
 
         switch (status) {
@@ -317,7 +244,7 @@ public class DossierCommonService {
     }
 
     /**
-     * Calculate statistics
+     * Calculate statistics using workflow system
      */
     public DossierStatisticsDTO calculateStatistics(List<Dossier> dossiers, Utilisateur utilisateur) {
         long total = dossiers.size();
@@ -325,6 +252,30 @@ public class DossierCommonService {
         long approuves = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.APPROVED).count();
         long rejetes = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.REJECTED).count();
         long attenteTraitement = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.SUBMITTED).count();
+
+        // Count dossiers in commission phase
+        long dossiersEnCommission = dossiers.stream()
+                .filter(d -> {
+                    try {
+                        WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(d);
+                        return "AP - Phase AHA-AF".equals(etapeInfo.getDesignation());
+                    } catch (Exception e) {
+                        return false;
+                    }
+                })
+                .count();
+
+        // Count overdue dossiers
+        long dossiersEnRetard = dossiers.stream()
+                .filter(d -> {
+                    try {
+                        WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(d);
+                        return etapeInfo.getEnRetard();
+                    } catch (Exception e) {
+                        return false;
+                    }
+                })
+                .count();
 
         LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
         long ceMois = dossiers.stream().filter(d -> d.getDateCreation().isAfter(startOfMonth)).count();
@@ -336,12 +287,74 @@ public class DossierCommonService {
                 .dossiersEnCours(enCours)
                 .dossiersApprouves(approuves)
                 .dossiersRejetes(rejetes)
-                .dossiersEnRetard(0L)
+                .dossiersEnRetard(dossiersEnRetard)
                 .tauxCompletion(tauxCompletion)
                 .dossiersCeMois(ceMois)
                 .dossiersAttenteTraitement(attenteTraitement)
-                .dossiersEnCommission(0L)
+                .dossiersEnCommission(dossiersEnCommission)
                 .build();
+    }
+
+    // Private helper methods
+
+    private boolean canUserAccessDossierAtCurrentEtape(Dossier dossier, Utilisateur utilisateur) {
+        try {
+            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            
+            switch (utilisateur.getRole()) {
+                case AGENT_ANTENNE:
+                    return etapeInfo.getEmplacementActuel() == WorkflowInstance.EmplacementType.ANTENNE;
+                case AGENT_GUC:
+                    return etapeInfo.getEmplacementActuel() == WorkflowInstance.EmplacementType.GUC;
+                case AGENT_COMMISSION_TERRAIN:
+                    return etapeInfo.getEmplacementActuel() == WorkflowInstance.EmplacementType.COMMISSION_AHA_AF;
+                default:
+                    return true;
+            }
+        } catch (Exception e) {
+            return true; // Allow access if workflow info unavailable
+        }
+    }
+
+    private List<Dossier> getCommissionDossiers(Utilisateur utilisateur) {
+        return dossierRepository.findAll().stream()
+                .filter(d -> canCommissionAccessDossier(d, utilisateur))
+                .collect(Collectors.toList());
+    }
+
+    private boolean canCommissionAccessDossier(Dossier dossier, Utilisateur utilisateur) {
+        try {
+            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            
+            // Must be at Commission etape
+            if (!"AP - Phase AHA-AF".equals(etapeInfo.getDesignation())) {
+                return false;
+            }
+
+            // Check team assignment if user has one
+            if (utilisateur.getEquipeCommission() != null) {
+                Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
+                Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
+                return equipeRequise.equals(utilisateur.getEquipeCommission());
+            }
+
+            return true; // Agent without team can see all commission dossiers
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Calculate completion percentage
+     */
+    public double calculateCompletionPercentage(List<PieceJointe> pieceJointes, List<DocumentRequis> documentsRequis) {
+        if (documentsRequis.isEmpty()) return 100.0;
+
+        long completedDocs = pieceJointes.stream()
+                .filter(pj -> pj.getStatus() == PieceJointe.DocumentStatus.COMPLETE)
+                .count();
+
+        return (double) completedDocs / documentsRequis.size() * 100.0;
     }
 
     /**
@@ -358,9 +371,7 @@ public class DossierCommonService {
         auditTrailRepository.save(audit);
     }
 
-    /**
-     * Map to detail DTOs
-     */
+    // Rest of mapping methods remain the same
     public DossierDetailDTO mapToDossierDetailDTO(Dossier dossier) {
         return DossierDetailDTO.builder()
                 .id(dossier.getId())
@@ -503,5 +514,35 @@ public class DossierCommonService {
 
     public List<String> getValidationErrors(Dossier dossier, List<PieceJointe> pieceJointes) {
         return List.of();
+    }
+
+    // Apply filters (keep existing implementation)
+    public List<Dossier> applyFilters(List<Dossier> dossiers, DossierFilterRequest filter) {
+        return dossiers.stream()
+                .filter(d -> filter.getSearchTerm() == null ||
+                        containsSearchTerm(d, filter.getSearchTerm()))
+                .filter(d -> filter.getStatut() == null ||
+                        d.getStatus().name().equals(filter.getStatut()))
+                .filter(d -> filter.getSousRubriqueId() == null ||
+                        d.getSousRubrique().getId().equals(filter.getSousRubriqueId()))
+                .filter(d -> filter.getDateDebutCreation() == null ||
+                        d.getDateCreation().isAfter(filter.getDateDebutCreation()))
+                .filter(d -> filter.getDateFinCreation() == null ||
+                        d.getDateCreation().isBefore(filter.getDateFinCreation()))
+                .filter(d -> filter.getAntenneId() == null ||
+                        d.getAntenne().getId().equals(filter.getAntenneId()))
+                .collect(Collectors.toList());
+    }
+
+    private boolean containsSearchTerm(Dossier dossier, String searchTerm) {
+        String term = searchTerm.toLowerCase();
+        return (dossier.getSaba() != null && dossier.getSaba().toLowerCase().contains(term)) ||
+                (dossier.getReference() != null && dossier.getReference().toLowerCase().contains(term)) ||
+                (dossier.getAgriculteur().getCin() != null
+                        && dossier.getAgriculteur().getCin().toLowerCase().contains(term)) ||
+                (dossier.getAgriculteur().getNom() != null
+                        && dossier.getAgriculteur().getNom().toLowerCase().contains(term)) ||
+                (dossier.getAgriculteur().getPrenom() != null
+                        && dossier.getAgriculteur().getPrenom().toLowerCase().contains(term));
     }
 }

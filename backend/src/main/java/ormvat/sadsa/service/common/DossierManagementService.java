@@ -30,11 +30,9 @@ public class DossierManagementService {
 
     private final DossierRepository dossierRepository;
     private final UtilisateurRepository utilisateurRepository;
-    private final WorkflowInstanceRepository workflowInstanceRepository;
-    private final HistoriqueWorkflowRepository historiqueWorkflowRepository;
     private final PieceJointeRepository pieceJointeRepository;
     private final NoteRepository noteRepository;
-    private final DocumentRequisRepository documentRequisRepository;
+    private final WorkflowService workflowService;
 
     // Role-specific services
     private final DossierCommonService dossierCommonService;
@@ -44,7 +42,7 @@ public class DossierManagementService {
     private final DossierAdminService dossierAdminService;
 
     /**
-     * Get paginated list of dossiers with filtering based on user role
+     * Get paginated list of dossiers with filtering based on user role and workflow
      */
     public DossierListResponse getDossiersList(DossierFilterRequest filterRequest, String userEmail) {
         try {
@@ -61,7 +59,7 @@ public class DossierManagementService {
             int size = filterRequest.getSize() != null ? filterRequest.getSize() : 20;
             Pageable pageable = PageRequest.of(page, size, sort);
 
-            // Get dossiers based on user role
+            // Get dossiers based on user role using workflow system
             List<Dossier> allDossiers = dossierCommonService.getDossiersForUserRole(utilisateur, filterRequest);
 
             // Apply filters
@@ -108,7 +106,7 @@ public class DossierManagementService {
     }
 
     /**
-     * Get detailed dossier information with role-specific data
+     * Get detailed dossier information with workflow-based data
      */
     public DossierDetailResponse getDossierDetail(Long dossierId, String userEmail) {
         try {
@@ -120,17 +118,21 @@ public class DossierManagementService {
             Dossier dossier = dossierRepository.findById(dossierId)
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
-            // Check access permission based on role
+            // Check access permission based on role and workflow
             if (!dossierCommonService.canAccessDossier(dossier, utilisateur)) {
                 throw new RuntimeException("Accès non autorisé à ce dossier");
             }
 
-            // Get workflow instance
-            List<WorkflowInstance> workflowInstances = workflowInstanceRepository.findByDossierId(dossierId);
-            WorkflowInstance currentWorkflow = workflowInstances.isEmpty() ? null : workflowInstances.get(0);
+            // Get current workflow information
+            WorkflowService.EtapeInfo etapeInfo = null;
+            try {
+                etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            } catch (Exception e) {
+                log.warn("Impossible de récupérer l'étape pour le dossier {}: {}", dossierId, e.getMessage());
+            }
 
             // Get workflow history
-            List<HistoriqueWorkflow> workflowHistory = historiqueWorkflowRepository.findByDossierId(dossierId);
+            List<HistoriqueWorkflow> workflowHistory = workflowService.getWorkflowHistory(dossier);
 
             // Get piece jointes
             List<PieceJointe> pieceJointes = pieceJointeRepository.findByDossierId(dossierId);
@@ -142,14 +144,11 @@ public class DossierManagementService {
             List<AvailableFormDTO> availableForms = dossierCommonService.getAvailableForms(
                     dossier.getSousRubrique().getId(), pieceJointes, utilisateur);
 
-            // Calculate permissions based on role
+            // Calculate permissions based on role and workflow
             DossierPermissionsDTO permissions = dossierCommonService.calculatePermissions(dossier, utilisateur);
 
             // Get available actions for this dossier and user
             List<AvailableActionDTO> availableActions = getAvailableActionsForDossier(dossier, utilisateur);
-
-            // Calculate workflow info
-            Map<String, Object> workflowInfo = dossierCommonService.calculateWorkflowInfo(currentWorkflow);
 
             return DossierDetailResponse.builder()
                     .dossier(dossierCommonService.mapToDossierDetailDTO(dossier))
@@ -159,10 +158,10 @@ public class DossierManagementService {
                     .pieceJointes(dossierCommonService.mapToPieceJointeDTOs(pieceJointes, utilisateur))
                     .notes(dossierCommonService.mapToNoteDTOs(notes, utilisateur))
                     .validationErrors(dossierCommonService.getValidationErrors(dossier, pieceJointes))
-                    .joursRestants((Integer) workflowInfo.get("joursRestants"))
-                    .enRetard((Boolean) workflowInfo.get("enRetard"))
-                    .etapeActuelle((String) workflowInfo.get("etapeActuelle"))
-                    .emplacementActuel((WorkflowInstance.EmplacementType) workflowInfo.get("emplacementActuel"))
+                    .joursRestants(etapeInfo != null ? etapeInfo.getJoursRestants() : 0)
+                    .enRetard(etapeInfo != null ? etapeInfo.getEnRetard() : false)
+                    .etapeActuelle(etapeInfo != null ? etapeInfo.getDesignation() : "Non définie")
+                    .emplacementActuel(etapeInfo != null ? etapeInfo.getEmplacementActuel() : null)
                     .permissions(permissions)
                     .availableActions(availableActions)
                     .currentUserRole(utilisateur.getRole().name())
@@ -206,6 +205,46 @@ public class DossierManagementService {
     @Transactional
     public DossierActionResponse rejectDossier(RejectDossierRequest request, String userEmail) {
         return dossierGUCService.rejectDossier(request, userEmail);
+    }
+
+    /**
+     * Approve dossier (Agent GUC action)
+     */
+    @Transactional
+    public DossierActionResponse approveDossier(Long dossierId, String userEmail, String commentaire) {
+        return dossierGUCService.approveDossier(dossierId, userEmail, commentaire);
+    }
+
+    /**
+     * Approve terrain (Commission action)
+     */
+    @Transactional
+    public DossierActionResponse approveTerrain(Long dossierId, String userEmail, String commentaire) {
+        return dossierCommissionService.approveTerrain(dossierId, userEmail, commentaire);
+    }
+
+    /**
+     * Reject terrain (Commission action)
+     */
+    @Transactional
+    public DossierActionResponse rejectTerrain(Long dossierId, String userEmail, String motif, String commentaire) {
+        return dossierCommissionService.rejectTerrain(dossierId, userEmail, motif, commentaire);
+    }
+
+    /**
+     * Return to GUC from Commission
+     */
+    @Transactional
+    public DossierActionResponse returnToGUCFromCommission(Long dossierId, String userEmail, String motif, String commentaire) {
+        return dossierCommissionService.returnToGUC(dossierId, userEmail, motif, commentaire);
+    }
+
+    /**
+     * Start realization phase (Agent Antenne action)
+     */
+    @Transactional
+    public DossierActionResponse startRealizationPhase(Long dossierId, String userEmail) {
+        return dossierAntenneService.startRealizationPhase(dossierId, userEmail);
     }
 
     /**
@@ -262,6 +301,81 @@ public class DossierManagementService {
         }
     }
 
+    /**
+     * Process workflow action based on action type
+     */
+    @Transactional
+    public DossierActionResponse processWorkflowAction(Long dossierId, String action, Map<String, Object> parameters, String userEmail) {
+        try {
+            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+            Dossier dossier = dossierRepository.findById(dossierId)
+                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+            // Check if user can act on current etape
+            if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
+                throw new RuntimeException("Cette action n'est pas autorisée à l'étape actuelle");
+            }
+
+            String commentaire = (String) parameters.getOrDefault("commentaire", "");
+
+            switch (action) {
+                case "move_to_next":
+                    workflowService.moveToNextEtape(dossier, utilisateur, commentaire);
+                    break;
+                case "return_to_previous":
+                    workflowService.returnToPreviousEtape(dossier, utilisateur, commentaire);
+                    break;
+                default:
+                    throw new RuntimeException("Action de workflow non reconnue: " + action);
+            }
+
+            return DossierActionResponse.builder()
+                    .success(true)
+                    .message("Action de workflow exécutée avec succès")
+                    .dateAction(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors de l'exécution de l'action de workflow", e);
+            throw new RuntimeException("Erreur lors de l'action: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Get workflow information for dossier
+     */
+    public WorkflowInfoResponse getWorkflowInfo(Long dossierId, String userEmail) {
+        try {
+            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+            Dossier dossier = dossierRepository.findById(dossierId)
+                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            List<HistoriqueWorkflow> history = workflowService.getWorkflowHistory(dossier);
+
+            return WorkflowInfoResponse.builder()
+                    .currentEtape(etapeInfo.getDesignation())
+                    .phase(etapeInfo.getPhase())
+                    .ordre(etapeInfo.getOrdre())
+                    .dureeJours(etapeInfo.getDureeJours())
+                    .joursRestants(etapeInfo.getJoursRestants())
+                    .enRetard(etapeInfo.getEnRetard())
+                    .dateLimite(etapeInfo.getDateLimite())
+                    .emplacementActuel(etapeInfo.getEmplacementActuel())
+                    .canUserAct(workflowService.canUserActOnCurrentEtape(dossier, utilisateur))
+                    .history(dossierCommonService.mapToWorkflowHistoryDTOs(history))
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération des informations de workflow", e);
+            throw new RuntimeException("Erreur lors de la récupération: " + e.getMessage());
+        }
+    }
+
     // Private helper methods for delegation
 
     private List<AvailableActionDTO> getAvailableActionsForRole(Utilisateur.UserRole role) {
@@ -292,5 +406,23 @@ public class DossierManagementService {
             default:
                 return new ArrayList<>();
         }
+    }
+
+    // DTO for workflow information
+    @lombok.Data
+    @lombok.Builder
+    @lombok.AllArgsConstructor
+    @lombok.NoArgsConstructor
+    public static class WorkflowInfoResponse {
+        private String currentEtape;
+        private String phase;
+        private Integer ordre;
+        private Integer dureeJours;
+        private Integer joursRestants;
+        private Boolean enRetard;
+        private LocalDateTime dateLimite;
+        private WorkflowInstance.EmplacementType emplacementActuel;
+        private Boolean canUserAct;
+        private List<WorkflowHistoryDTO> history;
     }
 }
