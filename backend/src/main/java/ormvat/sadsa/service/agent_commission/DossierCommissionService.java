@@ -293,40 +293,4 @@ public class DossierCommissionService {
         return availableActions;
     }
 
-    /**
-     * Get dossiers assigned to commission agent's team
-     */
-    public List<Dossier> getDossiersForCommissionAgent(Utilisateur utilisateur) {
-        if (utilisateur.getEquipeCommission() == null) {
-            // Agent not assigned to specific team - can see all commission dossiers
-            return dossierRepository.findAll().stream()
-                    .filter(d -> {
-                        try {
-                            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(d);
-                            return "AP - Phase AHA-AF".equals(etapeInfo.getDesignation());
-                        } catch (Exception e) {
-                            return false;
-                        }
-                    })
-                    .collect(java.util.stream.Collectors.toList());
-        }
-
-        // Filter by team assignment
-        return dossierRepository.findAll().stream()
-                .filter(d -> {
-                    try {
-                        WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(d);
-                        if (!"AP - Phase AHA-AF".equals(etapeInfo.getDesignation())) {
-                            return false;
-                        }
-                        
-                        Long rubriqueId = d.getSousRubrique().getRubrique().getId();
-                        Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
-                        return equipeRequise.equals(utilisateur.getEquipeCommission());
-                    } catch (Exception e) {
-                        return false;
-                    }
-                })
-                .collect(java.util.stream.Collectors.toList());
-    }
 }

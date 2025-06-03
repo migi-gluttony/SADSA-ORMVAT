@@ -623,7 +623,17 @@ async function openVisitDetail(visit) {
 }
 
 function openCompleteDialog(visit) {
-  selectedVisit.value = visit;
+  if (!visit || !visit.id) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: 'Impossible d\'ouvrir la finalisation - données de visite manquantes',
+      life: 4000
+    });
+    return;
+  }
+  
+  selectedVisit.value = { ...visit };
   showCompleteDialog.value = true;
 }
 

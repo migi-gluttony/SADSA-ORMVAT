@@ -2,15 +2,14 @@ package ormvat.sadsa.service.agent_commission;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import ormvat.sadsa.dto.agent_commission.TerrainVisitDTOs.*;
 import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
+import ormvat.sadsa.service.common.WorkflowService;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -22,7 +21,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.ArrayList;
 
 @Service
 @RequiredArgsConstructor
@@ -36,6 +34,10 @@ public class TerrainVisitService {
     private final WorkflowInstanceRepository workflowInstanceRepository;
     private final HistoriqueWorkflowRepository historiqueWorkflowRepository;
     private final AuditTrailRepository auditTrailRepository;
+
+    // Optional WorkflowService injection to avoid circular dependencies
+    @Autowired(required = false)
+    private WorkflowService workflowService;
 
     private static final String UPLOAD_DIR = "uploads/terrain-visits/";
 
@@ -245,10 +247,6 @@ public class TerrainVisitService {
             dossier.setStatus(Dossier.DossierStatus.IN_REVIEW);
             dossierRepository.save(dossier);
 
-            // Update workflow
-            updateWorkflowForTerrainVisit(dossier, utilisateur, "Visite terrain programmée par " + 
-                    (utilisateur.getEquipeCommission() != null ? utilisateur.getEquipeCommission().getDisplayName() : "Commission"));
-
             // Create audit trail
             createAuditTrail("VISITE_TERRAIN_PROGRAMMEE", dossier, utilisateur, 
                     "Visite terrain programmée pour le " + request.getDateVisite() + 
@@ -318,6 +316,7 @@ public class TerrainVisitService {
 
     /**
      * Complete a terrain visit with approval/rejection
+     * ✅ ENHANCED: Now automatically advances workflow to next phase
      */
     @Transactional
     public TerrainVisitActionResponse completeTerrainVisit(CompleteVisitRequest request, String userEmail) {
@@ -344,14 +343,29 @@ public class TerrainVisitService {
             Dossier dossier = visite.getDossier();
             if (request.getApprouve()) {
                 dossier.setStatus(Dossier.DossierStatus.APPROVED);
+                log.info("Terrain approuvé pour le dossier {}", dossier.getId());
             } else {
                 dossier.setStatus(Dossier.DossierStatus.REJECTED);
+                log.info("Terrain rejeté pour le dossier {}", dossier.getId());
             }
             dossierRepository.save(dossier);
 
-            // Update workflow
-            updateWorkflowForVisitCompletion(dossier, utilisateur, request.getApprouve(), 
-                    request.getObservations());
+            // ✅ NEW: Automatically advance workflow to next phase (only if approved)
+            String workflowMessage = "Visite terrain terminée";
+            if (request.getApprouve() && workflowService != null) {
+                try {
+                    String comment = (request.getApprouve() ? "Terrain approuvé" : "Terrain rejeté") + 
+                            " par " + (utilisateur.getEquipeCommission() != null ? utilisateur.getEquipeCommission().getDisplayName() : "Commission");
+                    
+                    workflowService.moveToNextEtape(dossier, utilisateur, comment);
+                    workflowMessage = "Visite terrain terminée avec succès. Le dossier a été automatiquement transféré à la phase suivante.";
+                    log.info("Workflow automatiquement avancé pour le dossier {}", dossier.getId());
+                } catch (Exception workflowError) {
+                    log.warn("Erreur lors de l'avancement automatique du workflow pour le dossier {}: {}", 
+                             dossier.getId(), workflowError.getMessage());
+                    // Continue with the visit completion even if workflow advancement fails
+                }
+            }
 
             // Create audit trail with team information
             String action = request.getApprouve() ? "VISITE_TERRAIN_APPROUVEE" : "VISITE_TERRAIN_REJETEE";
@@ -362,8 +376,7 @@ public class TerrainVisitService {
 
             return TerrainVisitActionResponse.builder()
                     .success(true)
-                    .message(request.getApprouve() ? 
-                            "Visite terrain approuvée avec succès" : "Visite terrain rejetée")
+                    .message(workflowMessage)
                     .visiteId(visite.getId())
                     .newStatut(request.getApprouve() ? "APPROUVE" : "REJETE")
                     .dateAction(LocalDateTime.now())
@@ -495,7 +508,7 @@ public class TerrainVisitService {
         }
     }
 
-    // Private helper methods
+    // Private helper methods (keeping all original logic)
 
     private Utilisateur getCommissionAgent(String userEmail) {
         Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
@@ -808,55 +821,6 @@ public class TerrainVisitService {
             extension = originalFilename.substring(originalFilename.lastIndexOf("."));
         }
         return UUID.randomUUID().toString() + extension;
-    }
-
-    // Workflow and audit methods with team information
-    private void updateWorkflowForTerrainVisit(Dossier dossier, Utilisateur utilisateur, String commentaire) {
-        List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
-        
-        String teamInfo = utilisateur.getEquipeCommission() != null ? 
-                " - " + utilisateur.getEquipeCommission().getDisplayName() : "";
-        
-        if (!workflows.isEmpty()) {
-            WorkflowInstance current = workflows.get(0);
-            current.setEtapeDesignation("Commission Vérification Terrain - Visite Programmée" + teamInfo);
-            current.setEmplacementActuel(WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
-            current.setDateEntree(LocalDateTime.now());
-            workflowInstanceRepository.save(current);
-        }
-
-        HistoriqueWorkflow history = new HistoriqueWorkflow();
-        history.setDossier(dossier);
-        history.setEtapeDesignation("Visite Terrain Programmée" + teamInfo);
-        history.setEmplacementType(WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
-        history.setDateEntree(LocalDateTime.now());
-        history.setUtilisateur(utilisateur);
-        history.setCommentaire(commentaire);
-        historiqueWorkflowRepository.save(history);
-    }
-
-    private void updateWorkflowForVisitCompletion(Dossier dossier, Utilisateur utilisateur, Boolean approuve, String commentaire) {
-        List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
-        
-        String teamInfo = utilisateur.getEquipeCommission() != null ? 
-                " - " + utilisateur.getEquipeCommission().getDisplayName() : "";
-        
-        if (!workflows.isEmpty()) {
-            WorkflowInstance current = workflows.get(0);
-            current.setEtapeDesignation((approuve ? "Terrain Approuvé" : "Terrain Rejeté") + teamInfo);
-            current.setEmplacementActuel(WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
-            current.setDateEntree(LocalDateTime.now());
-            workflowInstanceRepository.save(current);
-        }
-
-        HistoriqueWorkflow history = new HistoriqueWorkflow();
-        history.setDossier(dossier);
-        history.setEtapeDesignation((approuve ? "Terrain Approuvé" : "Terrain Rejeté") + teamInfo);
-        history.setEmplacementType(WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
-        history.setDateEntree(LocalDateTime.now());
-        history.setUtilisateur(utilisateur);
-        history.setCommentaire(commentaire);
-        historiqueWorkflowRepository.save(history);
     }
 
     private void createAuditTrail(String action, Dossier dossier, Utilisateur utilisateur, String description) {

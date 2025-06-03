@@ -520,6 +520,17 @@ function formatDateForAPI(date) {
 async function completeVisit() {
   if (!validateForm()) return;
   
+  // Validate that we have a valid visit ID
+  if (!props.visit || !props.visit.id) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: 'ID de visite manquant - impossible de finaliser',
+      life: 4000
+    });
+    return;
+  }
+  
   try {
     loading.value = true;
     
@@ -535,6 +546,9 @@ async function completeVisit() {
       pointsNonConformes: formData.approuve === false ? formData.pointsNonConformes : [],
       remarquesGenerales: formData.remarquesGenerales?.trim() || null
     };
+    
+    console.log('Sending complete request for visit ID:', props.visit.id);
+    console.log('Complete data:', completeData);
     
     const response = await ApiService.post(`/agent_commission/terrain-visits/${props.visit.id}/complete`, completeData);
     

@@ -27,9 +27,20 @@ public class WorkflowService {
 
     /**
      * Initialize workflow for new dossier - starts at AP Phase Antenne
+     * ✅ FIXED: Better logging and validation
      */
     @Transactional
     public WorkflowInstance initializeWorkflow(Dossier dossier, Utilisateur utilisateur) {
+        log.info("Initializing workflow for dossier ID: {} with reference: {}", 
+                 dossier.getId(), dossier.getReference());
+        
+        // ✅ FIXED: Check if workflow already exists for this dossier
+        List<WorkflowInstance> existingWorkflows = workflowInstanceRepository.findByDossierId(dossier.getId());
+        if (!existingWorkflows.isEmpty()) {
+            log.warn("Workflow already exists for dossier ID: {}. Returning existing workflow.", dossier.getId());
+            return existingWorkflows.get(0);
+        }
+        
         // Get the first etape: AP - Phase Antenne
         Etape firstEtape = etapeRepository.findByDesignation("AP - Phase Antenne");
         if (firstEtape == null) {
@@ -38,6 +49,9 @@ public class WorkflowService {
 
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime dateLimite = calculateDeadline(now, firstEtape.getDureeJours());
+        
+        log.info("Creating workflow for dossier ID: {} starting at: {} with deadline: {}", 
+                 dossier.getId(), now, dateLimite);
 
         WorkflowInstance workflow = new WorkflowInstance();
         workflow.setDossier(dossier);
@@ -47,14 +61,16 @@ public class WorkflowService {
         workflow.setDateEntree(now);
         workflow.setDateLimite(dateLimite);
         workflow.setJoursRestants(calculateRemainingDays(dateLimite));
-        workflow.setEnRetard(false);
+        workflow.setEnRetard(calculateRemainingDays(dateLimite) < 0);
 
-        workflowInstanceRepository.save(workflow);
+        workflow = workflowInstanceRepository.save(workflow);
+        
+        log.info("Workflow created successfully for dossier ID: {} with workflow ID: {}", 
+                 dossier.getId(), workflow.getId());
 
         // Create history entry
         createHistoryEntry(dossier, firstEtape, now, null, utilisateur, "Initialisation du workflow");
 
-        log.info("Workflow initialisé pour le dossier {} à l'étape {}", dossier.getId(), firstEtape.getDesignation());
         return workflow;
     }
 
@@ -65,6 +81,9 @@ public class WorkflowService {
     public WorkflowInstance moveToNextEtape(Dossier dossier, Utilisateur utilisateur, String commentaire) {
         WorkflowInstance currentWorkflow = getCurrentWorkflowInstance(dossier);
         Etape currentEtape = currentWorkflow.getEtape();
+        
+        log.info("Moving dossier ID: {} from etape: {} to next etape", 
+                 dossier.getId(), currentEtape.getDesignation());
         
         // Find next etape
         Etape nextEtape = getNextEtape(currentEtape);
@@ -107,24 +126,49 @@ public class WorkflowService {
 
     /**
      * Get current workflow instance for dossier
+     * ✅ FIXED: Better error handling and logging
      */
     public WorkflowInstance getCurrentWorkflowInstance(Dossier dossier) {
+        log.debug("Getting current workflow for dossier ID: {}", dossier.getId());
+        
         List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
         if (workflows.isEmpty()) {
-            throw new RuntimeException("Aucun workflow trouvé pour le dossier " + dossier.getId());
+            log.error("No workflow found for dossier ID: {} with reference: {}", 
+                     dossier.getId(), dossier.getReference());
+            throw new RuntimeException("Aucun workflow trouvé pour le dossier " + dossier.getId() + 
+                                     " (Référence: " + dossier.getReference() + ")");
         }
-        return workflows.get(0); // Latest workflow
+        
+        // ✅ FIXED: Get the most recent workflow (in case there are multiple)
+        WorkflowInstance latestWorkflow = workflows.stream()
+                .max((w1, w2) -> w1.getDateEntree().compareTo(w2.getDateEntree()))
+                .orElse(workflows.get(0));
+                
+        log.debug("Found workflow ID: {} for dossier ID: {} at etape: {}", 
+                 latestWorkflow.getId(), dossier.getId(), latestWorkflow.getEtapeDesignation());
+                 
+        return latestWorkflow;
     }
 
     /**
      * Get current etape info with calculated remaining time
+     * ✅ FIXED: Recalculate remaining days on each call
      */
     public EtapeInfo getCurrentEtapeInfo(Dossier dossier) {
         WorkflowInstance workflow = getCurrentWorkflowInstance(dossier);
         Etape etape = workflow.getEtape();
         
+        // ✅ FIXED: Always recalculate remaining days based on current time
         int joursRestants = calculateRemainingDays(workflow.getDateLimite());
         boolean enRetard = joursRestants < 0;
+        
+        // ✅ FIXED: Update workflow instance with current calculations
+        workflow.setJoursRestants(Math.abs(joursRestants)); // Store absolute value
+        workflow.setEnRetard(enRetard);
+        workflowInstanceRepository.save(workflow);
+
+        log.debug("Etape info for dossier ID: {} - Etape: {}, Jours restants: {}, En retard: {}", 
+                 dossier.getId(), etape.getDesignation(), joursRestants, enRetard);
 
         return EtapeInfo.builder()
                 .etape(etape)
@@ -135,7 +179,8 @@ public class WorkflowService {
                 .emplacementActuel(workflow.getEmplacementActuel())
                 .dateEntree(workflow.getDateEntree())
                 .dateLimite(workflow.getDateLimite())
-                .joursRestants(Math.max(0, joursRestants))
+                .joursRestants(Math.max(0, joursRestants)) // Return 0 if overdue
+                .joursDeRetard(Math.max(0, -joursRestants)) // Positive number of overdue days
                 .enRetard(enRetard)
                 .build();
     }
@@ -162,6 +207,9 @@ public class WorkflowService {
     private WorkflowInstance transitionToEtape(Dossier dossier, Etape targetEtape, Utilisateur utilisateur, String commentaire) {
         WorkflowInstance currentWorkflow = getCurrentWorkflowInstance(dossier);
         LocalDateTime now = LocalDateTime.now();
+        
+        log.info("Transitioning dossier ID: {} from etape: {} to etape: {}", 
+                 dossier.getId(), currentWorkflow.getEtapeDesignation(), targetEtape.getDesignation());
 
         // Close current workflow history
         closeCurrentHistoryEntry(dossier, currentWorkflow, now, utilisateur, commentaire);
@@ -175,14 +223,15 @@ public class WorkflowService {
         LocalDateTime newDeadline = calculateDeadline(now, targetEtape.getDureeJours());
         currentWorkflow.setDateLimite(newDeadline);
         currentWorkflow.setJoursRestants(calculateRemainingDays(newDeadline));
-        currentWorkflow.setEnRetard(false);
+        currentWorkflow.setEnRetard(false); // Reset delay status for new etape
 
         workflowInstanceRepository.save(currentWorkflow);
 
         // Create new history entry
         createHistoryEntry(dossier, targetEtape, now, null, utilisateur, commentaire);
 
-        log.info("Dossier {} transitionné vers l'étape {}", dossier.getId(), targetEtape.getDesignation());
+        log.info("Dossier ID: {} transitioned successfully to etape: {} with new deadline: {}", 
+                 dossier.getId(), targetEtape.getDesignation(), newDeadline);
         return currentWorkflow;
     }
 
@@ -273,16 +322,23 @@ public class WorkflowService {
         }
     }
 
+    /**
+     * ✅ FIXED: Calculate deadline from start date, considering working days and holidays
+     */
     private LocalDateTime calculateDeadline(LocalDateTime startDate, int durationInWorkingDays) {
         LocalDate currentDate = startDate.toLocalDate();
         int addedDays = 0;
         
-        // Get holidays for the period
-        LocalDate endSearchDate = currentDate.plusDays(durationInWorkingDays * 2); // Buffer for weekends/holidays
+        log.debug("Calculating deadline from: {} with duration: {} working days", startDate, durationInWorkingDays);
+        
+        // Get holidays for the period (look ahead more days to account for weekends)
+        LocalDate endSearchDate = currentDate.plusDays(durationInWorkingDays * 2 + 30); // Buffer for weekends/holidays
         Set<LocalDate> holidays = joursFerieRepository.findByDateBetween(currentDate, endSearchDate)
                 .stream()
                 .map(JoursFerie::getDate)
                 .collect(Collectors.toSet());
+        
+        log.debug("Found {} holidays in the period", holidays.size());
         
         while (addedDays < durationInWorkingDays) {
             currentDate = currentDate.plusDays(1);
@@ -292,41 +348,79 @@ public class WorkflowService {
                 currentDate.getDayOfWeek() != DayOfWeek.SUNDAY && 
                 !holidays.contains(currentDate)) {
                 addedDays++;
+                log.trace("Added working day {}: {} (total: {})", addedDays, currentDate, addedDays);
+            } else {
+                log.trace("Skipped non-working day: {} (weekend: {}, holiday: {})", 
+                         currentDate, 
+                         currentDate.getDayOfWeek() == DayOfWeek.SATURDAY || currentDate.getDayOfWeek() == DayOfWeek.SUNDAY,
+                         holidays.contains(currentDate));
             }
         }
         
-        return currentDate.atTime(17, 0); // End of business day
+        LocalDateTime deadline = currentDate.atTime(17, 0); // End of business day
+        log.debug("Calculated deadline: {} (added {} working days)", deadline, durationInWorkingDays);
+        
+        return deadline;
     }
 
+    /**
+     * ✅ FIXED: Calculate remaining working days until deadline
+     */
     private int calculateRemainingDays(LocalDateTime deadline) {
         LocalDate deadlineDate = deadline.toLocalDate();
         LocalDate today = LocalDate.now();
         
+        log.trace("Calculating remaining days from today: {} to deadline: {}", today, deadlineDate);
+        
+        // ✅ FIXED: If deadline has passed, return negative number of overdue days
         if (deadlineDate.isBefore(today)) {
-            return (int) today.toEpochDay() - (int) deadlineDate.toEpochDay(); // Negative for overdue
+            int overdueDays = calculateWorkingDaysBetween(deadlineDate, today);
+            log.trace("Deadline passed. Overdue by {} working days", overdueDays);
+            return -overdueDays; // Negative for overdue
         }
         
-        int remainingDays = 0;
-        LocalDate currentDate = today;
+        // ✅ FIXED: If deadline is today, return 0
+        if (deadlineDate.equals(today)) {
+            log.trace("Deadline is today");
+            return 0;
+        }
         
-        // Get holidays
-        Set<LocalDate> holidays = joursFerieRepository.findByDateBetween(today, deadlineDate)
+        // Calculate remaining working days
+        int remainingDays = calculateWorkingDaysBetween(today, deadlineDate);
+        log.trace("Remaining working days: {}", remainingDays);
+        
+        return remainingDays;
+    }
+    
+    /**
+     * ✅ NEW: Helper method to calculate working days between two dates
+     */
+    private int calculateWorkingDaysBetween(LocalDate startDate, LocalDate endDate) {
+        if (startDate.equals(endDate)) {
+            return 0;
+        }
+        
+        // Get holidays for the period
+        Set<LocalDate> holidays = joursFerieRepository.findByDateBetween(startDate, endDate)
                 .stream()
                 .map(JoursFerie::getDate)
                 .collect(Collectors.toSet());
         
-        while (currentDate.isBefore(deadlineDate)) {
+        int workingDays = 0;
+        LocalDate currentDate = startDate;
+        
+        while (currentDate.isBefore(endDate)) {
             currentDate = currentDate.plusDays(1);
             
-            // Count only working days
+            // Count only working days (not weekends or holidays)
             if (currentDate.getDayOfWeek() != DayOfWeek.SATURDAY && 
                 currentDate.getDayOfWeek() != DayOfWeek.SUNDAY && 
                 !holidays.contains(currentDate)) {
-                remainingDays++;
+                workingDays++;
             }
         }
         
-        return remainingDays;
+        return workingDays;
     }
 
     private void createHistoryEntry(Dossier dossier, Etape etape, LocalDateTime dateEntree, 
@@ -348,6 +442,9 @@ public class WorkflowService {
         }
         
         historiqueWorkflowRepository.save(history);
+        
+        log.debug("Created history entry for dossier ID: {} at etape: {}", 
+                 dossier.getId(), etape.getDesignation());
     }
 
     private void closeCurrentHistoryEntry(Dossier dossier, WorkflowInstance workflow, 
@@ -356,6 +453,8 @@ public class WorkflowService {
                 .stream()
                 .filter(h -> h.getDateSortie() == null)
                 .collect(Collectors.toList());
+        
+        log.debug("Closing {} open history entries for dossier ID: {}", openEntries.size(), dossier.getId());
         
         for (HistoriqueWorkflow entry : openEntries) {
             entry.setDateSortie(dateSortie);
@@ -368,6 +467,7 @@ public class WorkflowService {
 
     /**
      * Helper class for etape information
+     * ✅ ENHANCED: Added joursDeRetard field
      */
     @lombok.Data
     @lombok.Builder
@@ -382,7 +482,8 @@ public class WorkflowService {
         private WorkflowInstance.EmplacementType emplacementActuel;
         private LocalDateTime dateEntree;
         private LocalDateTime dateLimite;
-        private Integer joursRestants;
+        private Integer joursRestants;      // Positive number of remaining days (0 if overdue)
+        private Integer joursDeRetard;      // Positive number of overdue days (0 if not overdue)
         private Boolean enRetard;
     }
 }

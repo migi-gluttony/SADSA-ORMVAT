@@ -6,12 +6,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ormvat.sadsa.dto.common.DossierCommonDTOs.*;
 import ormvat.sadsa.dto.agent_guc.DossierGUCActionDTOs.*;
+import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.*;
 import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
 import ormvat.sadsa.service.common.DossierCommonService;
 import ormvat.sadsa.service.common.WorkflowService;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
@@ -198,19 +201,19 @@ public class DossierGUCService {
     }
 
     /**
-     * Approve dossier and generate final approval (end of AP phase)
+     * Make final approval decision with fiche generation (end of AP phase)
      */
     @Transactional
-    public DossierActionResponse approveDossier(Long dossierId, String userEmail, String commentaire) {
+    public DossierActionResponse makeFinalApprovalDecision(FinalApprovalRequest request, String userEmail) {
         try {
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
             if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_GUC)) {
-                throw new RuntimeException("Seul un agent GUC peut approuver un dossier");
+                throw new RuntimeException("Seul un agent GUC peut prendre la décision finale d'approbation");
             }
 
-            Dossier dossier = dossierRepository.findById(dossierId)
+            Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
             // Check if at final AP etape
@@ -219,28 +222,89 @@ public class DossierGUCService {
                 throw new RuntimeException("Le dossier n'est pas à l'étape finale d'approbation");
             }
 
-            // Update dossier status
-            dossier.setStatus(Dossier.DossierStatus.APPROVED);
-            dossier.setDateApprobation(LocalDateTime.now());
-            dossierRepository.save(dossier);
+            if (request.getApproved()) {
+                // APPROVAL CASE - Generate fiche d'approbation
+                dossier.setStatus(Dossier.DossierStatus.APPROVED);
+                dossier.setDateApprobation(LocalDateTime.now());
+                
+                // Use provided amount or original amount
+                if (request.getMontantApprouve() != null) {
+                    dossier.setMontantSubvention(request.getMontantApprouve());
+                }
+                dossierRepository.save(dossier);
 
-            // Create audit trail for approval
-            dossierCommonService.createAuditTrail("APPROBATION_FINALE", dossier, utilisateur, 
-                "Approbation finale du dossier - Phase AP terminée. " + commentaire);
+                // Generate fiche number
+                String numeroFiche = generateFicheNumber(dossier);
 
-            return DossierActionResponse.builder()
-                    .success(true)
-                    .message("Dossier approuvé avec succès - Phase d'approbation terminée")
-                    .newStatut(dossier.getStatus().name())
-                    .dateAction(LocalDateTime.now())
-                    .additionalData(Map.of(
-                            "phaseTerminee", "AP",
-                            "prochainEtape", "Attente de démarrage phase RP par l'antenne"
-                    ))
-                    .build();
+                // Create audit trail for approval with fiche
+                dossierCommonService.createAuditTrail("APPROBATION_FINALE_AVEC_FICHE", dossier, utilisateur, 
+                    String.format("Approbation finale avec génération fiche %s. Montant approuvé: %s. Commentaire: %s", 
+                            numeroFiche, dossier.getMontantSubvention(), request.getCommentaireApprobation()));
+
+                return DossierActionResponse.builder()
+                        .success(true)
+                        .message("Dossier approuvé avec succès - Fiche d'approbation générée")
+                        .newStatut(dossier.getStatus().name())
+                        .dateAction(LocalDateTime.now())
+                        .additionalData(Map.of(
+                                "phaseTerminee", "AP",
+                                "numeroFiche", numeroFiche,
+                                "montantApprouve", dossier.getMontantSubvention(),
+                                "prochainEtape", "En attente de récupération de la fiche par l'agriculteur",
+                                "ficheGenerated", true
+                        ))
+                        .build();
+
+            } else {
+                // REJECTION CASE
+                dossier.setStatus(Dossier.DossierStatus.REJECTED);
+                dossierRepository.save(dossier);
+
+                // Create audit trail for rejection
+                dossierCommonService.createAuditTrail("REJET_FINAL", dossier, utilisateur, 
+                    String.format("Rejet final du dossier. Motif: %s", request.getMotifRejet()));
+
+                return DossierActionResponse.builder()
+                        .success(true)
+                        .message("Dossier rejeté")
+                        .newStatut(dossier.getStatus().name())
+                        .dateAction(LocalDateTime.now())
+                        .additionalData(Map.of(
+                                "motifRejet", request.getMotifRejet(),
+                                "ficheGenerated", false
+                        ))
+                        .build();
+            }
 
         } catch (Exception e) {
-            log.error("Erreur lors de l'approbation du dossier", e);
+            log.error("Erreur lors de la décision finale d'approbation", e);
+            throw new RuntimeException("Erreur lors de la décision: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Legacy method for backward compatibility
+     */
+    @Transactional
+    public DossierActionResponse approveDossier(Long dossierId, String userEmail, String commentaire) {
+        try {
+            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+            Dossier dossier = dossierRepository.findById(dossierId)
+                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+            FinalApprovalRequest request = FinalApprovalRequest.builder()
+                    .dossierId(dossierId)
+                    .approved(true)
+                    .commentaireApprobation(commentaire)
+                    .montantApprouve(dossier.getMontantSubvention()) // Use original amount
+                    .build();
+            
+            return makeFinalApprovalDecision(request, userEmail);
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de l'approbation legacy du dossier", e);
             throw new RuntimeException("Erreur lors de l'approbation: " + e.getMessage());
         }
     }
@@ -331,13 +395,13 @@ public class DossierGUCService {
                     // Final GUC phase - can approve or reject
                     if (permissions.getPeutApprouver()) {
                         availableActions.add(AvailableActionDTO.builder()
-                                .action("approve")
-                                .label("Approuver")
+                                .action("final_approve")
+                                .label("Décision Finale")
                                 .icon("pi-check-circle")
                                 .severity("success")
                                 .requiresComment(false)
                                 .requiresConfirmation(true)
-                                .description("Approuver le dossier")
+                                .description("Prendre la décision finale d'approbation")
                                 .build());
                     }
                 }
@@ -386,5 +450,17 @@ public class DossierGUCService {
         }
 
         return availableActions;
+    }
+
+    /**
+     * Helper method for fiche generation
+     */
+    private String generateFicheNumber(Dossier dossier) {
+        LocalDate today = LocalDate.now();
+        String year = String.valueOf(today.getYear());
+        String month = String.format("%02d", today.getMonthValue());
+        
+        // Format: FA-YYYY-MM-DOSSIER_ID
+        return String.format("FA-%s-%s-%06d", year, month, dossier.getId());
     }
 }

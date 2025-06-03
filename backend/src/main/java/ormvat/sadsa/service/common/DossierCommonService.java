@@ -26,29 +26,32 @@ public class DossierCommonService {
     private final NoteRepository noteRepository;
     private final DocumentRequisRepository documentRequisRepository;
     private final AuditTrailRepository auditTrailRepository;
+    private final HistoriqueWorkflowRepository historiqueWorkflowRepository;
     private final WorkflowService workflowService;
 
     /**
-     * Get dossiers for user role using new workflow system
+     * Get dossiers for user role - UPDATED to show dossiers that have passed through user's phase
      */
     public List<Dossier> getDossiersForUserRole(Utilisateur utilisateur, DossierFilterRequest filterRequest) {
         switch (utilisateur.getRole()) {
             case AGENT_ANTENNE:
+                // Agent Antenne can see ALL dossiers from their antenne, regardless of current phase
                 if (utilisateur.getAntenne() != null) {
-                    return dossierRepository.findByAntenneId(utilisateur.getAntenne().getId()).stream()
-                            .filter(d -> canUserAccessDossierAtCurrentEtape(d, utilisateur))
-                            .collect(Collectors.toList());
+                    return dossierRepository.findByAntenneId(utilisateur.getAntenne().getId());
                 }
                 return List.of();
 
             case AGENT_GUC:
+                // Agent GUC can see all dossiers that have passed the initial antenne phase (not DRAFT)
                 return dossierRepository.findAll().stream()
-                        .filter(d -> !d.getStatus().equals(Dossier.DossierStatus.DRAFT))
-                        .filter(d -> canUserAccessDossierAtCurrentEtape(d, utilisateur))
+                        .filter(d -> hasPassedAntennePhase(d))
                         .collect(Collectors.toList());
 
             case AGENT_COMMISSION_TERRAIN:
-                return getCommissionDossiers(utilisateur);
+                // Agent Commission can see all dossiers that have reached or passed commission phase
+                return dossierRepository.findAll().stream()
+                        .filter(d -> hasReachedCommissionPhase(d, utilisateur))
+                        .collect(Collectors.toList());
 
             case ADMIN:
                 return dossierRepository.findAll();
@@ -59,22 +62,84 @@ public class DossierCommonService {
     }
 
     /**
-     * Check if user can access dossier based on current etape
+     * Check if user can access dossier - UPDATED for new visibility logic
      */
     public boolean canAccessDossier(Dossier dossier, Utilisateur utilisateur) {
         switch (utilisateur.getRole()) {
             case ADMIN:
                 return true;
             case AGENT_ANTENNE:
+                // Can access any dossier from their antenne
                 return utilisateur.getAntenne() != null &&
                         dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId());
             case AGENT_GUC:
-                return !dossier.getStatus().equals(Dossier.DossierStatus.DRAFT);
+                // Can access any dossier that has passed antenne phase
+                return hasPassedAntennePhase(dossier);
             case AGENT_COMMISSION_TERRAIN:
-                return canCommissionAccessDossier(dossier, utilisateur);
+                // Can access any dossier that has reached commission phase
+                return hasReachedCommissionPhase(dossier, utilisateur);
             default:
                 return false;
         }
+    }
+
+    /**
+     * Check if dossier has passed the initial antenne phase
+     */
+    private boolean hasPassedAntennePhase(Dossier dossier) {
+        // A dossier has passed antenne phase if it's not in DRAFT status
+        return !dossier.getStatus().equals(Dossier.DossierStatus.DRAFT);
+    }
+
+    /**
+     * Check if dossier has reached commission phase
+     */
+    private boolean hasReachedCommissionPhase(Dossier dossier, Utilisateur utilisateur) {
+        try {
+            // Check if dossier has ever been at commission phase by looking at workflow history
+            List<HistoriqueWorkflow> history = historiqueWorkflowRepository.findByDossierId(dossier.getId());
+            
+            boolean hasBeenAtCommission = history.stream()
+                    .anyMatch(h -> h.getEmplacementType() == WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
+            
+            if (hasBeenAtCommission) {
+                // If it has been at commission, check team assignment
+                return isAssignedToCommissionTeam(dossier, utilisateur);
+            }
+            
+            // Check if currently at commission phase
+            try {
+                WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+                boolean currentlyAtCommission = etapeInfo.getEmplacementActuel() == WorkflowInstance.EmplacementType.COMMISSION_AHA_AF;
+                
+                if (currentlyAtCommission) {
+                    return isAssignedToCommissionTeam(dossier, utilisateur);
+                }
+            } catch (Exception e) {
+                log.debug("Could not get current etape info for dossier {}", dossier.getId());
+            }
+            
+            return false;
+        } catch (Exception e) {
+            log.error("Error checking commission phase access for dossier {}", dossier.getId(), e);
+            return false;
+        }
+    }
+
+    /**
+     * Check if user is assigned to the appropriate commission team for this dossier
+     */
+    private boolean isAssignedToCommissionTeam(Dossier dossier, Utilisateur utilisateur) {
+        // If user has no team assignment, they can see all commission dossiers
+        if (utilisateur.getEquipeCommission() == null) {
+            return true;
+        }
+        
+        // Check if user's team matches the required team for this project type
+        Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
+        Utilisateur.EquipeCommission requiredTeam = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
+        
+        return requiredTeam.equals(utilisateur.getEquipeCommission());
     }
 
     /**
@@ -293,55 +358,6 @@ public class DossierCommonService {
                 .dossiersAttenteTraitement(attenteTraitement)
                 .dossiersEnCommission(dossiersEnCommission)
                 .build();
-    }
-
-    // Private helper methods
-
-    private boolean canUserAccessDossierAtCurrentEtape(Dossier dossier, Utilisateur utilisateur) {
-        try {
-            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
-            
-            switch (utilisateur.getRole()) {
-                case AGENT_ANTENNE:
-                    return etapeInfo.getEmplacementActuel() == WorkflowInstance.EmplacementType.ANTENNE;
-                case AGENT_GUC:
-                    return etapeInfo.getEmplacementActuel() == WorkflowInstance.EmplacementType.GUC;
-                case AGENT_COMMISSION_TERRAIN:
-                    return etapeInfo.getEmplacementActuel() == WorkflowInstance.EmplacementType.COMMISSION_AHA_AF;
-                default:
-                    return true;
-            }
-        } catch (Exception e) {
-            return true; // Allow access if workflow info unavailable
-        }
-    }
-
-    private List<Dossier> getCommissionDossiers(Utilisateur utilisateur) {
-        return dossierRepository.findAll().stream()
-                .filter(d -> canCommissionAccessDossier(d, utilisateur))
-                .collect(Collectors.toList());
-    }
-
-    private boolean canCommissionAccessDossier(Dossier dossier, Utilisateur utilisateur) {
-        try {
-            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
-            
-            // Must be at Commission etape
-            if (!"AP - Phase AHA-AF".equals(etapeInfo.getDesignation())) {
-                return false;
-            }
-
-            // Check team assignment if user has one
-            if (utilisateur.getEquipeCommission() != null) {
-                Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
-                Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
-                return equipeRequise.equals(utilisateur.getEquipeCommission());
-            }
-
-            return true; // Agent without team can see all commission dossiers
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     /**
