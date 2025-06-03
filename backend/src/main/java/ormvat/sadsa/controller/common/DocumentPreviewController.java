@@ -45,6 +45,7 @@ public class DocumentPreviewController {
             Authentication authentication) {
         try {
             String userEmail = authentication.getName();
+            log.info("Preview request - Document ID: {}, User: {}", pieceJointeId, userEmail);
             
             PieceJointe pieceJointe = pieceJointeRepository.findById(pieceJointeId)
                     .orElseThrow(() -> new RuntimeException("Document non trouvé"));
@@ -52,12 +53,17 @@ public class DocumentPreviewController {
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
+            log.info("Found document: {}, User role: {}", pieceJointe.getNomFichier(), utilisateur.getRole());
+
             // Check access permissions
             if (!canAccessDocument(pieceJointe, utilisateur)) {
+                log.warn("Access denied - User: {}, Role: {}, Document: {}", 
+                    userEmail, utilisateur.getRole(), pieceJointeId);
                 return ResponseEntity.status(403).build();
             }
 
             if (pieceJointe.getCheminFichier() == null) {
+                log.error("File path is null for document: {}", pieceJointeId);
                 return ResponseEntity.notFound().build();
             }
 
@@ -70,10 +76,11 @@ public class DocumentPreviewController {
 
             // Only allow preview for images and PDFs
             if (!isPreviewableType(contentType)) {
+                log.warn("File type not previewable: {}", contentType);
                 return ResponseEntity.status(415).build(); // Unsupported Media Type
             }
 
-            log.info("Document previewed - ID: {}, Type: {}, User: {}", 
+            log.info("Document preview successful - ID: {}, Type: {}, User: {}", 
                     pieceJointeId, contentType, userEmail);
 
             return ResponseEntity.ok()
@@ -84,7 +91,7 @@ public class DocumentPreviewController {
                     .body(resource);
 
         } catch (Exception e) {
-            log.error("Erreur lors de la prévisualisation du document: {}", pieceJointeId, e);
+            log.error("Error previewing document: {}", pieceJointeId, e);
             return ResponseEntity.status(500).build();
         }
     }
@@ -98,6 +105,7 @@ public class DocumentPreviewController {
             Authentication authentication) {
         try {
             String userEmail = authentication.getName();
+            log.info("Download request - Document ID: {}, User: {}", pieceJointeId, userEmail);
             
             PieceJointe pieceJointe = pieceJointeRepository.findById(pieceJointeId)
                     .orElseThrow(() -> new RuntimeException("Document non trouvé"));
@@ -105,12 +113,17 @@ public class DocumentPreviewController {
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
+            log.info("Found document: {}, User role: {}", pieceJointe.getNomFichier(), utilisateur.getRole());
+
             // Check access permissions
             if (!canAccessDocument(pieceJointe, utilisateur)) {
+                log.warn("Download access denied - User: {}, Role: {}, Document: {}", 
+                    userEmail, utilisateur.getRole(), pieceJointeId);
                 return ResponseEntity.status(403).build();
             }
 
             if (pieceJointe.getCheminFichier() == null) {
+                log.error("File path is null for download: {}", pieceJointeId);
                 return ResponseEntity.notFound().build();
             }
 
@@ -125,7 +138,7 @@ public class DocumentPreviewController {
             createAuditTrail("DOWNLOAD_DOCUMENT", pieceJointe.getDossier().getId(), 
                     "Téléchargement document: " + pieceJointe.getNomFichier(), userEmail);
 
-            log.info("Document downloaded - ID: {}, File: {}, User: {}", 
+            log.info("Document download successful - ID: {}, File: {}, User: {}", 
                     pieceJointeId, pieceJointe.getNomFichier(), userEmail);
 
             return ResponseEntity.ok()
@@ -135,7 +148,7 @@ public class DocumentPreviewController {
                     .body(resource);
 
         } catch (Exception e) {
-            log.error("Erreur lors du téléchargement du document: {}", pieceJointeId, e);
+            log.error("Error downloading document: {}", pieceJointeId, e);
             return ResponseEntity.status(500).build();
         }
     }
@@ -145,20 +158,30 @@ public class DocumentPreviewController {
     private boolean canAccessDocument(PieceJointe pieceJointe, Utilisateur utilisateur) {
         Dossier dossier = pieceJointe.getDossier();
         
+        log.debug("Checking access - User role: {}, Dossier status: {}", 
+            utilisateur.getRole(), dossier.getStatus());
+        
         switch (utilisateur.getRole()) {
             case ADMIN:
                 return true;
             case AGENT_ANTENNE:
-                return utilisateur.getAntenne() != null &&
+                boolean antenneAccess = utilisateur.getAntenne() != null &&
                         dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId());
+                log.debug("Antenne access check: {}", antenneAccess);
+                return antenneAccess;
             case AGENT_GUC:
-                return !dossier.getStatus().equals(Dossier.DossierStatus.DRAFT);
+                boolean gucAccess = !dossier.getStatus().equals(Dossier.DossierStatus.DRAFT);
+                log.debug("GUC access check: {}", gucAccess);
+                return gucAccess;
             case AGENT_COMMISSION_TERRAIN:
-                return dossier.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
+                boolean commissionAccess = dossier.getStatus().equals(Dossier.DossierStatus.SUBMITTED) ||
                         dossier.getStatus().equals(Dossier.DossierStatus.IN_REVIEW) ||
                         dossier.getStatus().equals(Dossier.DossierStatus.APPROVED) ||
                         dossier.getStatus().equals(Dossier.DossierStatus.REJECTED);
+                log.debug("Commission access check: {}", commissionAccess);
+                return commissionAccess;
             default:
+                log.warn("Unknown role: {}", utilisateur.getRole());
                 return false;
         }
     }
@@ -173,11 +196,14 @@ public class DocumentPreviewController {
             Path file = getStorageLocation().resolve(filePath).normalize();
             Resource resource = new UrlResource(file.toUri());
             if (resource.exists()) {
+                log.debug("File loaded successfully: {}", file.toString());
                 return resource;
             } else {
+                log.error("File not found: {}", file.toString());
                 throw new RuntimeException("File not found: " + filePath);
             }
         } catch (MalformedURLException ex) {
+            log.error("Malformed URL for file: {}", filePath, ex);
             throw new RuntimeException("File not found: " + filePath, ex);
         }
     }
@@ -185,8 +211,11 @@ public class DocumentPreviewController {
     private String getMimeType(String filePath) {
         try {
             Path file = getStorageLocation().resolve(filePath).normalize();
-            return Files.probeContentType(file);
+            String mimeType = Files.probeContentType(file);
+            log.debug("Detected MIME type: {} for file: {}", mimeType, filePath);
+            return mimeType;
         } catch (IOException ex) {
+            log.warn("Could not determine MIME type for file: {}", filePath, ex);
             return null;
         }
     }
@@ -205,7 +234,7 @@ public class DocumentPreviewController {
             
             auditTrailRepository.save(auditTrail);
         } catch (Exception e) {
-            log.warn("Erreur lors de la création de l'audit trail", e);
+            log.warn("Error creating audit trail", e);
         }
     }
 }
