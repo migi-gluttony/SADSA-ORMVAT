@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -160,7 +161,7 @@ public class DocumentFillingService {
     }
 
     /**
-     * Save form data for a document requis - Progressive saving (updates existing file)
+     * Save form data for a document requis - Fixed to properly update existing files
      */
     @Transactional
     public SaveFormDataResponse saveFormData(SaveFormDataRequest request, String userEmail) {
@@ -184,7 +185,7 @@ public class DocumentFillingService {
             PieceJointe formDataPieceJointe = findOrCreateFormDataPieceJointe(
                     dossier, documentRequis, utilisateur);
 
-            // Save/Update form data as JSON file (overwrite existing)
+            // Save/Update form data as JSON file (properly replace existing)
             String formDataFilePath = saveOrUpdateFormDataAsJsonFile(
                     request.getFormData(), subDirectory, 
                     documentRequis.getNomDocument(), 
@@ -193,6 +194,7 @@ public class DocumentFillingService {
                     formDataPieceJointe.getCheminDonneesFormulaire());
 
             formDataPieceJointe.setCheminDonneesFormulaire(formDataFilePath);
+            formDataPieceJointe.setDateUpload(LocalDateTime.now()); // Update timestamp
             pieceJointeRepository.save(formDataPieceJointe);
 
             createAuditTrail("SAVE_FORM_DATA", request.getDossierId(), 
@@ -333,22 +335,27 @@ public class DocumentFillingService {
     }
 
     private PieceJointe findOrCreateFormDataPieceJointe(Dossier dossier, DocumentRequis documentRequis, Utilisateur utilisateur) {
-        return pieceJointeRepository
+        // Look for existing form data piece jointe
+        Optional<PieceJointe> existingPieceJointe = pieceJointeRepository
                 .findByDossierIdAndDocumentRequisId(dossier.getId(), documentRequis.getId())
                 .stream()
                 .filter(pj -> pj.getCheminDonneesFormulaire() != null)
-                .findFirst()
-                .orElseGet(() -> {
-                    PieceJointe newPieceJointe = new PieceJointe();
-                    newPieceJointe.setNomFichier("form_data_" + documentRequis.getNomDocument() + ".json");
-                    newPieceJointe.setTypeDocument("FORM_DATA");
-                    newPieceJointe.setStatus(PieceJointe.DocumentStatus.COMPLETE);
-                    newPieceJointe.setDateUpload(LocalDateTime.now());
-                    newPieceJointe.setDossier(dossier);
-                    newPieceJointe.setDocumentRequis(documentRequis);
-                    newPieceJointe.setUtilisateur(utilisateur);
-                    return pieceJointeRepository.save(newPieceJointe);
-                });
+                .findFirst();
+        
+        if (existingPieceJointe.isPresent()) {
+            return existingPieceJointe.get();
+        }
+        
+        // Create new one if not found
+        PieceJointe newPieceJointe = new PieceJointe();
+        newPieceJointe.setNomFichier("form_data_" + documentRequis.getNomDocument() + ".json");
+        newPieceJointe.setTypeDocument("FORM_DATA");
+        newPieceJointe.setStatus(PieceJointe.DocumentStatus.COMPLETE);
+        newPieceJointe.setDateUpload(LocalDateTime.now());
+        newPieceJointe.setDossier(dossier);
+        newPieceJointe.setDocumentRequis(documentRequis);
+        newPieceJointe.setUtilisateur(utilisateur);
+        return pieceJointeRepository.save(newPieceJointe);
     }
 
     private String saveOrUpdateFormDataAsJsonFile(Map<String, Object> formData, String subDirectory, 
@@ -357,15 +364,18 @@ public class DocumentFillingService {
         try {
             String fileName;
             
-            // If existing file exists, use the same name, otherwise create new
-            if (existingFilePath != null) {
+            // If existing file exists, reuse the same name and delete old file
+            if (existingFilePath != null && !existingFilePath.isEmpty()) {
                 Path existingPath = Paths.get(existingFilePath);
                 fileName = existingPath.getFileName().toString();
                 
                 // Delete old file first
                 Path fullExistingPath = getStorageLocation().resolve(existingFilePath);
                 Files.deleteIfExists(fullExistingPath);
+                
+                log.info("Deleted existing form data file: {}", fullExistingPath);
             } else {
+                // Create new filename
                 String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
                 fileName = "form_data_" + documentName.replaceAll("[^a-zA-Z0-9]", "_") + 
                         "_" + dossierId + "_" + documentRequisId + "_" + timestamp + ".json";
@@ -379,7 +389,10 @@ public class DocumentFillingService {
             Path filePath = targetLocation.resolve(fileName);
             Files.write(filePath, jsonContent.getBytes());
             
-            return subDirectory + "/" + fileName;
+            String relativePath = subDirectory + "/" + fileName;
+            log.info("Saved form data to: {}", relativePath);
+            
+            return relativePath;
             
         } catch (IOException ex) {
             throw new RuntimeException("Could not save form data as JSON file. Please try again!", ex);
@@ -556,12 +569,12 @@ public class DocumentFillingService {
         List<PieceJointe> pieceJointes = pieceJointeRepository
                 .findByDossierIdAndDocumentRequisId(dossierId, documentRequis.getId());
 
-        // Group files by type
+        // Group files by type - FIXED: Only include actual uploaded files, not form data
         List<PieceJointeGroupDTO> fichierGroups = new ArrayList<>();
         
-        // Group 1: Uploaded files
+        // Group 1: Only actual uploaded files (exclude form data files)
         List<PieceJointeDTO> uploadedFiles = pieceJointes.stream()
-                .filter(pj -> pj.getCheminFichier() != null)
+                .filter(pj -> pj.getCheminFichier() != null && !"FORM_DATA".equals(pj.getTypeDocument()))
                 .map(this::buildPieceJointeDTO)
                 .collect(Collectors.toList());
         
@@ -579,44 +592,12 @@ public class DocumentFillingService {
             fichierGroups.add(filesGroup);
         }
 
-        // Group 2: Form data
+        // Get form data separately 
         Map<String, Object> formData = pieceJointes.stream()
                 .filter(pj -> pj.getCheminDonneesFormulaire() != null)
                 .findFirst()
                 .map(pj -> parseFormDataFromFile(pj.getCheminDonneesFormulaire()))
                 .orElse(new HashMap<>());
-        
-        if (!formData.isEmpty()) {
-            PieceJointeDTO formDataFile = PieceJointeDTO.builder()
-                    .id(-1L) // Virtual ID for form data
-                    .nomFichier("Données du formulaire")
-                    .typeDocument("FORM_DATA")
-                    .status("COMPLETE")
-                    .dateUpload(pieceJointes.stream()
-                            .filter(pj -> pj.getCheminDonneesFormulaire() != null)
-                            .findFirst()
-                            .map(PieceJointe::getDateUpload)
-                            .orElse(LocalDateTime.now()))
-                    .utilisateurNom("Système")
-                    .tailleFichier(0L)
-                    .formatFichier("JSON")
-                    .displayName("Formulaire rempli")
-                    .canDelete(false)
-                    .canDownload(false)
-                    .build();
-            
-            PieceJointeGroupDTO formGroup = PieceJointeGroupDTO.builder()
-                    .groupName("Données de formulaire")
-                    .groupType("FORM_DATA")
-                    .files(List.of(formDataFile))
-                    .totalFiles(1)
-                    .totalSize(0L)
-                    .lastUpdated(formDataFile.getDateUpload())
-                    .isComplete(true)
-                    .groupStatus("COMPLETE")
-                    .build();
-            fichierGroups.add(formGroup);
-        }
 
         Map<String, Object> formStructure = parseFormStructure(documentRequis.getLocationFormulaire());
         String status = determineDocumentStatus(documentRequis, uploadedFiles, formData);
@@ -715,7 +696,7 @@ public class DocumentFillingService {
         
         double percentage = total > 0 ? (double) completed / total * 100 : 0;
 
-        // Calculate file statistics
+        // Calculate file statistics - only actual files, not form data
         int totalFiles = documents.stream()
                 .mapToInt(doc -> doc.getFichierGroups().stream()
                         .mapToInt(group -> group.getTotalFiles() != null ? group.getTotalFiles() : 0)

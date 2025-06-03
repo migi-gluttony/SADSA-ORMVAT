@@ -1,264 +1,114 @@
 <template>
   <Dialog 
-    v-model:visible="localVisible" 
-    header="Ajouter une Note"
+    v-model:visible="dialogVisible" 
     modal 
-    class="add-note-dialog"
+    header="Ajouter une note"
     :style="{ width: '600px' }"
-    @hide="resetForm"
+    :closable="true"
   >
-    <div class="dialog-content">
-      <!-- Dossier Information -->
-      <div class="dossier-info">
-        <h4><i class="pi pi-folder"></i> Dossier concerné</h4>
-        <div class="info-grid">
-          <div><strong>Référence:</strong> {{ dossier?.reference }}</div>
-          <div><strong>Agriculteur:</strong> {{ dossier?.agriculteurNom }}</div>
-          <div><strong>Statut:</strong> {{ dossier?.statut }}</div>
-        </div>
+    <div class="note-form">
+      <div class="form-field">
+        <label for="objet" class="required">Objet</label>
+        <InputText 
+          id="objet"
+          v-model="noteForm.objet"
+          placeholder="Objet de la note"
+          :class="{ 'p-invalid': errors.objet }"
+          class="w-full"
+        />
+        <small v-if="errors.objet" class="p-error">{{ errors.objet }}</small>
       </div>
 
-      <!-- Note Form -->
-      <div class="note-form">
-        <div class="form-grid">
-          <!-- Subject -->
-          <div class="field-group">
-            <label for="objet">Objet de la note *</label>
-            <InputText 
-              id="objet"
-              v-model="formData.objet" 
-              placeholder="Ex: Demande de complément d'information"
-              :class="{ 'p-invalid': errors.objet }"
-            />
-            <small v-if="errors.objet" class="error-message">{{ errors.objet }}</small>
-          </div>
-
-          <!-- Priority -->
-          <div class="field-group">
-            <label for="priorite">Priorité</label>
-            <Select 
-              id="priorite"
-              v-model="formData.priorite" 
-              :options="prioriteOptions"
-              optionLabel="label"
-              optionValue="value"
-              placeholder="Sélectionner la priorité"
-            />
-          </div>
-
-          <!-- Type -->
-          <div class="field-group">
-            <label for="typeNote">Type de note</label>
-            <Select 
-              id="typeNote"
-              v-model="formData.typeNote" 
-              :options="typeNoteOptions"
-              optionLabel="label"
-              optionValue="value"
-              placeholder="Sélectionner le type"
-            />
-          </div>
-
-          <!-- Visibility -->
-          <div class="field-group">
-            <label for="visibilite">Visibilité</label>
-            <Select 
-              id="visibilite"
-              v-model="formData.visibilite" 
-              :options="visibiliteOptions"
-              optionLabel="label"
-              optionValue="value"
-              placeholder="Qui peut voir cette note"
-            />
-          </div>
-        </div>
-
-        <!-- Content -->
-        <div class="field-group">
-          <label for="contenu">Contenu de la note *</label>
-          <Textarea 
-            id="contenu"
-            v-model="formData.contenu" 
-            rows="4"
-            placeholder="Décrivez votre note, observation ou demande..."
-            :class="{ 'p-invalid': errors.contenu }"
-          />
-          <small v-if="errors.contenu" class="error-message">{{ errors.contenu }}</small>
-        </div>
-
-        <!-- Recipients (for notifications) -->
-        <div v-if="recipientOptions.length > 0" class="field-group">
-          <label for="destinataires">Notifier les personnes suivantes</label>
-          <MultiSelect 
-            id="destinataires"
-            v-model="formData.destinataires" 
-            :options="recipientOptions"
-            optionLabel="nom"
-            optionValue="id"
-            placeholder="Sélectionner les destinataires"
-            :maxSelectedLabels="3"
-            selectedItemsLabel="{0} personnes sélectionnées"
-          />
-          <small class="field-help">Ces personnes recevront une notification par email</small>
-        </div>
-
-        <!-- Tags -->
-        <div class="field-group">
-          <label for="tags">Mots-clés (optionnel)</label>
-          <Chips 
-            id="tags"
-            v-model="formData.tags" 
-            placeholder="Ajouter des mots-clés pour faciliter la recherche"
-            :max="5"
-          />
-          <small class="field-help">Appuyez sur Entrée pour ajouter un mot-clé</small>
-        </div>
-
-        <!-- Attachments -->
-        <div class="field-group">
-          <label for="attachments">Pièces jointes (optionnel)</label>
-          <FileUpload 
-            id="attachments"
-            mode="advanced"
-            :multiple="true"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-            :maxFileSize="5000000"
-            :fileLimit="3"
-            @select="onFilesSelected"
-            @remove="onFileRemoved"
-            :customUpload="true"
-            :auto="false"
-            chooseLabel="Choisir des fichiers"
-            uploadLabel="Joindre"
-            cancelLabel="Annuler"
-          >
-            <template #empty>
-              <div class="upload-empty">
-                <i class="pi pi-file"></i>
-                <p>Glissez-déposez des fichiers ici ou cliquez pour sélectionner.</p>
-                <p class="upload-help">Maximum 3 fichiers, 5MB par fichier</p>
-              </div>
-            </template>
-          </FileUpload>
-        </div>
-
-        <!-- Follow-up Options -->
-        <div class="field-group">
-          <div class="checkbox-options">
-            <div class="checkbox-item">
-              <Checkbox 
-                id="demandeReponse" 
-                v-model="formData.demandeReponse" 
-                binary 
-              />
-              <label for="demandeReponse">Demander une réponse</label>
-            </div>
-            
-            <div class="checkbox-item">
-              <Checkbox 
-                id="rappelAutomatique" 
-                v-model="formData.rappelAutomatique" 
-                binary 
-              />
-              <label for="rappelAutomatique">Rappel automatique si pas de réponse sous 3 jours</label>
-            </div>
-          </div>
-        </div>
-
-        <!-- Date limite (if response requested) -->
-        <div v-if="formData.demandeReponse" class="field-group">
-          <label for="dateLimiteReponse">Date limite pour la réponse</label>
-          <Calendar 
-            id="dateLimiteReponse"
-            v-model="formData.dateLimiteReponse" 
-            :minDate="minDate"
-            dateFormat="dd/mm/yy"
-            placeholder="Sélectionner une date limite"
-            :showIcon="true"
-          />
-        </div>
+      <div class="form-field">
+        <label for="typeNote">Type de note</label>
+        <Dropdown 
+          id="typeNote"
+          v-model="noteForm.typeNote"
+          :options="typeNoteOptions"
+          option-label="label"
+          option-value="value"
+          placeholder="Sélectionner le type"
+          class="w-full"
+        />
       </div>
 
-      <!-- Preview -->
-      <div v-if="showPreview" class="note-preview">
-        <h4><i class="pi pi-eye"></i> Aperçu de la note</h4>
-        <div class="preview-content">
-          <div class="preview-header">
-            <div class="preview-subject">{{ formData.objet || 'Objet non défini' }}</div>
-            <Tag 
-              :value="formData.priorite || 'NORMALE'" 
-              :severity="getPrioritySeverity(formData.priorite)"
-              class="priority-tag"
-            />
-          </div>
-          <div class="preview-meta">
-            <span><strong>Type:</strong> {{ getTypeLabel(formData.typeNote) }}</span>
-            <span><strong>Visibilité:</strong> {{ getVisibilityLabel(formData.visibilite) }}</span>
-          </div>
-          <div class="preview-body">
-            {{ formData.contenu || 'Contenu non défini' }}
-          </div>
-          <div v-if="formData.tags?.length > 0" class="preview-tags">
-            <strong>Mots-clés:</strong>
-            <Tag 
-              v-for="tag in formData.tags" 
-              :key="tag"
-              :value="tag"
-              severity="info"
-              class="tag-item"
-            />
-          </div>
-        </div>
+      <div class="form-field">
+        <label for="priorite">Priorité</label>
+        <Dropdown 
+          id="priorite"
+          v-model="noteForm.priorite"
+          :options="prioriteOptions"
+          option-label="label"
+          option-value="value"
+          placeholder="Sélectionner la priorité"
+          class="w-full"
+        />
+      </div>
+
+      <div class="form-field">
+        <label for="contenu" class="required">Contenu</label>
+        <Textarea 
+          id="contenu"
+          v-model="noteForm.contenu"
+          rows="5"
+          placeholder="Contenu de la note"
+          :class="{ 'p-invalid': errors.contenu }"
+          class="w-full"
+          autoResize
+        />
+        <small v-if="errors.contenu" class="p-error">{{ errors.contenu }}</small>
+      </div>
+
+      <div v-if="canAssignUser" class="form-field">
+        <label for="destinataire">Destinataire (optionnel)</label>
+        <Dropdown 
+          id="destinataire"
+          v-model="noteForm.utilisateurDestinataireId"
+          :options="availableUsers"
+          option-label="fullName"
+          option-value="id"
+          placeholder="Assigner à un utilisateur"
+          class="w-full"
+          filter
+          :loading="loadingUsers"
+        />
+        <small>Laissez vide pour une note générale</small>
       </div>
     </div>
 
     <template #footer>
-      <div class="dialog-footer">
-        <Button 
-          label="Annuler" 
-          icon="pi pi-times" 
-          @click="localVisible = false"
-          class="p-button-text"
-        />
-        <Button 
-          :label="showPreview ? 'Modifier' : 'Aperçu'" 
-          :icon="showPreview ? 'pi pi-pencil' : 'pi pi-eye'" 
-          @click="togglePreview"
-          class="p-button-outlined"
-        />
-        <Button 
-          label="Ajouter la note" 
-          icon="pi pi-plus" 
-          @click="addNote"
-          :loading="loading"
-          class="p-button-success"
-          :disabled="!canSubmit"
-        />
-      </div>
+      <Button 
+        label="Annuler" 
+        icon="pi pi-times" 
+        @click="closeDialog"
+        class="p-button-outlined"
+      />
+      <Button 
+        label="Ajouter la note" 
+        icon="pi pi-check" 
+        @click="submitNote"
+        :loading="submitting"
+        :disabled="!isFormValid"
+        class="p-button-primary"
+      />
     </template>
   </Dialog>
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import ApiService from '@/services/ApiService';
 import AuthService from '@/services/AuthService';
+import ApiService from '@/services/ApiService';
 
 // PrimeVue components
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
-import Select from 'primevue/select';
-import MultiSelect from 'primevue/multiselect';
-import Calendar from 'primevue/calendar';
-import Checkbox from 'primevue/checkbox';
-import Chips from 'primevue/chips';
-import FileUpload from 'primevue/fileupload';
-import Tag from 'primevue/tag';
+import Dropdown from 'primevue/dropdown';
 
-// Props
+// Props & Emits
 const props = defineProps({
   visible: {
     type: Boolean,
@@ -267,481 +117,246 @@ const props = defineProps({
   dossier: {
     type: Object,
     default: null
+  },
+  prefilledData: {
+    type: Object,
+    default: () => ({})
   }
 });
 
-// Emits
 const emit = defineEmits(['update:visible', 'note-added']);
 
 const toast = useToast();
 
 // State
-const loading = ref(false);
-const showPreview = ref(false);
-const selectedFiles = ref([]);
-const recipientOptions = ref([]);
+const submitting = ref(false);
+const loadingUsers = ref(false);
+const availableUsers = ref([]);
+const errors = ref({});
 
-// Form data
-const formData = reactive({
+const noteForm = ref({
   objet: '',
   contenu: '',
+  typeNote: 'OBSERVATION',
   priorite: 'NORMALE',
-  typeNote: 'INFORMATION',
-  visibilite: 'EQUIPE',
-  destinataires: [],
-  tags: [],
-  demandeReponse: false,
-  rappelAutomatique: false,
-  dateLimiteReponse: null
-});
-
-// Validation errors
-const errors = reactive({
-  objet: '',
-  contenu: ''
+  utilisateurDestinataireId: null
 });
 
 // Options
-const prioriteOptions = ref([
-  { label: 'Haute', value: 'HAUTE' },
-  { label: 'Normale', value: 'NORMALE' },
-  { label: 'Faible', value: 'FAIBLE' }
-]);
-
-const typeNoteOptions = ref([
-  { label: 'Information', value: 'INFORMATION' },
-  { label: 'Question', value: 'QUESTION' },
-  { label: 'Demande de complément', value: 'DEMANDE_COMPLEMENT' },
+const typeNoteOptions = [
   { label: 'Observation', value: 'OBSERVATION' },
-  { label: 'Recommandation', value: 'RECOMMANDATION' },
+  { label: 'Question', value: 'QUESTION' },
+  { label: 'Demande', value: 'DEMANDE' },
+  { label: 'Information', value: 'INFORMATION' },
   { label: 'Alerte', value: 'ALERTE' }
-]);
+];
 
-const visibiliteOptions = ref([
-  { label: 'Équipe uniquement', value: 'EQUIPE' },
-  { label: 'Service complet', value: 'SERVICE' },
-  { label: 'Tous les intervenants', value: 'TOUS' },
-  { label: 'Privée', value: 'PRIVE' }
-]);
+const prioriteOptions = [
+  { label: 'Normale', value: 'NORMALE' },
+  { label: 'Haute', value: 'HAUTE' },
+  { label: 'Faible', value: 'FAIBLE' }
+];
 
 // Computed
-const localVisible = computed({
+const dialogVisible = computed({
   get: () => props.visible,
   set: (value) => emit('update:visible', value)
 });
 
-const minDate = computed(() => {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return tomorrow;
+const currentUser = computed(() => AuthService.getCurrentUser());
+
+const canAssignUser = computed(() => {
+  return currentUser.value?.role === 'AGENT_GUC' || currentUser.value?.role === 'ADMIN';
 });
 
-const canSubmit = computed(() => {
-  return formData.objet.trim() && formData.contenu.trim();
+const isFormValid = computed(() => {
+  return noteForm.value.objet.trim() && noteForm.value.contenu.trim();
 });
 
-// Watch for dialog opening
-watch(() => props.visible, (newVisible) => {
-  if (newVisible && props.dossier) {
-    loadRecipients();
-    initializeForm();
+// Watchers
+watch(() => props.visible, (newValue) => {
+  if (newValue) {
+    resetForm();
+    if (props.prefilledData) {
+      Object.assign(noteForm.value, props.prefilledData);
+    }
+    if (canAssignUser.value) {
+      loadAvailableUsers();
+    }
   }
 });
 
 // Methods
-async function loadRecipients() {
-  try {
-    const response = await ApiService.get(`/dossiers/${props.dossier.id}/participants`);
-    recipientOptions.value = response.filter(user => 
-      user.id !== AuthService.getCurrentUser()?.id
-    );
-  } catch (err) {
-    console.error('Error loading recipients:', err);
-    recipientOptions.value = [];
-  }
-}
-
-function initializeForm() {
-  // Reset form
-  Object.assign(formData, {
+function resetForm() {
+  noteForm.value = {
     objet: '',
     contenu: '',
+    typeNote: 'OBSERVATION',
     priorite: 'NORMALE',
-    typeNote: 'INFORMATION',
-    visibilite: 'EQUIPE',
-    destinataires: [],
-    tags: [],
-    demandeReponse: false,
-    rappelAutomatique: false,
-    dateLimiteReponse: null
-  });
+    utilisateurDestinataireId: null
+  };
+  errors.value = {};
+}
 
-  // Clear errors
-  Object.keys(errors).forEach(key => {
-    errors[key] = '';
-  });
-
-  selectedFiles.value = [];
-  showPreview.value = false;
+async function loadAvailableUsers() {
+  if (!canAssignUser.value) return;
+  
+  loadingUsers.value = true;
+  try {
+    const response = await ApiService.get('/users/active');
+    availableUsers.value = response.map(user => ({
+      id: user.id,
+      fullName: `${user.prenom} ${user.nom} (${user.role})`,
+      role: user.role
+    }));
+  } catch (error) {
+    console.error('Erreur lors du chargement des utilisateurs:', error);
+  } finally {
+    loadingUsers.value = false;
+  }
 }
 
 function validateForm() {
-  let isValid = true;
-  
-  // Clear previous errors
-  Object.keys(errors).forEach(key => {
-    errors[key] = '';
-  });
+  errors.value = {};
 
-  // Required fields validation
-  if (!formData.objet.trim()) {
-    errors.objet = 'L\'objet est requis';
-    isValid = false;
+  if (!noteForm.value.objet.trim()) {
+    errors.value.objet = 'L\'objet est requis';
   }
 
-  if (!formData.contenu.trim()) {
-    errors.contenu = 'Le contenu est requis';
-    isValid = false;
+  if (!noteForm.value.contenu.trim()) {
+    errors.value.contenu = 'Le contenu est requis';
   }
 
-  return isValid;
+  return Object.keys(errors.value).length === 0;
 }
 
-function togglePreview() {
-  if (!showPreview.value && !validateForm()) {
-    return;
-  }
-  showPreview.value = !showPreview.value;
-}
-
-function onFilesSelected(event) {
-  selectedFiles.value = [...event.files];
-}
-
-function onFileRemoved(event) {
-  const index = selectedFiles.value.findIndex(file => file.name === event.file.name);
-  if (index > -1) {
-    selectedFiles.value.splice(index, 1);
-  }
-}
-
-async function addNote() {
+async function submitNote() {
   if (!validateForm()) {
     return;
   }
 
-  try {
-    loading.value = true;
+  if (!props.dossier) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: 'Aucun dossier sélectionné',
+      life: 3000
+    });
+    return;
+  }
 
+  submitting.value = true;
+  try {
     const payload = {
       dossierId: props.dossier.id,
-      objet: formData.objet.trim(),
-      contenu: formData.contenu.trim(),
-      priorite: formData.priorite,
-      typeNote: formData.typeNote,
-      visibilite: formData.visibilite,
-      destinataires: formData.destinataires,
-      tags: formData.tags,
-      demandeReponse: formData.demandeReponse,
-      rappelAutomatique: formData.rappelAutomatique,
-      dateLimiteReponse: formData.dateLimiteReponse?.toISOString() || null,
-      attachments: selectedFiles.value
+      objet: noteForm.value.objet.trim(),
+      contenu: noteForm.value.contenu.trim(),
+      typeNote: noteForm.value.typeNote,
+      priorite: noteForm.value.priorite,
+      utilisateurDestinataireId: noteForm.value.utilisateurDestinataireId
     };
 
-    const response = await ApiService.post('/notes', payload);
+    const response = await ApiService.post(`/dossiers/${props.dossier.id}/notes`, payload);
 
     if (response.success) {
       toast.add({
         severity: 'success',
         summary: 'Succès',
         detail: 'Note ajoutée avec succès',
-        life: 4000
+        life: 3000
       });
 
-      emit('note-added', response.data);
-      localVisible.value = false;
+      emit('note-added', response);
+      closeDialog();
     }
 
-  } catch (err) {
-    console.error('Error adding note:', err);
+  } catch (error) {
+    console.error('Erreur lors de l\'ajout de la note:', error);
     toast.add({
       severity: 'error',
       summary: 'Erreur',
-      detail: err.message || 'Impossible d\'ajouter la note',
-      life: 4000
+      detail: error.message || 'Impossible d\'ajouter la note',
+      life: 3000
     });
   } finally {
-    loading.value = false;
+    submitting.value = false;
   }
 }
 
-function getPrioritySeverity(priority) {
-  const severityMap = {
-    'HAUTE': 'danger',
-    'NORMALE': 'info',
-    'FAIBLE': 'secondary'
-  };
-  return severityMap[priority] || 'info';
-}
-
-function getTypeLabel(type) {
-  const option = typeNoteOptions.value.find(opt => opt.value === type);
-  return option ? option.label : type;
-}
-
-function getVisibilityLabel(visibility) {
-  const option = visibiliteOptions.value.find(opt => opt.value === visibility);
-  return option ? option.label : visibility;
-}
-
-function resetForm() {
-  if (!loading.value) {
-    initializeForm();
-  }
+function closeDialog() {
+  emit('update:visible', false);
 }
 </script>
 
 <style scoped>
-:deep(.add-note-dialog .p-dialog-header) {
-  background: var(--primary-color);
-  color: white;
-}
-
-:deep(.add-note-dialog .p-dialog-header .p-dialog-title) {
-  font-weight: 600;
-}
-
-:deep(.add-note-dialog .p-dialog-header .p-dialog-header-icon) {
-  color: white;
-}
-
-.dialog-content {
+.note-form {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-height: 70vh;
-  overflow-y: auto;
+  padding: 0.5rem 0;
 }
 
-/* Dossier Information */
-.dossier-info {
-  background: var(--section-background);
-  border-radius: 8px;
-  padding: 1rem;
-  border: 1px solid var(--card-border);
-}
-
-.dossier-info h4 {
-  color: var(--primary-color);
-  margin: 0 0 1rem 0;
-  font-size: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.75rem;
-  font-size: 0.9rem;
-}
-
-/* Form */
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.field-group {
+.form-field {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin-bottom: 1rem;
 }
 
-.field-group label {
-  font-weight: 500;
+.form-field label {
+  font-weight: 600;
   color: var(--text-color);
-  font-size: 0.9rem;
 }
 
-.field-group .p-inputtext,
-.field-group .p-textarea,
-.field-group .p-select,
-.field-group .p-multiselect,
-.field-group .p-calendar,
-.field-group .p-chips {
+.form-field label.required::after {
+  content: ' *';
+  color: var(--red-500);
+}
+
+.form-field small {
+  color: var(--text-color-secondary);
+  font-size: 0.8rem;
+}
+
+.form-field small.p-error {
+  color: var(--red-500);
+}
+
+.w-full {
   width: 100%;
 }
 
-.error-message {
-  color: var(--danger-color);
-  font-size: 0.8rem;
-  margin-top: 0.25rem;
-}
-
-.field-help {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  margin-top: 0.25rem;
-}
-
-.checkbox-options {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.checkbox-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.checkbox-item label {
-  margin: 0;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-/* File Upload */
-:deep(.p-fileupload .p-fileupload-content) {
-  background: var(--section-background);
-  border: 1px dashed var(--card-border);
-  border-radius: 8px;
-}
-
-.upload-empty {
-  text-align: center;
+/* Dialog footer styling */
+:deep(.p-dialog-footer) {
   padding: 1.5rem;
-  color: var(--text-secondary);
-}
-
-.upload-empty i {
-  font-size: 1.5rem;
-  margin-bottom: 0.5rem;
-  display: block;
-  color: var(--primary-color);
-}
-
-.upload-empty p {
-  margin: 0.25rem 0;
-}
-
-.upload-help {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-/* Preview */
-.note-preview {
-  background: var(--section-background);
-  border-radius: 8px;
-  padding: 1rem;
-  border: 1px solid var(--card-border);
-}
-
-.note-preview h4 {
-  color: var(--primary-color);
-  margin: 0 0 1rem 0;
-  font-size: 1rem;
-  display: flex;
-  align-items: center;
+  border-top: 1px solid var(--surface-border);
   gap: 0.5rem;
-}
-
-.preview-content {
-  background: var(--background-color);
-  border-radius: 6px;
-  padding: 1rem;
-  border: 1px solid var(--card-border);
-}
-
-.preview-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--card-border);
-}
-
-.preview-subject {
-  font-weight: 600;
-  color: var(--text-color);
-  font-size: 1rem;
-}
-
-.priority-tag {
-  font-size: 0.7rem !important;
-}
-
-.preview-meta {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-
-.preview-body {
-  color: var(--text-color);
-  line-height: 1.6;
-  margin-bottom: 0.75rem;
-  white-space: pre-wrap;
-}
-
-.preview-tags {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  font-size: 0.8rem;
-}
-
-.tag-item {
-  font-size: 0.7rem !important;
-  padding: 0.125rem 0.375rem !important;
-}
-
-/* Dialog Footer */
-.dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
 }
 
-/* Responsive Design */
+:deep(.p-dialog-footer .p-button) {
+  margin-left: 0.5rem;
+}
+
+:deep(.p-dialog-footer .p-button:first-child) {
+  margin-left: 0;
+}
+
+/* Responsive design */
 @media (max-width: 768px) {
-  :deep(.add-note-dialog) {
+  :deep(.p-dialog) {
     width: 95vw !important;
-    max-width: none !important;
+    margin: 0 !important;
   }
-
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .info-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .preview-header {
-    flex-direction: column;
-    gap: 0.5rem;
-    align-items: flex-start;
-  }
-
-  .preview-meta {
-    flex-direction: column;
+  
+  :deep(.p-dialog-footer) {
+    flex-direction: column-reverse;
     gap: 0.5rem;
   }
-
-  .dialog-footer {
-    flex-direction: column;
+  
+  :deep(.p-dialog-footer .p-button) {
+    margin-left: 0;
+    width: 100%;
   }
 }
 </style>
