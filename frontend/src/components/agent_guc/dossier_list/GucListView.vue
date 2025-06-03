@@ -96,6 +96,24 @@
       <Button icon="pi pi-comment" @click="showAddNoteDialog(dossier)"
         class="p-button-info p-button-sm action-btn" v-tooltip.top="'Ajouter note'" />
 
+      <!-- Final Approval Button -->
+      <Button 
+        v-if="needsFinalApproval(dossier)"
+        icon="pi pi-gavel" 
+        @click="goToFinalApproval(dossier)"
+        class="p-button-success p-button-sm action-btn" 
+        v-tooltip.top="'Décision Finale'" 
+      />
+
+      <!-- View Fiche Button -->
+      <Button 
+        v-if="hasApprovedFiche(dossier)"
+        icon="pi pi-file-text" 
+        @click="goToFiche(dossier)"
+        class="p-button-info p-button-sm action-btn" 
+        v-tooltip.top="'Voir Fiche'" 
+      />
+
       <SplitButton v-if="dossier.availableActions && dossier.availableActions.length > 0"
         :model="getActionMenuItems(dossier)" class="p-button-sm action-split-btn"
         @click="handlePrimaryAction(dossier)">
@@ -188,6 +206,25 @@ function applyFilters() {
 function showAddNoteDialog(dossier) {
   addNoteDialog.visible = true;
   addNoteDialog.dossier = dossier;
+}
+
+function needsFinalApproval(dossier) {
+  // Check if dossier is back from commission and needs final approval
+  return dossier.etapeActuelle === 'AP - Phase GUC' && 
+         (dossier.statut === 'Commission Terrain Approuvé' || dossier.statut === 'IN_REVIEW');
+}
+
+function hasApprovedFiche(dossier) {
+  // Check if dossier is approved and has a fiche
+  return dossier.statut === 'APPROVED' || dossier.statut === 'Approuvé';
+}
+
+function goToFinalApproval(dossier) {
+  router.push(`/agent_guc/dossiers/${dossier.id}/final-approval`);
+}
+
+function goToFiche(dossier) {
+  router.push(`/agent_guc/dossiers/${dossier.id}/fiche`);
 }
 
 function getActionMenuItems(dossier) {

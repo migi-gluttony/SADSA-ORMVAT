@@ -37,6 +37,24 @@
         class="p-button-info"
       />
       
+      <!-- Final Approval Button -->
+      <Button 
+        v-if="isFinalApprovalStage(dossier)"
+        label="Décision Finale" 
+        icon="pi pi-gavel" 
+        @click="goToFinalApproval(dossier)"
+        class="p-button-success"
+      />
+      
+      <!-- View Fiche Button -->
+      <Button 
+        v-if="isApprovedWithFiche(dossier)"
+        label="Voir Fiche" 
+        icon="pi pi-file-text" 
+        @click="goToFiche(dossier)"
+        class="p-button-info"
+      />
+      
       <SplitButton 
         v-if="hasGUCActions(dossier)"
         :model="getGUCActionMenuItems(dossier)" 
@@ -195,6 +213,19 @@ function hasGUCActions(dossier) {
   return status === 'SUBMITTED' || status === 'Soumis au GUC' || status === 'IN_REVIEW' || status === 'En cours d\'examen';
 }
 
+function isFinalApprovalStage(dossier) {
+  // Check if dossier is back from commission and needs final approval
+  const etapeActuelle = currentDossierDetail.value?.etapeActuelle;
+  return etapeActuelle === 'AP - Phase GUC' && 
+         currentDossierDetail.value?.ordre === 4 &&
+         (dossier?.statut === 'Commission Terrain Approuvé' || dossier?.statut === 'IN_REVIEW');
+}
+
+function isApprovedWithFiche(dossier) {
+  // Check if dossier is approved and has a fiche
+  return dossier?.statut === 'APPROVED' || dossier?.statut === 'Approuvé';
+}
+
 function getGUCActionMenuItems(dossier) {
   const items = [];
   const status = dossier?.statut;
@@ -263,6 +294,14 @@ function getWorkflowLocationText() {
 
 function showAddNoteDialog() {
   // This will be handled by the base component
+}
+
+function goToFinalApproval(dossier) {
+  router.push(`/agent_guc/dossiers/${dossier.id}/final-approval`);
+}
+
+function goToFiche(dossier) {
+  router.push(`/agent_guc/dossiers/${dossier.id}/fiche`);
 }
 
 function showActionDialog(action) {

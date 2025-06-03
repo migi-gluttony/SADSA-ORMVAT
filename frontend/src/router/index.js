@@ -80,6 +80,13 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE', title: 'Documents du Dossier' },
       props: true
     },
+    {
+      path: '/agent_antenne/dossiers/:dossierId/fiche',
+      name: 'agent-antenne-fiche-approbation',
+      component: () => import('@/views/agent_guc/FicheApprobationView.vue'),
+      meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE', title: 'Fiche d\'Approbation' },
+      props: true
+    },
 
     // Admin Routes
     {
@@ -101,6 +108,20 @@ const router = createRouter({
       name: 'agent-guc-dossier-detail',
       component: DossierDetailView,
       meta: { requiresAuth: true, requiresRole: 'AGENT_GUC', title: 'Détails du Dossier' },
+      props: true
+    },
+    {
+      path: '/agent_guc/dossiers/:dossierId/final-approval',
+      name: 'agent-guc-final-approval',
+      component: () => import('@/views/agent_guc/FinalApprobationView.vue'),
+      meta: { requiresAuth: true, requiresRole: 'AGENT_GUC', title: 'Décision Finale d\'Approbation' },
+      props: true
+    },
+    {
+      path: '/agent_guc/dossiers/:dossierId/fiche',
+      name: 'agent-guc-fiche-approbation',
+      component: () => import('@/views/agent_guc/FicheApprobationView.vue'),
+      meta: { requiresAuth: true, requiresRole: 'AGENT_GUC', title: 'Fiche d\'Approbation' },
       props: true
     },
 

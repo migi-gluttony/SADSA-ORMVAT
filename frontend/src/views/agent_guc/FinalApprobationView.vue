@@ -347,7 +347,7 @@ async function submitDecision() {
       observationsCommission: formData.observationsCommission
     };
 
-    const response = await ApiService.post(`/dossiers/${dossierId.value}/final-approval`, requestData);
+    const response = await ApiService.post('/fiche-approbation/final-approval', requestData);
     
     if (response.success) {
       toast.add({

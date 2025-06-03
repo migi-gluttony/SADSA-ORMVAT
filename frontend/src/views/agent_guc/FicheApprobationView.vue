@@ -26,7 +26,7 @@
             class="p-button-outlined"
           />
           <div class="breadcrumb">
-            <span>Dossiers GUC</span>
+            <span>{{ getBreadcrumbRoot() }}</span>
             <i class="pi pi-angle-right"></i>
             <span>{{ ficheData.reference }}</span>
             <i class="pi pi-angle-right"></i>
@@ -42,7 +42,7 @@
             class="p-button-info"
           />
           <Button 
-            v-if="!ficheData.farmersRetrieved"
+            v-if="!ficheData.farmersRetrieved && canMarkRetrieved()"
             label="Marquer comme récupérée" 
             icon="pi pi-user-check" 
             @click="showRetrievalDialog"
@@ -401,6 +401,23 @@ function getFullLocation() {
   return parts.join(', ') || 'Non spécifiée';
 }
 
+function getBreadcrumbRoot() {
+  const user = AuthService.getCurrentUser();
+  switch (user?.role) {
+    case 'AGENT_GUC':
+      return 'Dossiers GUC';
+    case 'AGENT_ANTENNE':
+      return 'Mes Dossiers';
+    default:
+      return 'Dossiers';
+  }
+}
+
+function canMarkRetrieved() {
+  const user = AuthService.getCurrentUser();
+  return user?.role === 'AGENT_GUC';
+}
+
 function showRetrievalDialog() {
   retrievalDialog.visible = true;
   retrievalDialog.farmerCin = ficheData.value?.agriculteurCin || '';
@@ -477,7 +494,17 @@ function printFiche() {
 }
 
 function goBack() {
-  router.push('/agent_guc/dossiers');
+  const user = AuthService.getCurrentUser();
+  switch (user?.role) {
+    case 'AGENT_GUC':
+      router.push('/agent_guc/dossiers');
+      break;
+    case 'AGENT_ANTENNE':
+      router.push('/agent_antenne/dossiers');
+      break;
+    default:
+      router.push('/');
+  }
 }
 
 function formatCurrency(amount) {
