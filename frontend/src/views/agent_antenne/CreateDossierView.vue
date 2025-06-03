@@ -111,8 +111,15 @@
     <!-- Étape 2: Informations de base -->
     <div v-if="currentStep === 2" class="step-content">
       <div class="component-card">
-        <h2><i class="pi pi-user"></i> Informations de l'agriculteur</h2>
-        <div class="form-grid">
+<div class="title-section">
+    <h2><i class="pi pi-user"></i> Informations de l'agriculteur</h2>
+    <Button 
+      label="Réinitialiser le formulaire" 
+      icon="pi pi-refresh" 
+      @click="resetForm"
+      class="p-button-danger p-button-outlined"
+    />
+  </div>        <div class="form-grid">
           <div class="form-group">
             <label for="cin" class="required">CIN</label>
             <div class="cin-input-group">
@@ -651,9 +658,7 @@ const loadSavedData = async () => {
       
       // Force refresh of Select components
       refreshKey.value++;
-      
-      showSaveNotification('Brouillon restauré', 'success', 'pi pi-check');
-      
+          
     } catch (e) {
       console.warn('Failed to load saved data:', e);
       localStorage.removeItem(STORAGE_KEY);
@@ -1343,6 +1348,25 @@ function formatDate(date) {
   padding: 0;
   background: var(--background-color);
   min-height: 100vh;
+}
+
+
+
+
+.title-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+/* Responsive adjustment */
+@media (max-width: 768px) {
+  .title-section {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
 }
 
 /* Save notification for important events */

@@ -1,5 +1,13 @@
 <template>
   <div class="document-filling-container">
+    <div class="navigation-header">
+      <Button 
+        label="Retour au détails du dossier" 
+        icon="pi pi-arrow-left" 
+        @click="goBack"
+        class="p-button-outlined"
+      />
+    </div>
     <!-- Loading State -->
     <div v-if="loading" class="loading-container">
       <ProgressBar mode="indeterminate" />
@@ -251,6 +259,8 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
+import { useRouter } from 'vue-router'; 
+
 import { useRoute } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
@@ -268,6 +278,7 @@ import Toast from 'primevue/toast';
 const route = useRoute();
 const toast = useToast();
 const confirm = useConfirm();
+const router = useRouter();
 
 // Reactive data
 const loading = ref(true);
@@ -583,6 +594,13 @@ function getDocumentStatusSeverity(status) {
   };
   return severities[status] || 'secondary';
 }
+
+
+function goBack() {
+  router.push(`/agent_antenne/dossiers/${dossierId.value}`);
+}
+
+
 </script>
 
 <style scoped>
@@ -591,6 +609,12 @@ function getDocumentStatusSeverity(status) {
   margin: 0 auto;
   padding: 1rem;
 }
+
+
+.navigation-header{
+  padding-bottom:1rem;
+}
+
 
 /* Loading State */
 .loading-container {

@@ -389,17 +389,6 @@
         <span>Aucun champ configuré dans ce formulaire</span>
       </div>
 
-      <!-- Cache Status Indicator -->
-      <div v-if="dataLoadedFromStorage" class="cache-indicator">
-        <i class="pi pi-info-circle"></i>
-        <span>Données restaurées depuis le cache du navigateur</span>
-        <Button 
-          type="button" 
-          icon="pi pi-times" 
-          class="p-button-text p-button-sm"
-          @click="dataLoadedFromStorage = false"
-        />
-      </div>
 
       <!-- Form Actions -->
       <div v-if="formFields.length > 0" class="form-actions">
