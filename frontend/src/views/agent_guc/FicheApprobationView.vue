@@ -3,7 +3,7 @@
     <!-- Loading State -->
     <div v-if="loading" class="loading-container">
       <ProgressSpinner size="50px" />
-      <span>Chargement de la fiche...</span>
+      <span>{{ loadingMessage }}</span>
     </div>
 
     <!-- Error State -->
@@ -11,13 +11,25 @@
       <i class="pi pi-exclamation-triangle"></i>
       <h3>Erreur</h3>
       <p>{{ error }}</p>
-      <Button label="Retour" icon="pi pi-arrow-left" @click="goBack" />
+      <div class="error-actions">
+        <Button 
+          label="Réessayer" 
+          icon="pi pi-refresh" 
+          @click="loadFicheData"
+          class="p-button-outlined mr-2"
+        />
+        <Button 
+          label="Retour" 
+          icon="pi pi-arrow-left" 
+          @click="goBack" 
+        />
+      </div>
     </div>
 
     <!-- Main Content -->
     <div v-else-if="ficheData" class="fiche-content">
-      <!-- Header -->
-      <div class="fiche-header">
+      <!-- Header Actions (hidden in print) -->
+      <div class="fiche-header no-print">
         <div class="header-nav">
           <Button 
             label="Retour" 
@@ -26,7 +38,7 @@
             class="p-button-outlined"
           />
           <div class="breadcrumb">
-            <span>{{ getBreadcrumbRoot() }}</span>
+            <span>Dossiers GUC</span>
             <i class="pi pi-angle-right"></i>
             <span>{{ ficheData.reference }}</span>
             <i class="pi pi-angle-right"></i>
@@ -39,207 +51,214 @@
             label="Imprimer" 
             icon="pi pi-print" 
             @click="printFiche"
-            class="p-button-info"
+            class="p-button-success"
           />
           <Button 
             v-if="!ficheData.farmersRetrieved && canMarkRetrieved()"
             label="Marquer comme récupérée" 
             icon="pi pi-user-check" 
             @click="showRetrievalDialog"
-            class="p-button-success"
+            class="p-button-info"
           />
         </div>
       </div>
 
-      <!-- Status Banner -->
-      <div class="status-banner" :class="getStatusBannerClass()">
+      <!-- Status Banner (hidden in print) -->
+      <div v-if="ficheData.farmersRetrieved" class="status-banner no-print">
         <div class="status-info">
-          <i :class="getStatusIcon()"></i>
+          <i class="pi pi-check-circle"></i>
           <div class="status-text">
-            <h4>{{ getStatusTitle() }}</h4>
-            <p>{{ getStatusDescription() }}</p>
+            <h4>Fiche Récupérée</h4>
+            <p>Cette fiche a été récupérée par l'agriculteur le {{ formatDate(ficheData.dateRetrievalFermier) }}</p>
           </div>
-        </div>
-        <div v-if="ficheData.farmersRetrieved" class="retrieval-info">
-          <small>Récupérée le {{ formatDate(ficheData.dateRetrievalFermier) }}</small>
         </div>
       </div>
 
-      <!-- Fiche Document -->
-      <div class="fiche-document" ref="ficheDocument">
-        <div class="document-header">
-          <div class="logo-section">
-            <div class="organization-logo">
-              <!-- Organization logo would go here -->
-              <div class="logo-placeholder">ORMVAT</div>
+      <!-- Printable Fiche Document -->
+      <div class="printable-fiche print-only">
+        <div class="fiche-document">
+          <!-- Header with logos and title (based on PrintableReceipt) -->
+          <div class="print-header">
+            <div class="header-logo left-logo">
+              <img src="/src/assets/logo/logo_ministre.jpg" alt="Armoiries du Maroc" />
             </div>
-            <div class="organization-info">
-              <h1>OFFICE RÉGIONAL DE MISE EN VALEUR AGRICOLE DU TADLA</h1>
-              <h2>FICHE D'APPROBATION</h2>
-              <div class="fiche-number">N° {{ ficheData.numeroFiche }}</div>
+            <div class="header-text">
+              <div class="header-title">
+                <p><strong>Royaume du Maroc</strong></p>
+                <p>Ministère de l'Agriculture, de la Pêche Maritime</p>
+                <p>et du Développement Rural et des Eaux et Forêts</p>
+                <p><strong>OFFICE RÉGIONAL DE MISE EN VALEUR AGRICOLE DU TADLA</strong></p>
+              </div>
+            </div>
+            <div class="header-logo right-logo">
+              <img src="/src/assets/logo/logo-ormvat-full-original.jpg" alt="Logo ORMVAT" />
             </div>
           </div>
-          <div class="date-section">
-            <div class="approval-date">
-              <strong>Date d'approbation:</strong><br>
-              {{ formatDate(ficheData.dateApprobation) }}
-            </div>
+          
+          <hr class="header-separator" />
+          
+          <!-- Document Title -->
+          <div class="document-title">
+            <h1>Système Automatisé de Demande de Subventions Agricoles (SADSA)</h1>
+            <h2>FICHE D'APPROBATION</h2>
+            <h3>N° {{ ficheData.numeroFiche }}</h3>
+            <p class="approval-date">Date d'approbation: {{ formatDate(ficheData.dateApprobation) }}</p>
           </div>
-        </div>
+          
+          <!-- Fiche Content -->
+          <div class="content-area">
+            <!-- Beneficiary Section -->
+            <div class="fiche-section">
+              <h3>INFORMATIONS DU BÉNÉFICIAIRE</h3>
+              <table class="info-table">
+                <tr>
+                  <td class="label">Nom et Prénom :</td>
+                  <td class="value">{{ ficheData.agriculteurNom }} {{ ficheData.agriculteurPrenom }}</td>
+                </tr>
+                <tr>
+                  <td class="label">CIN :</td>
+                  <td class="value">{{ ficheData.agriculteurCin }}</td>
+                </tr>
+                <tr>
+                  <td class="label">Téléphone :</td>
+                  <td class="value">{{ ficheData.agriculteurTelephone }}</td>
+                </tr>
+                <tr>
+                  <td class="label">Localisation :</td>
+                  <td class="value">{{ getFullLocation() }}</td>
+                </tr>
+              </table>
+            </div>
 
-        <div class="document-content">
-          <!-- Beneficiary Section -->
-          <div class="fiche-section">
-            <h3><i class="pi pi-user"></i> BÉNÉFICIAIRE</h3>
-            <div class="section-grid">
-              <div class="info-group">
-                <div class="info-item">
-                  <strong>Nom et Prénom:</strong>
-                  <span>{{ ficheData.agriculteurNom }} {{ ficheData.agriculteurPrenom }}</span>
-                </div>
-                <div class="info-item">
-                  <strong>CIN:</strong>
-                  <span>{{ ficheData.agriculteurCin }}</span>
-                </div>
-              </div>
-              <div class="info-group">
-                <div class="info-item">
-                  <strong>Téléphone:</strong>
-                  <span>{{ ficheData.agriculteurTelephone }}</span>
-                </div>
-                <div class="info-item">
-                  <strong>Localisation:</strong>
-                  <span>{{ getFullLocation() }}</span>
-                </div>
-              </div>
+            <!-- Project Section -->
+            <div class="fiche-section">
+              <h3>INFORMATIONS DU PROJET</h3>
+              <table class="info-table">
+                <tr>
+                  <td class="label">Référence Dossier :</td>
+                  <td class="value">{{ ficheData.reference }}</td>
+                </tr>
+                <tr>
+                  <td class="label">Numéro SABA :</td>
+                  <td class="value"><strong>{{ ficheData.saba }}</strong></td>
+                </tr>
+                <tr>
+                  <td class="label">Type de projet :</td>
+                  <td class="value">{{ ficheData.rubriqueDesignation }}</td>
+                </tr>
+                <tr>
+                  <td class="label">Description détaillée :</td>
+                  <td class="value">{{ ficheData.sousRubriqueDesignation }}</td>
+                </tr>
+                <tr>
+                  <td class="label">Montant demandé :</td>
+                  <td class="value">{{ formatCurrency(ficheData.montantDemande) }}</td>
+                </tr>
+                <tr>
+                  <td class="label">Montant approuvé :</td>
+                  <td class="value amount-approved"><strong>{{ formatCurrency(ficheData.montantApprouve) }}</strong></td>
+                </tr>
+              </table>
             </div>
-          </div>
 
-          <!-- Project Section -->
-          <div class="fiche-section">
-            <h3><i class="pi pi-briefcase"></i> PROJET APPROUVÉ</h3>
-            <div class="section-grid">
-              <div class="info-group">
-                <div class="info-item">
-                  <strong>Référence Dossier:</strong>
-                  <span>{{ ficheData.reference }}</span>
-                </div>
-                <div class="info-item">
-                  <strong>SABA:</strong>
-                  <span>{{ ficheData.saba }}</span>
-                </div>
-                <div class="info-item">
-                  <strong>Type de projet:</strong>
-                  <span>{{ ficheData.rubriqueDesignation }}</span>
-                </div>
-              </div>
-              <div class="info-group">
-                <div class="info-item">
-                  <strong>Description détaillée:</strong>
-                  <span>{{ ficheData.sousRubriqueDesignation }}</span>
-                </div>
-                <div class="info-item amount-section">
-                  <strong>Montant approuvé:</strong>
-                  <span class="amount-value">{{ formatCurrency(ficheData.montantApprouve) }}</span>
-                </div>
-              </div>
+            <!-- Approval Section -->
+            <div class="fiche-section">
+              <h3>DÉTAILS DE L'APPROBATION</h3>
+              <table class="info-table">
+                <tr>
+                  <td class="label">Statut :</td>
+                  <td class="value"><strong>{{ ficheData.statutApprobation }}</strong></td>
+                </tr>
+                <tr>
+                  <td class="label">Date d'approbation :</td>
+                  <td class="value">{{ formatDate(ficheData.dateApprobation) }}</td>
+                </tr>
+                <tr>
+                  <td class="label">Validité :</td>
+                  <td class="value">{{ ficheData.validiteJusquau }}</td>
+                </tr>
+                <tr v-if="ficheData.commentaireApprobation">
+                  <td class="label">Commentaire :</td>
+                  <td class="value">{{ ficheData.commentaireApprobation }}</td>
+                </tr>
+                <tr v-if="ficheData.conditionsSpecifiques">
+                  <td class="label">Conditions spécifiques :</td>
+                  <td class="value">{{ ficheData.conditionsSpecifiques }}</td>
+                </tr>
+              </table>
             </div>
-          </div>
 
-          <!-- Approval Details -->
-          <div class="fiche-section">
-            <h3><i class="pi pi-clipboard-check"></i> DÉTAILS DE L'APPROBATION</h3>
-            <div class="approval-details">
-              <div class="approval-status">
-                <Tag value="APPROUVÉ" severity="success" class="status-tag-large" />
-                <span class="validity-info">Valable jusqu'au {{ ficheData.validiteJusquau }}</span>
-              </div>
-              
-              <div v-if="ficheData.commentaireApprobation" class="approval-comment">
-                <strong>Commentaire d'approbation:</strong>
-                <p>{{ ficheData.commentaireApprobation }}</p>
-              </div>
-              
-              <div v-if="ficheData.conditionsSpecifiques" class="conditions">
-                <strong>Conditions spécifiques:</strong>
-                <p>{{ ficheData.conditionsSpecifiques }}</p>
-              </div>
-              
-              <div v-if="ficheData.observationsCommission" class="commission-obs">
-                <strong>Observations de la commission:</strong>
-                <p>{{ ficheData.observationsCommission }}</p>
-              </div>
+            <!-- Administrative Section -->
+            <div class="fiche-section">
+              <h3>INFORMATIONS ADMINISTRATIVES</h3>
+              <table class="info-table">
+                <tr>
+                  <td class="label">Antenne :</td>
+                  <td class="value">{{ ficheData.antenneDesignation }}</td>
+                </tr>
+                <tr>
+                  <td class="label">CDA :</td>
+                  <td class="value">{{ ficheData.cdaNom }}</td>
+                </tr>
+                <tr>
+                  <td class="label">Province :</td>
+                  <td class="value">{{ ficheData.agriculteurProvince }}</td>
+                </tr>
+                <tr>
+                  <td class="label">Agent GUC :</td>
+                  <td class="value">{{ ficheData.agentGucNom }}</td>
+                </tr>
+              </table>
             </div>
-          </div>
 
-          <!-- Administrative Info -->
-          <div class="fiche-section">
-            <h3><i class="pi pi-building"></i> INFORMATIONS ADMINISTRATIVES</h3>
-            <div class="section-grid">
-              <div class="info-group">
-                <div class="info-item">
-                  <strong>Antenne:</strong>
-                  <span>{{ ficheData.antenneDesignation }}</span>
-                </div>
-                <div class="info-item">
-                  <strong>CDA:</strong>
-                  <span>{{ ficheData.cdaNom }}</span>
-                </div>
-              </div>
-              <div class="info-group">
-                <div class="info-item">
-                  <strong>Province:</strong>
-                  <span>{{ ficheData.agriculteurProvince }}</span>
-                </div>
-                <div class="info-item">
-                  <strong>Date de génération:</strong>
-                  <span>{{ formatDateTime(ficheData.dateGeneration) }}</span>
-                </div>
-              </div>
+            <!-- Important Notice -->
+            <div class="important-notice">
+              <h3>INFORMATIONS IMPORTANTES</h3>
+              <ul>
+                <li>Cette fiche atteste de l'approbation de votre demande de subvention agricole.</li>
+                <li>Conservez précieusement ce document pour la phase de réalisation de votre projet.</li>
+                <li>La validité de cette approbation est de 6 mois à compter de la date d'émission.</li>
+                <li>Tout changement dans les spécifications du projet nécessite une nouvelle approbation.</li>
+                <li>Vous devez respecter toutes les conditions mentionnées ci-dessus.</li>
+                <li>Présentez cette fiche lors de la mise en œuvre de votre projet.</li>
+              </ul>
             </div>
-          </div>
 
-          <!-- Signatures Section -->
-          <div class="signatures-section">
-            <h3><i class="pi pi-pen-nib"></i> VALIDATION ET SIGNATURES</h3>
-            <div class="signatures-grid">
-              <div class="signature-block">
-                <h4>Agent GUC</h4>
-                <div class="signature-info">
-                  <p><strong>{{ ficheData.agentGucNom }}</strong></p>
+            <!-- Signatures Section -->
+            <div class="signatures-section">
+              <div class="signature-grid">
+                <div class="signature-block">
+                  <p><strong>Agent GUC</strong></p>
+                  <p>{{ ficheData.agentGucNom }}</p>
                   <p class="signature-line">{{ ficheData.agentGucSignature }}</p>
                   <div class="signature-space"></div>
                 </div>
-              </div>
-              
-              <div class="signature-block">
-                <h4>Responsable ORMVAT</h4>
-                <div class="signature-info">
-                  <p><strong>{{ ficheData.responsableNom }}</strong></p>
+                
+                <div class="signature-block">
+                  <p><strong>Responsable ORMVAT</strong></p>
+                  <p>{{ ficheData.responsableNom }}</p>
                   <p class="signature-line">{{ ficheData.responsableSignature }}</p>
                   <div class="signature-space"></div>
                 </div>
               </div>
             </div>
           </div>
-
-          <!-- Important Notice -->
-          <div class="important-notice">
-            <h4><i class="pi pi-info-circle"></i> IMPORTANT</h4>
-            <ul>
-              <li>Cette fiche doit être présentée lors de la phase de réalisation du projet</li>
-              <li>La validité de cette approbation est de 6 mois à compter de la date d'émission</li>
-              <li>Tout changement dans les spécifications du projet nécessite une nouvelle approbation</li>
-              <li>Le bénéficiaire doit respecter toutes les conditions mentionnées ci-dessus</li>
-            </ul>
-          </div>
-        </div>
-
-        <!-- Document Footer -->
-        <div class="document-footer">
-          <div class="footer-info">
-            <p>Document généré automatiquement par le système SADSA-ORMVAT</p>
-            <p>{{ formatDateTime(new Date()) }}</p>
+          
+          <!-- Footer section -->
+          <div class="footer-section">
+            <div class="contact-info">
+              <p><strong>Pour toute information :</strong></p>
+              <p>ORMVAT - BP 244, Fquih Ben Salah</p>
+              <p>Tél : +212 5 23 43 50 23/35/48</p>
+              <p>Email : sadsa@ormvatadla.ma</p>
+            </div>
+            <div class="signature-area">
+              <p>Fait à {{ ficheData.antenneDesignation }}, le {{ formatDate(ficheData.dateApprobation) }}</p>
+              <div class="signature">
+                <p>Document généré automatiquement par SADSA</p>
+                <p>{{ formatDateTime(ficheData.dateGeneration) }}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -249,12 +268,12 @@
     <Dialog 
       v-model:visible="retrievalDialog.visible" 
       modal 
-      :header="'Confirmation de Récupération'"
-      :style="{ width: '500px' }"
+      header="Confirmation de Récupération"
+      style="width: 500px"
     >
       <div class="retrieval-form">
-        <div class="form-group">
-          <label for="farmerCin" class="form-label">CIN de l'Agriculteur *</label>
+        <div class="field">
+          <label for="farmerCin">CIN de l'Agriculteur *</label>
           <InputText 
             id="farmerCin"
             v-model="retrievalDialog.farmerCin" 
@@ -263,8 +282,8 @@
           />
         </div>
         
-        <div class="form-group">
-          <label for="retrievedBy" class="form-label">Nom de la personne qui récupère *</label>
+        <div class="field">
+          <label for="retrievedBy">Nom de la personne qui récupère *</label>
           <InputText 
             id="retrievedBy"
             v-model="retrievalDialog.retrievedBy" 
@@ -273,8 +292,8 @@
           />
         </div>
         
-        <div class="form-group">
-          <label for="retrievalComment" class="form-label">Commentaire</label>
+        <div class="field">
+          <label for="retrievalComment">Commentaire</label>
           <Textarea 
             id="retrievalComment"
             v-model="retrievalDialog.comment" 
@@ -316,7 +335,6 @@ import AuthService from '@/services/AuthService';
 // PrimeVue components
 import Button from 'primevue/button';
 import ProgressSpinner from 'primevue/progressspinner';
-import Tag from 'primevue/tag';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
@@ -330,7 +348,7 @@ const toast = useToast();
 const loading = ref(true);
 const error = ref(null);
 const ficheData = ref(null);
-const ficheDocument = ref(null);
+const loadingMessage = ref('Chargement de la fiche...');
 
 // Retrieval dialog
 const retrievalDialog = reactive({
@@ -353,44 +371,67 @@ async function loadFicheData() {
   try {
     loading.value = true;
     error.value = null;
+    loadingMessage.value = 'Chargement de la fiche...';
     
-    const response = await ApiService.get(`/fiche-approbation/${dossierId.value}/print`);
+    console.log('Loading fiche data for dossier:', dossierId.value);
+    
+    // Try to load the fiche with retry logic
+    const response = await loadFicheWithRetry();
+    
+    console.log('Fiche data loaded successfully:', response);
     ficheData.value = response;
     
   } catch (err) {
     console.error('Error loading fiche:', err);
-    error.value = err.message || 'Impossible de charger la fiche';
+    
+    // More specific error handling
+    if (err.message && err.message.includes('dateApprobation')) {
+      error.value = 'Le dossier n\'a pas encore été approuvé ou la fiche n\'est pas prête. Veuillez réessayer dans quelques instants.';
+    } else if (err.status === 404) {
+      error.value = 'Fiche d\'approbation non trouvée. Assurez-vous que le dossier a été approuvé.';
+    } else {
+      error.value = err.message || 'Impossible de charger la fiche. Assurez-vous que le dossier a été approuvé.';
+    }
+    
+    // Don't auto-redirect on error, let user choose to go back
   } finally {
     loading.value = false;
   }
 }
 
-function getStatusBannerClass() {
-  if (ficheData.value?.farmersRetrieved) {
-    return 'status-retrieved';
+async function loadFicheWithRetry(maxRetries = 3, delay = 2000) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt === 1) {
+        loadingMessage.value = 'Chargement de la fiche...';
+      } else {
+        loadingMessage.value = `Tentative ${attempt}/${maxRetries}...`;
+      }
+      
+      console.log(`Attempt ${attempt} to load fiche data...`);
+      
+      const response = await ApiService.get(`/fiche-approbation/${dossierId.value}/print`);
+      
+      // If we get here, the request succeeded
+      return response;
+      
+    } catch (err) {
+      console.error(`Attempt ${attempt} failed:`, err);
+      
+      // If this is the last attempt, throw the error
+      if (attempt === maxRetries) {
+        throw err;
+      }
+      
+      // Wait before retrying
+      loadingMessage.value = `Nouvelle tentative dans ${Math.ceil(delay/1000)} secondes...`;
+      console.log(`Waiting ${delay}ms before retry...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      // Increase delay for next attempt
+      delay = delay * 1.5;
+    }
   }
-  return 'status-waiting';
-}
-
-function getStatusIcon() {
-  if (ficheData.value?.farmersRetrieved) {
-    return 'pi pi-check-circle';
-  }
-  return 'pi pi-clock';
-}
-
-function getStatusTitle() {
-  if (ficheData.value?.farmersRetrieved) {
-    return 'Fiche Récupérée';
-  }
-  return 'En Attente de Récupération';
-}
-
-function getStatusDescription() {
-  if (ficheData.value?.farmersRetrieved) {
-    return 'Cette fiche a été récupérée par l\'agriculteur. Le dossier peut maintenant passer en phase de réalisation.';
-  }
-  return 'Cette fiche est prête à être récupérée par l\'agriculteur. Marquez-la comme récupérée une fois remise.';
 }
 
 function getFullLocation() {
@@ -399,18 +440,6 @@ function getFullLocation() {
   if (ficheData.value?.agriculteurCommune) parts.push(ficheData.value.agriculteurCommune);
   if (ficheData.value?.agriculteurProvince) parts.push(ficheData.value.agriculteurProvince);
   return parts.join(', ') || 'Non spécifiée';
-}
-
-function getBreadcrumbRoot() {
-  const user = AuthService.getCurrentUser();
-  switch (user?.role) {
-    case 'AGENT_GUC':
-      return 'Dossiers GUC';
-    case 'AGENT_ANTENNE':
-      return 'Mes Dossiers';
-    default:
-      return 'Dossiers';
-  }
 }
 
 function canMarkRetrieved() {
@@ -474,37 +503,11 @@ async function confirmRetrieval() {
 }
 
 function printFiche() {
-  // Hide all UI elements except the fiche document
-  const elementsToHide = document.querySelectorAll('body > *:not(.fiche-approbation-container)');
-  const headerElement = document.querySelector('.fiche-header');
-  const statusElement = document.querySelector('.status-banner');
-  
-  // Hide elements
-  elementsToHide.forEach(el => el.style.display = 'none');
-  if (headerElement) headerElement.style.display = 'none';
-  if (statusElement) statusElement.style.display = 'none';
-  
-  // Print
   window.print();
-  
-  // Restore elements
-  elementsToHide.forEach(el => el.style.display = '');
-  if (headerElement) headerElement.style.display = '';
-  if (statusElement) statusElement.style.display = '';
 }
 
 function goBack() {
-  const user = AuthService.getCurrentUser();
-  switch (user?.role) {
-    case 'AGENT_GUC':
-      router.push('/agent_guc/dossiers');
-      break;
-    case 'AGENT_ANTENNE':
-      router.push('/agent_antenne/dossiers');
-      break;
-    default:
-      router.push('/');
-  }
+  router.push('/agent_guc/dossiers');
 }
 
 function formatCurrency(amount) {
@@ -533,10 +536,37 @@ function formatDateTime(date) {
 </script>
 
 <style scoped>
+/* Based on PrintableReceipt component */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  .print-only, .print-only * {
+    visibility: visible;
+  }
+  
+  .printable-fiche {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  @page {
+    size: A4;
+    margin: 1.5cm;
+  }
+}
+
 .fiche-approbation-container {
   max-width: 1000px;
   margin: 0 auto;
-  padding: 0;
+  padding: 1rem;
 }
 
 .loading-container,
@@ -547,24 +577,16 @@ function formatDateTime(date) {
   justify-content: center;
   padding: 3rem;
   gap: 1rem;
-  color: #6b7280;
 }
 
-.error-container i {
-  font-size: 3rem;
-  color: #dc2626;
-}
-
-/* Header */
 .fiche-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
-  padding: 1rem 1.5rem;
-  background: var(--background-color);
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+  background: var(--surface-ground);
+  border-radius: 8px;
 }
 
 .header-nav {
@@ -577,13 +599,7 @@ function formatDateTime(date) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #6b7280;
-  font-size: 0.9rem;
-}
-
-.breadcrumb span:last-child {
-  color: var(--primary-color);
-  font-weight: 500;
+  color: var(--text-color-secondary);
 }
 
 .header-actions {
@@ -591,24 +607,12 @@ function formatDateTime(date) {
   gap: 0.75rem;
 }
 
-/* Status Banner */
 .status-banner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.5rem;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  background: var(--green-50);
+  border: 1px solid var(--green-200);
   border-radius: 8px;
-  margin-bottom: 2rem;
-}
-
-.status-banner.status-waiting {
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid #f59e0b;
-}
-
-.status-banner.status-retrieved {
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid #10b981;
 }
 
 .status-info {
@@ -618,386 +622,186 @@ function formatDateTime(date) {
 }
 
 .status-info i {
+  color: var(--green-500);
   font-size: 1.5rem;
 }
 
-.status-waiting .status-info i {
-  color: #f59e0b;
-}
-
-.status-retrieved .status-info i {
-  color: #10b981;
-}
-
-.status-text h4 {
-  margin: 0 0 0.25rem 0;
-  color: var(--text-color);
-}
-
-.status-text p {
-  margin: 0;
-  color: #6b7280;
-  font-size: 0.9rem;
-}
-
-.retrieval-info {
-  color: #6b7280;
-  font-size: 0.8rem;
-}
-
-/* Document Styles */
+/* Document styles based on PrintableReceipt */
 .fiche-document {
+  padding: 20px;
+  font-family: Arial, sans-serif;
   background: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 2rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  font-family: 'Times New Roman', serif;
 }
 
-.document-header {
+.print-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  border-bottom: 3px solid var(--primary-color);
-  padding-bottom: 1.5rem;
-  margin-bottom: 2rem;
+  align-items: center;
+  margin-bottom: 15px;
 }
 
-.logo-section {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+.header-logo {
+  width: 80px;
+  height: 80px;
+}
+
+.header-logo img {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.header-text {
+  text-align: center;
   flex: 1;
 }
 
-.logo-placeholder {
-  width: 80px;
-  height: 80px;
-  background: var(--primary-color);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  font-weight: bold;
-  font-size: 1.2rem;
+.header-title p {
+  margin: 3px 0;
+  font-size: 11px;
+  line-height: 1.2;
 }
 
-.organization-info h1 {
-  margin: 0 0 0.5rem 0;
-  color: var(--primary-color);
-  font-size: 1.4rem;
-  font-weight: bold;
+.header-separator {
+  border: none;
+  border-top: 2px solid black;
+  margin: 15px 0 25px 0;
+}
+
+.document-title {
   text-align: center;
+  margin-bottom: 40px;
 }
 
-.organization-info h2 {
-  margin: 0 0 1rem 0;
-  color: var(--text-color);
-  font-size: 1.2rem;
-  text-align: center;
-}
-
-.fiche-number {
-  text-align: center;
-  font-size: 1.1rem;
+.document-title h1 {
+  font-size: 16px;
   font-weight: bold;
-  color: var(--primary-color);
-  border: 2px solid var(--primary-color);
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  margin-bottom: 8px;
+  text-decoration: underline;
 }
 
-.date-section {
-  text-align: right;
-  font-size: 0.9rem;
+.document-title h2 {
+  font-size: 14px;
+  font-weight: bold;
+  margin: 5px 0;
+}
+
+.document-title h3 {
+  font-size: 12px;
+  font-weight: bold;
+  margin: 10px 0;
+  border: 2px solid black;
+  padding: 8px;
+  display: inline-block;
 }
 
 .approval-date {
-  color: var(--text-color);
-}
-
-/* Document Content */
-.document-content {
-  line-height: 1.6;
+  font-weight: bold;
+  margin-top: 10px;
 }
 
 .fiche-section {
-  margin-bottom: 2rem;
-  page-break-inside: avoid;
+  margin-bottom: 25px;
 }
 
 .fiche-section h3 {
-  color: var(--primary-color);
-  margin: 0 0 1rem 0;
-  font-size: 1.1rem;
+  font-size: 12px;
   font-weight: bold;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  border-bottom: 1px solid #e5e7eb;
-  padding-bottom: 0.5rem;
+  margin-bottom: 10px;
+  text-decoration: underline;
 }
 
-.section-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 15px;
 }
 
-.info-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+.info-table td {
+  padding: 6px 8px;
+  border: 1px solid black;
+  font-size: 11px;
 }
 
-.info-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+.info-table .label {
+  background-color: #f0f0f0;
+  font-weight: bold;
+  width: 35%;
 }
 
-.info-item strong {
-  color: var(--text-color);
-  font-size: 0.9rem;
+.info-table .value {
+  width: 65%;
 }
 
-.info-item span {
-  color: #374151;
-  font-size: 0.9rem;
+.amount-approved {
+  color: #059669;
+  font-weight: bold;
 }
 
-.amount-section .amount-value {
-  font-size: 1.2rem !important;
-  font-weight: bold !important;
-  color: var(--success-color) !important;
+.important-notice {
+  border: 2px solid black;
+  padding: 15px;
+  background-color: #f9f9f9;
+  margin: 20px 0;
 }
 
-/* Approval Details */
-.approval-details {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+.important-notice h3 {
+  font-size: 12px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  text-align: center;
+  text-decoration: underline;
 }
 
-.approval-status {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  background: #f0fdf4;
-  border-radius: 6px;
+.important-notice ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 10px;
+  line-height: 1.4;
 }
 
-.status-tag-large {
-  font-size: 1rem !important;
-  padding: 0.5rem 1rem !important;
-  font-weight: bold !important;
-}
-
-.validity-info {
-  color: #6b7280;
-  font-size: 0.9rem;
-}
-
-.approval-comment,
-.conditions,
-.commission-obs {
-  padding: 1rem;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-left: 4px solid var(--primary-color);
-}
-
-.approval-comment p,
-.conditions p,
-.commission-obs p {
-  margin: 0.5rem 0 0 0;
-  color: #374151;
-}
-
-/* Signatures */
 .signatures-section {
-  margin-top: 2rem;
-  page-break-inside: avoid;
+  margin-top: 30px;
 }
 
-.signatures-section h3 {
-  color: var(--primary-color);
-  margin: 0 0 1.5rem 0;
-  font-size: 1.1rem;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  border-bottom: 1px solid #e5e7eb;
-  padding-bottom: 0.5rem;
-}
-
-.signatures-grid {
+.signature-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 3rem;
+  gap: 40px;
+  margin-top: 20px;
 }
 
 .signature-block {
   text-align: center;
 }
 
-.signature-block h4 {
-  margin: 0 0 1rem 0;
-  color: var(--primary-color);
-  font-size: 1rem;
-  border-bottom: 1px solid #ddd;
-  padding-bottom: 0.5rem;
-}
-
-.signature-info p {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.9rem;
+.signature-block p {
+  margin: 5px 0;
+  font-size: 10px;
 }
 
 .signature-line {
   font-style: italic;
-  color: #6b7280;
+  font-size: 9px;
 }
 
 .signature-space {
-  height: 60px;
-  border-bottom: 1px solid #000;
-  margin: 1rem 0;
+  height: 50px;
+  border-top: 1px solid black;
+  margin: 15px 20px;
 }
 
-/* Important Notice */
-.important-notice {
-  margin-top: 2rem;
-  padding: 1.5rem;
-  background: #fffbeb;
-  border: 1px solid #f59e0b;
-  border-radius: 6px;
-  page-break-inside: avoid;
-}
-
-.important-notice h4 {
-  margin: 0 0 1rem 0;
-  color: #f59e0b;
+.footer-section {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  justify-content: space-between;
+  margin-top: 30px;
+  padding-top: 15px;
+  border-top: 1px solid black;
+  font-size: 9px;
 }
 
-.important-notice ul {
-  margin: 0;
-  padding-left: 1.5rem;
-}
-
-.important-notice li {
-  margin-bottom: 0.5rem;
-  color: #374151;
-  font-size: 0.9rem;
-}
-
-/* Document Footer */
-.document-footer {
-  margin-top: 2rem;
-  padding-top: 1rem;
-  border-top: 1px solid #e5e7eb;
-  text-align: center;
-  color: #6b7280;
-  font-size: 0.8rem;
-}
-
-.footer-info p {
-  margin: 0.25rem 0;
-}
-
-/* Retrieval Dialog */
-.retrieval-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.form-label {
-  font-weight: 600;
-  color: var(--text-color);
-  font-size: 0.9rem;
-}
-
-/* Print Styles */
-@media print {
-  .fiche-header,
-  .status-banner {
-    display: none !important;
-  }
-
-  .fiche-document {
-    box-shadow: none;
-    border: none;
-    padding: 1rem;
-  }
-
-  .section-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-
-  .signatures-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-  }
-
-  .fiche-section {
-    margin-bottom: 1.5rem;
-  }
-
-  .signature-space {
-    height: 40px;
-  }
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .fiche-header {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: stretch;
-  }
-
-  .header-nav {
-    justify-content: space-between;
-  }
-
-  .header-actions {
-    justify-content: center;
-  }
-
-  .document-header {
-    flex-direction: column;
-    gap: 1rem;
-    text-align: center;
-  }
-
-  .section-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .signatures-grid {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-  }
-
-  .status-banner {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: flex-start;
-  }
+.contact-info p,
+.signature-area p {
+  margin: 2px 0;
 }
 </style>

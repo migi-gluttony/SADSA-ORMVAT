@@ -13,6 +13,12 @@
 
     <!-- Header Actions -->
     <template #header-actions>
+      <Button 
+        label="Actualiser" 
+        icon="pi pi-refresh" 
+        @click="refreshDossierList"
+        class="p-button-outlined mr-2" 
+      />
       <Button label="Export Excel" icon="pi pi-file-excel" @click="exportToExcel"
         class="p-button-outlined" />
     </template>
@@ -96,7 +102,16 @@
       <Button icon="pi pi-comment" @click="showAddNoteDialog(dossier)"
         class="p-button-info p-button-sm action-btn" v-tooltip.top="'Ajouter note'" />
 
-      <!-- Final Approval Button -->
+      <!-- DEBUG: Always show final approval button if status might need it -->
+      <Button 
+        v-if="debugNeedsFinalApproval(dossier)"
+        icon="pi pi-gavel" 
+        @click="goToFinalApproval(dossier)"
+        class="p-button-warning p-button-sm action-btn" 
+        v-tooltip.top="'DEBUG: Décision Finale'" 
+      />
+
+      <!-- Final Approval Button (for dossiers back from commission) -->
       <Button 
         v-if="needsFinalApproval(dossier)"
         icon="pi pi-gavel" 
@@ -105,15 +120,25 @@
         v-tooltip.top="'Décision Finale'" 
       />
 
-      <!-- View Fiche Button -->
+      <!-- View Fiche Button (for approved dossiers) -->
       <Button 
         v-if="hasApprovedFiche(dossier)"
         icon="pi pi-file-text" 
         @click="goToFiche(dossier)"
-        class="p-button-info p-button-sm action-btn" 
-        v-tooltip.top="'Voir Fiche'" 
+        class="p-button-success p-button-sm action-btn" 
+        v-tooltip.top="'Voir Fiche d\'Approbation'" 
       />
 
+      <!-- DEBUG: Always show fiche button for testing -->
+      <Button 
+        v-if="!hasApprovedFiche(dossier) && (dossier.statut === 'IN_REVIEW' || dossier.statut === 'SUBMITTED')"
+        icon="pi pi-file-text" 
+        @click="goToFiche(dossier)"
+        class="p-button-help p-button-sm action-btn" 
+        v-tooltip.top="'DEBUG: Essayer Fiche'" 
+      />
+
+      <!-- Standard GUC Actions (send to commission, return, reject) -->
       <SplitButton v-if="dossier.availableActions && dossier.availableActions.length > 0"
         :model="getActionMenuItems(dossier)" class="p-button-sm action-split-btn"
         @click="handlePrimaryAction(dossier)">
@@ -132,7 +157,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import DossierListBase from '@/components/dossiers/DossierListBase.vue';
@@ -208,15 +233,104 @@ function showAddNoteDialog(dossier) {
   addNoteDialog.dossier = dossier;
 }
 
+function debugNeedsFinalApproval(dossier) {
+  // Debug function: show button for any dossier that could potentially need final approval
+  // This helps us see all candidates and debug the real conditions
+  const couldNeedApproval = (
+    // Not yet approved
+    dossier.statut !== 'APPROVED' && 
+    dossier.statut !== 'REJECTED' &&
+    // Contains GUC or commission keywords
+    (dossier.etapeActuelle?.includes('GUC') || 
+     dossier.etapeActuelle?.includes('Commission') ||
+     dossier.statut?.includes('Commission') ||
+     // Or is in review/submitted state
+     dossier.statut === 'IN_REVIEW' ||
+     dossier.statut === 'SUBMITTED')
+  );
+  
+  if (couldNeedApproval) {
+    console.log('DEBUG: Potential candidate for final approval:', {
+      id: dossier.id,
+      reference: dossier.reference,
+      etapeActuelle: dossier.etapeActuelle,
+      statut: dossier.statut,
+      emplacementActuel: dossier.emplacementActuel
+    });
+  }
+  
+  return couldNeedApproval;
+}
+
 function needsFinalApproval(dossier) {
-  // Check if dossier is back from commission and needs final approval
-  return dossier.etapeActuelle === 'AP - Phase GUC' && 
-         (dossier.statut === 'Commission Terrain Approuvé' || dossier.statut === 'IN_REVIEW');
+  // Debug logging to see actual dossier state
+  console.log('Checking needsFinalApproval for dossier:', {
+    id: dossier.id,
+    reference: dossier.reference,
+    etapeActuelle: dossier.etapeActuelle,
+    statut: dossier.statut,
+    emplacementActuel: dossier.emplacementActuel,
+    dateApprobation: dossier.dateApprobation,
+    hasApprovedFiche: hasApprovedFiche(dossier)
+  });
+
+  // First check: if already approved, don't show final approval button
+  if (hasApprovedFiche(dossier)) {
+    console.log('Dossier already approved, no final approval needed');
+    return false;
+  }
+
+  // Check if dossier is back from commission and needs final GUC approval
+  // More flexible conditions to catch different possible states
+  const isInFinalGUCPhase = dossier.etapeActuelle && 
+    (dossier.etapeActuelle.includes('AP - Phase GUC') || 
+     dossier.etapeActuelle.includes('GUC'));
+  
+  const needsApproval = dossier.statut === 'IN_REVIEW' || 
+                       dossier.statut === 'SUBMITTED' ||
+                       dossier.statut === 'Commission Terrain Approuvé' ||
+                       (dossier.etapeActuelle && dossier.etapeActuelle.includes('GUC'));
+  
+  const notYetApproved = !hasApprovedFiche(dossier);
+  
+  const result = isInFinalGUCPhase && needsApproval && notYetApproved;
+  
+  console.log('needsFinalApproval result:', result, {
+    isInFinalGUCPhase,
+    needsApproval,
+    notYetApproved
+  });
+  
+  return result;
 }
 
 function hasApprovedFiche(dossier) {
-  // Check if dossier is approved and has a fiche
-  return dossier.statut === 'APPROVED' || dossier.statut === 'Approuvé';
+  // Check if dossier is approved and has a fiche (dateApprobation exists)
+  const isApproved = dossier.statut === 'APPROVED';
+  const hasApprovalDate = dossier.dateApprobation && dossier.dateApprobation !== null && dossier.dateApprobation !== undefined;
+  
+  // Also check if the workflow shows completion
+  const isInApprovedState = dossier.etapeActuelle && 
+    (dossier.etapeActuelle.includes('Approuvé') || 
+     dossier.etapeActuelle.includes('APPROVED') ||
+     dossier.etapeActuelle.includes('terminé') ||
+     dossier.etapeActuelle.includes('Terminé'));
+  
+  const result = isApproved || hasApprovalDate || isInApprovedState;
+  
+  console.log('hasApprovedFiche check:', {
+    id: dossier.id,
+    reference: dossier.reference,
+    statut: dossier.statut,
+    dateApprobation: dossier.dateApprobation,
+    etapeActuelle: dossier.etapeActuelle,
+    isApproved,
+    hasApprovalDate,
+    isInApprovedState,
+    result
+  });
+  
+  return result;
 }
 
 function goToFinalApproval(dossier) {
@@ -224,8 +338,33 @@ function goToFinalApproval(dossier) {
 }
 
 function goToFiche(dossier) {
+  console.log('Navigating to fiche for dossier:', dossier.id);
   router.push(`/agent_guc/dossiers/${dossier.id}/fiche`);
 }
+
+// Add method to refresh list manually
+function refreshDossierList() {
+  console.log('Manually refreshing dossier list...');
+  if (baseComponent.value) {
+    baseComponent.value.loadDossiers();
+  }
+}
+
+// Auto-refresh every 30 seconds to catch status updates
+onMounted(() => {
+  // Set up auto-refresh interval
+  const refreshInterval = setInterval(() => {
+    if (baseComponent.value) {
+      console.log('Auto-refreshing dossier list...');
+      baseComponent.value.loadDossiers();
+    }
+  }, 30000); // 30 seconds
+
+  // Clean up interval on unmount
+  onUnmounted(() => {
+    clearInterval(refreshInterval);
+  });
+});
 
 function getActionMenuItems(dossier) {
   const items = [];
@@ -325,9 +464,10 @@ async function handleActionConfirmed(actionData) {
         life: 3000
       });
 
-      if (baseComponent.value) {
-        baseComponent.value.loadDossiers();
-      }
+      // Immediately refresh to show updated buttons
+      setTimeout(() => {
+        refreshDossierList();
+      }, 500);
     }
 
   } catch (err) {
@@ -361,9 +501,10 @@ async function handleNoteAdded() {
     life: 3000
   });
 
-  if (baseComponent.value) {
-    baseComponent.value.loadDossiers();
-  }
+  // Refresh list to show updated note count
+  setTimeout(() => {
+    refreshDossierList();
+  }, 500);
 }
 
 async function exportToExcel() {
@@ -416,7 +557,6 @@ function getPrioritySeverity(priority) {
   return severityMap[priority] || 'info';
 }
 </script>
-
 <style scoped>
 /* Statistics Section */
 .statistics-section {
