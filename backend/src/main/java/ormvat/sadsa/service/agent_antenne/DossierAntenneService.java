@@ -278,18 +278,23 @@ public class DossierAntenneService {
         try {
             // Get current etape information
             WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
-            String currentEtape = etapeInfo.getDesignation();
             
-            log.debug("Determining actions for dossier {} at etape: {} with status: {}", 
-                     dossier.getId(), currentEtape, dossier.getStatus());
+            if (etapeInfo == null || etapeInfo.getEtape() == null) {
+                return availableActions;
+            }
+            
+            Long etapeId = etapeInfo.getEtape().getId();
+            
+            log.debug("Determining actions for dossier {} at etapeId: {}, designation: {}, status: {}", 
+                     dossier.getId(), etapeId, etapeInfo.getDesignation(), dossier.getStatus());
 
             // Must be Agent Antenne from correct antenne
             if (!isCorrectAntenneAgent(dossier, utilisateur)) {
                 return availableActions;
             }
 
-            // PHASE 1: AP - Phase Antenne (Creation & Document Filling)
-            if ("AP - Phase Antenne".equals(currentEtape)) {
+            // PHASE 1: AP - Phase Antenne (etapeId=1)
+            if (etapeId == 1) {
                 // Can edit if DRAFT or RETURNED_FOR_COMPLETION
                 if (dossier.getStatus() == Dossier.DossierStatus.DRAFT || 
                     dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION) {
@@ -329,13 +334,25 @@ public class DossierAntenneService {
                 }
             }
 
-            // PHASES 2-3: Read-only (AP - Phase GUC, AP - Phase AHA-AF)
-            else if (currentEtape.startsWith("AP - Phase GUC") || currentEtape.startsWith("AP - Phase AHA-AF")) {
-                // No actions available - read-only
-                log.debug("Dossier {} in read-only phase: {}", dossier.getId(), currentEtape);
+            // PHASE 5: RP - Phase Antenne (etapeId=5)
+            else if (etapeId == 5) {
+                availableActions.add(AvailableActionDTO.builder()
+                        .action("send_to_guc")
+                        .label("Envoyer au GUC")
+                        .icon("pi-send")
+                        .severity("success")
+                        .requiresComment(false)
+                        .requiresConfirmation(true)
+                        .description("Envoyer le dossier au GUC pour traitement de réalisation")
+                        .build());
             }
 
-            // PHASE 4 END: Approved and waiting for farmer
+            // PHASES 2-4: Read-only (etapeId 2,3,4)
+            else if (etapeId >= 2 && etapeId <= 4) {
+                log.debug("Dossier {} in read-only AP phase (etapeId: {})", dossier.getId(), etapeId);
+            }
+
+            // APPROVED WAITING FOR FARMER: Special realization action
             else if (dossier.getStatus() == Dossier.DossierStatus.APPROVED_AWAITING_FARMER) {
                 availableActions.add(AvailableActionDTO.builder()
                         .action("initialize_realization")
@@ -348,14 +365,13 @@ public class DossierAntenneService {
                         .build());
             }
 
-            // PHASES 6-8: Read-only (RP phases)
-            else if (currentEtape.startsWith("RP")) {
-                // No actions available - read-only
-                log.debug("Dossier {} in RP read-only phase: {}", dossier.getId(), currentEtape);
+            // PHASES 6-8: Read-only (etapeId 6,7,8)
+            else if (etapeId >= 6 && etapeId <= 8) {
+                log.debug("Dossier {} in read-only RP phase (etapeId: {})", dossier.getId(), etapeId);
             }
 
-            log.debug("Found {} available actions for dossier {} at etape {}", 
-                     availableActions.size(), dossier.getId(), currentEtape);
+            log.debug("Found {} available actions for dossier {} at etapeId {}", 
+                     availableActions.size(), dossier.getId(), etapeId);
 
         } catch (Exception e) {
             log.error("Erreur lors de la récupération des actions disponibles pour le dossier {}", dossier.getId(), e);

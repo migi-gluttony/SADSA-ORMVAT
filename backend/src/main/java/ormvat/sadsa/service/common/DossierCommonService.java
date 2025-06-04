@@ -299,10 +299,14 @@ public class DossierCommonService {
             log.warn("Cannot get etape info for Agent Antenne permissions: {}", e.getMessage());
         }
 
-        String currentEtape = etapeInfo != null ? etapeInfo.getDesignation() : "";
+        if (etapeInfo == null || etapeInfo.getEtape() == null) {
+            return createReadOnlyPermissions();
+        }
 
-        // PHASE 1: AP - Phase Antenne (Full permissions)
-        if ("AP - Phase Antenne".equals(currentEtape) && canUserActOnCurrentEtape) {
+        Long etapeId = etapeInfo.getEtape().getId();
+
+        // PHASE 1: AP - Phase Antenne (etapeId=1) - Full permissions
+        if (etapeId == 1 && canUserActOnCurrentEtape) {
             boolean isDraftOrReturned = dossier.getStatus() == Dossier.DossierStatus.DRAFT ||
                                        dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
             boolean isDraft = dossier.getStatus() == Dossier.DossierStatus.DRAFT;
@@ -321,8 +325,24 @@ public class DossierCommonService {
                     .build();
         }
 
+        // PHASE 5: RP - Phase Antenne (etapeId=5) - Realization antenne phase
+        else if (etapeId == 5 && canUserActOnCurrentEtape) {
+            return DossierPermissionsDTO.builder()
+                    .peutEtreModifie(false)
+                    .peutEtreEnvoye(true) // Can send to GUC for realization
+                    .peutEtreSupprime(false)
+                    .peutAjouterNotes(true)
+                    .peutRetournerAntenne(false)
+                    .peutEnvoyerCommission(false)
+                    .peutRejeter(false)
+                    .peutApprouver(false)
+                    .peutVoirDocuments(true)
+                    .peutTelechargerDocuments(true)
+                    .build();
+        }
+
         // SPECIAL CASE: Approved and waiting for farmer (Realization initialization)
-        if (dossier.getStatus() == Dossier.DossierStatus.APPROVED_AWAITING_FARMER) {
+        else if (dossier.getStatus() == Dossier.DossierStatus.APPROVED_AWAITING_FARMER) {
             return DossierPermissionsDTO.builder()
                     .peutEtreModifie(false)
                     .peutEtreEnvoye(false) // Special action: initialize_realization
@@ -337,7 +357,7 @@ public class DossierCommonService {
                     .build();
         }
 
-        // ALL OTHER PHASES: Read-only (Phases 2-3, 6-8)
+        // ALL OTHER PHASES: Read-only (etapeId 2,3,4,6,7,8)
         return createReadOnlyPermissions();
     }
 
@@ -363,20 +383,39 @@ public class DossierCommonService {
      * UPDATED: Get display status using etape information and new statuses
      */
     public String getDisplayStatus(Dossier.DossierStatus status, WorkflowService.EtapeInfo etapeInfo) {
-        if (etapeInfo != null && etapeInfo.getDesignation() != null) {
+        if (etapeInfo != null && etapeInfo.getEtape() != null) {
             String phaseInfo = "";
             
-            // Add phase-specific information
-            if ("AP - Phase Antenne".equals(etapeInfo.getDesignation())) {
-                phaseInfo = " (Phase 1: Création & Documents)";
-            } else if (etapeInfo.getDesignation().startsWith("AP - Phase GUC")) {
-                phaseInfo = " (Phase 2: Validation GUC)";
-            } else if (etapeInfo.getDesignation().startsWith("AP - Phase AHA-AF")) {
-                phaseInfo = " (Phase 3: Commission Terrain)";
-            } else if (etapeInfo.getDesignation().contains("AP") && etapeInfo.getOrdre() == 4) {
-                phaseInfo = " (Phase 4: Approbation Finale)";
-            } else if (etapeInfo.getDesignation().startsWith("RP")) {
-                phaseInfo = " (Phase " + (etapeInfo.getOrdre() + 4) + ": Réalisation)";
+            // Map etape ID directly to phase number
+            int phaseNumber = getPhaseNumberByEtapeId(etapeInfo.getEtape().getId());
+            
+            switch (phaseNumber) {
+                case 1:
+                    phaseInfo = " (Phase 1: Création & Documents)";
+                    break;
+                case 2:
+                    phaseInfo = " (Phase 2: Validation GUC Initiale)";
+                    break;
+                case 3:
+                    phaseInfo = " (Phase 3: Commission Terrain)";
+                    break;
+                case 4:
+                    phaseInfo = " (Phase 4: Approbation Finale GUC)";
+                    break;
+                case 5:
+                    phaseInfo = " (Phase 5: Réalisation - Antenne)";
+                    break;
+                case 6:
+                    phaseInfo = " (Phase 6: Réalisation - GUC)";
+                    break;
+                case 7:
+                    phaseInfo = " (Phase 7: Réalisation - Service Technique)";
+                    break;
+                case 8:
+                    phaseInfo = " (Phase 8: Réalisation - GUC Final)";
+                    break;
+                default:
+                    phaseInfo = " (Phase " + phaseNumber + ")";
             }
             
             return etapeInfo.getDesignation() + phaseInfo +
@@ -406,6 +445,26 @@ public class DossierCommonService {
                 return "Retourné pour complétion - Phase 1";
             default: 
                 return status.name();
+        }
+    }
+
+    /**
+     * Add helper method to map etape ID to phase number
+     */
+    public int getPhaseNumberByEtapeId(Long etapeId) {
+        if (etapeId == null) return 0;
+        
+        // Direct mapping: etape ID = phase number
+        switch (etapeId.intValue()) {
+            case 1: return 1; // AP - Phase Antenne
+            case 2: return 2; // AP - Phase GUC (Initial)
+            case 3: return 3; // AP - Phase AHA-AF  
+            case 4: return 4; // AP - Phase GUC (Final)
+            case 5: return 5; // RP - Phase Antenne
+            case 6: return 6; // RP - Phase GUC
+            case 7: return 7; // RP - Phase service technique
+            case 8: return 8; // RP - Phase GUC (Final)
+            default: return 0;
         }
     }
 
