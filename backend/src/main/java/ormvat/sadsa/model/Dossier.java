@@ -81,6 +81,8 @@ public class Dossier {
         SUBMITTED,
         IN_REVIEW,
         APPROVED,
+        APPROVED_AWAITING_FARMER,
+        REALIZATION_IN_PROGRESS,
         REJECTED,
         COMPLETED,
         CANCELLED,

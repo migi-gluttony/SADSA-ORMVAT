@@ -1,11 +1,11 @@
 package ormvat.sadsa.model;
+
 import java.time.LocalDateTime;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
 
 @Entity
 @Table(name = "workflow_instance")
@@ -22,7 +22,7 @@ public class WorkflowInstance {
     @JoinColumn(name = "id_dossier")
     private Dossier dossier;
 
-@Column(name = "etape_designation")
+    @Column(name = "etape_designation")
     private String etapeDesignation;
 
     @Enumerated(EnumType.STRING)
@@ -49,6 +49,7 @@ public class WorkflowInstance {
         ANTENNE,
         GUC,
         SERVICE_TECHNIQUE,
-        COMMISSION_AHA_AF
+        COMMISSION_AHA_AF, 
+        AWAITING_FARMER_ACTION
     }
 }
