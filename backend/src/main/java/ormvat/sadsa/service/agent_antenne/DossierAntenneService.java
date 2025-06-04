@@ -26,7 +26,7 @@ public class DossierAntenneService {
     private final DossierCommonService dossierCommonService;
 
     /**
-     * Send dossier to GUC (Agent Antenne action)
+     * Send dossier to GUC (Agent Antenne action) - Phase 1 only
      */
     @Transactional
     public DossierActionResponse sendDossierToGUC(SendToGUCRequest request, String userEmail) {
@@ -37,22 +37,25 @@ public class DossierAntenneService {
             Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
-            // Verify permission
+            // Verify permission - only Phase 1 (AP - Phase Antenne)
             if (!canSendToGUC(dossier, utilisateur)) {
                 throw new RuntimeException("Vous n'avez pas l'autorisation d'envoyer ce dossier");
             }
 
-            // Check if user can act on current etape
+            // Check if user can act on current etape (must be at Phase 1)
             if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
                 throw new RuntimeException("Cette action n'est pas autorisée à l'étape actuelle");
             }
+
+            // TODO: Add validation that forms and documents are complete
+            // validateDocumentCompletion(dossier);
 
             // Update dossier status
             dossier.setStatus(Dossier.DossierStatus.SUBMITTED);
             dossier.setDateSubmission(LocalDateTime.now());
             dossierRepository.save(dossier);
 
-            // Move to next etape using WorkflowService
+            // Move to next etape using WorkflowService (Phase 2)
             WorkflowService.EtapeInfo currentEtapeInfo = workflowService.getCurrentEtapeInfo(dossier);
             workflowService.moveToNextEtape(dossier, utilisateur, 
                 request.getCommentaire() != null ? request.getCommentaire() : "Envoi au GUC");
@@ -80,7 +83,7 @@ public class DossierAntenneService {
     @Transactional
     public void initializeDossierWorkflow(Dossier dossier, Utilisateur utilisateur) {
         try {
-            // Initialize workflow at AP - Phase Antenne
+            // Initialize workflow at AP - Phase Antenne (Phase 1)
             workflowService.initializeWorkflow(dossier, utilisateur);
             
             // Set initial status
@@ -112,6 +115,10 @@ public class DossierAntenneService {
             dossier.setStatus(Dossier.DossierStatus.RETURNED_FOR_COMPLETION);
             dossierRepository.save(dossier);
 
+            // Move back to Phase 1 (AP - Phase Antenne)
+            workflowService.moveToEtape(dossier, "AP - Phase Antenne", utilisateur, 
+                "Retour du dossier pour complétion");
+
             // Create audit trail
             dossierCommonService.createAuditTrail("RECEPTION_RETOUR", dossier, utilisateur, 
                 "Réception du dossier retourné par le GUC");
@@ -130,7 +137,7 @@ public class DossierAntenneService {
     }
 
     /**
-     * Delete dossier (Agent Antenne action)
+     * Delete dossier (Agent Antenne action) - Phase 1 only
      */
     @Transactional
     public DossierActionResponse deleteDossier(DeleteDossierRequest request, String userEmail) {
@@ -141,7 +148,7 @@ public class DossierAntenneService {
             Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
-            // Verify permission
+            // Verify permission - only Phase 1 (AP - Phase Antenne)
             if (!canDeleteDossier(dossier, utilisateur)) {
                 throw new RuntimeException("Vous n'avez pas l'autorisation de supprimer ce dossier");
             }
@@ -165,7 +172,7 @@ public class DossierAntenneService {
     }
 
     /**
-     * Handle RP phase - when farmer returns with approval
+     * REIMPLEMENTED: Initialize realization phase - Direct transition to Phase 6
      */
     @Transactional
     public DossierActionResponse startRealizationPhase(Long dossierId, String userEmail) {
@@ -176,33 +183,45 @@ public class DossierAntenneService {
             Dossier dossier = dossierRepository.findById(dossierId)
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
-            // Move to RP - Phase Antenne - 1
-            workflowService.moveToEtape(dossier, "RP - Phase Antenne - 1", utilisateur, 
-                "Début de la phase de réalisation");
+            // Validate dossier is approved and waiting for farmer
+            if (!canInitializeRealization(dossier, utilisateur)) {
+                throw new RuntimeException("Impossible d'initialiser la réalisation pour ce dossier");
+            }
 
-            // Update status
-            dossier.setStatus(Dossier.DossierStatus.IN_REVIEW);
+            // Validate dossier status
+            if (dossier.getStatus() != Dossier.DossierStatus.APPROVED_AWAITING_FARMER) {
+                throw new RuntimeException("Le dossier doit être approuvé et en attente du fermier pour initialiser la réalisation");
+            }
+
+            // Direct transition to Phase 6 (RP - Phase GUC) - Skip Phase 5
+            workflowService.moveToEtape(dossier, "RP - Phase GUC", utilisateur, 
+                "Initialisation de la phase de réalisation - Transition directe vers GUC");
+
+            // Update status to realization in progress
+            dossier.setStatus(Dossier.DossierStatus.REALIZATION_IN_PROGRESS);
             dossierRepository.save(dossier);
 
             // Create audit trail
-            dossierCommonService.createAuditTrail("DEBUT_REALISATION", dossier, utilisateur, 
-                "Début de la phase de réalisation du projet");
+            dossierCommonService.createAuditTrail("INITIALISATION_REALISATION", dossier, utilisateur, 
+                "Initialisation de la phase de réalisation - Dossier transféré directement au GUC (Phase 6)");
+
+            log.info("Realization phase initialized for dossier {} - moved directly to Phase 6 (RP - Phase GUC)", dossierId);
 
             return DossierActionResponse.builder()
                     .success(true)
-                    .message("Phase de réalisation démarrée avec succès")
+                    .message("Phase de réalisation initialisée avec succès - Dossier transféré au GUC")
                     .newStatut(dossier.getStatus().name())
                     .dateAction(LocalDateTime.now())
                     .build();
 
         } catch (Exception e) {
-            log.error("Erreur lors du démarrage de la phase de réalisation", e);
-            throw new RuntimeException("Erreur lors du démarrage: " + e.getMessage());
+            log.error("Erreur lors de l'initialisation de la phase de réalisation", e);
+            throw new RuntimeException("Erreur lors de l'initialisation: " + e.getMessage());
         }
     }
 
     /**
-     * Get available actions for Agent Antenne
+     * Get available actions for Agent Antenne - All possible actions
      */
     public List<AvailableActionDTO> getAvailableActionsForAntenne() {
         List<AvailableActionDTO> actions = new ArrayList<>();
@@ -218,64 +237,128 @@ public class DossierAntenneService {
                 .build());
 
         actions.add(AvailableActionDTO.builder()
-                .action("start_realization")
-                .label("Démarrer Réalisation")
+                .action("initialize_realization")
+                .label("Initialiser Réalisation")
                 .icon("pi-play")
                 .severity("info")
                 .requiresComment(false)
                 .requiresConfirmation(true)
-                .description("Démarrer la phase de réalisation du projet approuvé")
+                .description("Initialiser la phase de réalisation du projet approuvé")
+                .build());
+
+        actions.add(AvailableActionDTO.builder()
+                .action("edit_dossier")
+                .label("Modifier Dossier")
+                .icon("pi-pencil")
+                .severity("warning")
+                .requiresComment(false)
+                .requiresConfirmation(false)
+                .description("Modifier les informations du dossier")
+                .build());
+
+        actions.add(AvailableActionDTO.builder()
+                .action("delete_dossier")
+                .label("Supprimer Dossier")
+                .icon("pi-trash")
+                .severity("danger")
+                .requiresComment(true)
+                .requiresConfirmation(true)
+                .description("Supprimer définitivement le dossier")
                 .build());
 
         return actions;
     }
 
     /**
-     * Get available actions for specific dossier and antenne user
+     * UPDATED: Get available actions for specific dossier based on current phase
      */
     public List<AvailableActionDTO> getAvailableActionsForDossier(Dossier dossier, Utilisateur utilisateur) {
         List<AvailableActionDTO> availableActions = new ArrayList<>();
         
         try {
-            // Check current etape
+            // Get current etape information
             WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
             String currentEtape = etapeInfo.getDesignation();
             
-            // Can only act if user can act on current etape
-            if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
+            log.debug("Determining actions for dossier {} at etape: {} with status: {}", 
+                     dossier.getId(), currentEtape, dossier.getStatus());
+
+            // Must be Agent Antenne from correct antenne
+            if (!isCorrectAntenneAgent(dossier, utilisateur)) {
                 return availableActions;
             }
 
-            DossierPermissionsDTO permissions = dossierCommonService.calculatePermissions(dossier, utilisateur);
+            // PHASE 1: AP - Phase Antenne (Creation & Document Filling)
+            if ("AP - Phase Antenne".equals(currentEtape)) {
+                // Can edit if DRAFT or RETURNED_FOR_COMPLETION
+                if (dossier.getStatus() == Dossier.DossierStatus.DRAFT || 
+                    dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION) {
+                    
+                    availableActions.add(AvailableActionDTO.builder()
+                            .action("edit_dossier")
+                            .label("Modifier Dossier")
+                            .icon("pi-pencil")
+                            .severity("warning")
+                            .requiresComment(false)
+                            .requiresConfirmation(false)
+                            .description("Modifier les informations du dossier")
+                            .build());
 
-            // AP - Phase Antenne: Can send to GUC
-            if ("AP - Phase Antenne".equals(currentEtape) && permissions.getPeutEtreEnvoye()) {
-                availableActions.add(AvailableActionDTO.builder()
-                        .action("send_to_guc")
-                        .label("Envoyer au GUC")
-                        .icon("pi-send")
-                        .severity("success")
-                        .requiresComment(false)
-                        .requiresConfirmation(true)
-                        .description("Envoyer le dossier au GUC pour validation")
-                        .build());
+                    availableActions.add(AvailableActionDTO.builder()
+                            .action("send_to_guc")
+                            .label("Envoyer au GUC")
+                            .icon("pi-send")
+                            .severity("success")
+                            .requiresComment(false)
+                            .requiresConfirmation(true)
+                            .description("Envoyer le dossier au GUC après completion des documents")
+                            .build());
+                }
+
+                // Can delete if DRAFT only
+                if (dossier.getStatus() == Dossier.DossierStatus.DRAFT) {
+                    availableActions.add(AvailableActionDTO.builder()
+                            .action("delete_dossier")
+                            .label("Supprimer Dossier")
+                            .icon("pi-trash")
+                            .severity("danger")
+                            .requiresComment(true)
+                            .requiresConfirmation(true)
+                            .description("Supprimer définitivement le dossier")
+                            .build());
+                }
             }
 
-            // RP - Phase Antenne actions
-            if (currentEtape.startsWith("RP - Phase Antenne")) {
+            // PHASES 2-3: Read-only (AP - Phase GUC, AP - Phase AHA-AF)
+            else if (currentEtape.startsWith("AP - Phase GUC") || currentEtape.startsWith("AP - Phase AHA-AF")) {
+                // No actions available - read-only
+                log.debug("Dossier {} in read-only phase: {}", dossier.getId(), currentEtape);
+            }
+
+            // PHASE 4 END: Approved and waiting for farmer
+            else if (dossier.getStatus() == Dossier.DossierStatus.APPROVED_AWAITING_FARMER) {
                 availableActions.add(AvailableActionDTO.builder()
-                        .action("process_realization")
-                        .label("Traiter Réalisation")
-                        .icon("pi-forward")
+                        .action("initialize_realization")
+                        .label("Initialiser Réalisation")
+                        .icon("pi-play")
                         .severity("info")
                         .requiresComment(false)
                         .requiresConfirmation(true)
-                        .description("Avancer à l'étape suivante de réalisation")
+                        .description("Vérifier la fiche d'approbation et initialiser la phase de réalisation")
                         .build());
             }
 
+            // PHASES 6-8: Read-only (RP phases)
+            else if (currentEtape.startsWith("RP")) {
+                // No actions available - read-only
+                log.debug("Dossier {} in RP read-only phase: {}", dossier.getId(), currentEtape);
+            }
+
+            log.debug("Found {} available actions for dossier {} at etape {}", 
+                     availableActions.size(), dossier.getId(), currentEtape);
+
         } catch (Exception e) {
-            log.error("Erreur lors de la récupération des actions disponibles", e);
+            log.error("Erreur lors de la récupération des actions disponibles pour le dossier {}", dossier.getId(), e);
         }
 
         return availableActions;
@@ -284,13 +367,45 @@ public class DossierAntenneService {
     // Private helper methods
 
     private boolean canSendToGUC(Dossier dossier, Utilisateur utilisateur) {
-        boolean canEdit = dossier.getStatus() == Dossier.DossierStatus.DRAFT ||
-                dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
-        return canEdit && utilisateur.getRole() == Utilisateur.UserRole.AGENT_ANTENNE;
+        // Must be at Phase 1 with correct status
+        boolean correctStatus = dossier.getStatus() == Dossier.DossierStatus.DRAFT ||
+                               dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
+        
+        // Must be Agent Antenne from correct antenne
+        boolean correctRole = utilisateur.getRole() == Utilisateur.UserRole.AGENT_ANTENNE;
+        boolean correctAntenne = isCorrectAntenneAgent(dossier, utilisateur);
+        
+        return correctStatus && correctRole && correctAntenne;
     }
 
     private boolean canDeleteDossier(Dossier dossier, Utilisateur utilisateur) {
-        return dossier.getStatus() == Dossier.DossierStatus.DRAFT &&
-                utilisateur.getRole() == Utilisateur.UserRole.AGENT_ANTENNE;
+        // Can only delete DRAFT dossiers at Phase 1
+        boolean isDraft = dossier.getStatus() == Dossier.DossierStatus.DRAFT;
+        boolean correctRole = utilisateur.getRole() == Utilisateur.UserRole.AGENT_ANTENNE;
+        boolean correctAntenne = isCorrectAntenneAgent(dossier, utilisateur);
+        
+        return isDraft && correctRole && correctAntenne;
     }
+
+    private boolean canInitializeRealization(Dossier dossier, Utilisateur utilisateur) {
+        // Must be approved and waiting for farmer
+        boolean correctStatus = dossier.getStatus() == Dossier.DossierStatus.APPROVED_AWAITING_FARMER;
+        
+        // Must be Agent Antenne from correct antenne
+        boolean correctRole = utilisateur.getRole() == Utilisateur.UserRole.AGENT_ANTENNE;
+        boolean correctAntenne = isCorrectAntenneAgent(dossier, utilisateur);
+        
+        return correctStatus && correctRole && correctAntenne;
+    }
+
+    private boolean isCorrectAntenneAgent(Dossier dossier, Utilisateur utilisateur) {
+        return utilisateur.getAntenne() != null &&
+               dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId());
+    }
+
+    // TODO: Implement document completion validation
+    // private void validateDocumentCompletion(Dossier dossier) {
+    //     // Check if all required documents are uploaded and forms are filled
+    //     // Throw exception if not complete
+    // }
 }

@@ -198,7 +198,7 @@ public class DossierCommonService {
     }
 
     /**
-     * Calculate dossier permissions based on user role and current etape
+     * Calculate dossier permissions based on user role and current etape - UPDATED for Agent Antenne only
      */
     public DossierPermissionsDTO calculatePermissions(Dossier dossier, Utilisateur utilisateur) {
         boolean isDraft = dossier.getStatus() == Dossier.DossierStatus.DRAFT;
@@ -211,24 +211,13 @@ public class DossierCommonService {
             log.warn("Impossible de vérifier les permissions pour le dossier {}: {}", dossier.getId(), e.getMessage());
         }
 
-        boolean canEditAtAntenne = (isDraft || isReturnedForCompletion) && canUserActOnCurrentEtape;
-
         switch (utilisateur.getRole()) {
             case AGENT_ANTENNE:
-                return DossierPermissionsDTO.builder()
-                        .peutEtreModifie(canEditAtAntenne)
-                        .peutEtreEnvoye(canEditAtAntenne)
-                        .peutEtreSupprime(isDraft && canUserActOnCurrentEtape)
-                        .peutAjouterNotes(true)
-                        .peutRetournerAntenne(false)
-                        .peutEnvoyerCommission(false)
-                        .peutRejeter(false)
-                        .peutApprouver(false)
-                        .peutVoirDocuments(true)
-                        .peutTelechargerDocuments(true)
-                        .build();
+                // UPDATED: Use new phase-based permissions for Agent Antenne
+                return calculateAntenneAgentPermissions(dossier, utilisateur, canUserActOnCurrentEtape);
 
             case AGENT_GUC:
+                // Keep existing GUC logic
                 return DossierPermissionsDTO.builder()
                         .peutEtreModifie(false)
                         .peutEtreEnvoye(false)
@@ -243,6 +232,7 @@ public class DossierCommonService {
                         .build();
 
             case AGENT_COMMISSION_TERRAIN:
+                // Keep existing Commission logic
                 return DossierPermissionsDTO.builder()
                         .peutEtreModifie(false)
                         .peutEtreEnvoye(false)
@@ -257,6 +247,7 @@ public class DossierCommonService {
                         .build();
 
             case ADMIN:
+                // Keep existing Admin logic
                 return DossierPermissionsDTO.builder()
                         .peutEtreModifie(true)
                         .peutEtreEnvoye(true)
@@ -287,24 +278,134 @@ public class DossierCommonService {
     }
 
     /**
-     * Get display status using etape information
+     * NEW: Calculate specific permissions for Agent Antenne based on phase
+     */
+    private DossierPermissionsDTO calculateAntenneAgentPermissions(Dossier dossier, Utilisateur utilisateur, 
+                                                                  boolean canUserActOnCurrentEtape) {
+        // Check if user is from correct antenne
+        boolean isCorrectAntenneAgent = utilisateur.getAntenne() != null &&
+                dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId());
+
+        // Agent Antenne can only act on their own antenne's dossiers
+        if (!isCorrectAntenneAgent) {
+            return createReadOnlyPermissions();
+        }
+
+        // Get current etape information
+        WorkflowService.EtapeInfo etapeInfo = null;
+        try {
+            etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+        } catch (Exception e) {
+            log.warn("Cannot get etape info for Agent Antenne permissions: {}", e.getMessage());
+        }
+
+        String currentEtape = etapeInfo != null ? etapeInfo.getDesignation() : "";
+
+        // PHASE 1: AP - Phase Antenne (Full permissions)
+        if ("AP - Phase Antenne".equals(currentEtape) && canUserActOnCurrentEtape) {
+            boolean isDraftOrReturned = dossier.getStatus() == Dossier.DossierStatus.DRAFT ||
+                                       dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
+            boolean isDraft = dossier.getStatus() == Dossier.DossierStatus.DRAFT;
+
+            return DossierPermissionsDTO.builder()
+                    .peutEtreModifie(isDraftOrReturned)
+                    .peutEtreEnvoye(isDraftOrReturned)
+                    .peutEtreSupprime(isDraft)
+                    .peutAjouterNotes(true)
+                    .peutRetournerAntenne(false)
+                    .peutEnvoyerCommission(false)
+                    .peutRejeter(false)
+                    .peutApprouver(false)
+                    .peutVoirDocuments(true)
+                    .peutTelechargerDocuments(true)
+                    .build();
+        }
+
+        // SPECIAL CASE: Approved and waiting for farmer (Realization initialization)
+        if (dossier.getStatus() == Dossier.DossierStatus.APPROVED_AWAITING_FARMER) {
+            return DossierPermissionsDTO.builder()
+                    .peutEtreModifie(false)
+                    .peutEtreEnvoye(false) // Special action: initialize_realization
+                    .peutEtreSupprime(false)
+                    .peutAjouterNotes(true)
+                    .peutRetournerAntenne(false)
+                    .peutEnvoyerCommission(false)
+                    .peutRejeter(false)
+                    .peutApprouver(false)
+                    .peutVoirDocuments(true)
+                    .peutTelechargerDocuments(true)
+                    .build();
+        }
+
+        // ALL OTHER PHASES: Read-only (Phases 2-3, 6-8)
+        return createReadOnlyPermissions();
+    }
+
+    /**
+     * Helper method for read-only permissions
+     */
+    private DossierPermissionsDTO createReadOnlyPermissions() {
+        return DossierPermissionsDTO.builder()
+                .peutEtreModifie(false)
+                .peutEtreEnvoye(false)
+                .peutEtreSupprime(false)
+                .peutAjouterNotes(true)
+                .peutRetournerAntenne(false)
+                .peutEnvoyerCommission(false)
+                .peutRejeter(false)
+                .peutApprouver(false)
+                .peutVoirDocuments(true)
+                .peutTelechargerDocuments(true)
+                .build();
+    }
+
+    /**
+     * UPDATED: Get display status using etape information and new statuses
      */
     public String getDisplayStatus(Dossier.DossierStatus status, WorkflowService.EtapeInfo etapeInfo) {
         if (etapeInfo != null && etapeInfo.getDesignation() != null) {
-            return etapeInfo.getDesignation() + 
-                   (etapeInfo.getEnRetard() ? " (En retard)" : "") +
-                   " (" + etapeInfo.getPhase() + ")";
+            String phaseInfo = "";
+            
+            // Add phase-specific information
+            if ("AP - Phase Antenne".equals(etapeInfo.getDesignation())) {
+                phaseInfo = " (Phase 1: Création & Documents)";
+            } else if (etapeInfo.getDesignation().startsWith("AP - Phase GUC")) {
+                phaseInfo = " (Phase 2: Validation GUC)";
+            } else if (etapeInfo.getDesignation().startsWith("AP - Phase AHA-AF")) {
+                phaseInfo = " (Phase 3: Commission Terrain)";
+            } else if (etapeInfo.getDesignation().contains("AP") && etapeInfo.getOrdre() == 4) {
+                phaseInfo = " (Phase 4: Approbation Finale)";
+            } else if (etapeInfo.getDesignation().startsWith("RP")) {
+                phaseInfo = " (Phase " + (etapeInfo.getOrdre() + 4) + ": Réalisation)";
+            }
+            
+            return etapeInfo.getDesignation() + phaseInfo +
+                   (etapeInfo.getEnRetard() ? " - EN RETARD" : "") +
+                   (etapeInfo.getJoursRestants() > 0 ? " (" + etapeInfo.getJoursRestants() + "j restants)" : "");
         }
 
+        // Fallback to status-based display
         switch (status) {
-            case DRAFT: return "Brouillon";
-            case SUBMITTED: return "Soumis au GUC";
-            case IN_REVIEW: return "En cours d'examen";
-            case APPROVED: return "Approuvé";
-            case REJECTED: return "Rejeté";
-            case COMPLETED: return "Terminé";
-            case RETURNED_FOR_COMPLETION: return "Retourné pour complétion";
-            default: return status.name();
+            case DRAFT: 
+                return "Brouillon - Phase 1";
+            case SUBMITTED: 
+                return "Soumis au GUC - Phase 2";
+            case IN_REVIEW: 
+                return "En cours d'examen";
+            case APPROVED: 
+                return "Approuvé - Phase 4";
+            case APPROVED_AWAITING_FARMER:
+                return "Approuvé - En attente fermier";
+            case REALIZATION_IN_PROGRESS:
+                return "Réalisation en cours";
+            case REJECTED: 
+                return "Rejeté";
+            case COMPLETED: 
+                return "Terminé";
+            case RETURNED_FOR_COMPLETION: 
+                return "Retourné pour complétion - Phase 1";
+            default: 
+                return status.name();
         }
     }
 
@@ -313,8 +414,12 @@ public class DossierCommonService {
      */
     public DossierStatisticsDTO calculateStatistics(List<Dossier> dossiers, Utilisateur utilisateur) {
         long total = dossiers.size();
-        long enCours = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.IN_REVIEW).count();
-        long approuves = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.APPROVED).count();
+        long enCours = dossiers.stream().filter(d -> 
+            d.getStatus() == Dossier.DossierStatus.IN_REVIEW ||
+            d.getStatus() == Dossier.DossierStatus.REALIZATION_IN_PROGRESS).count();
+        long approuves = dossiers.stream().filter(d -> 
+            d.getStatus() == Dossier.DossierStatus.APPROVED ||
+            d.getStatus() == Dossier.DossierStatus.APPROVED_AWAITING_FARMER).count();
         long rejetes = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.REJECTED).count();
         long attenteTraitement = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.SUBMITTED).count();
 

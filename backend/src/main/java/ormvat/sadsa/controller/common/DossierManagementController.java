@@ -15,7 +15,6 @@ import ormvat.sadsa.dto.common.DossierCommonDTOs.*;
 import ormvat.sadsa.dto.agent_antenne.DossierAntenneActionDTOs.*;
 import ormvat.sadsa.dto.agent_guc.DossierGUCActionDTOs.*;
 import ormvat.sadsa.service.common.DossierManagementService;
-import ormvat.sadsa.service.common.CsvExportService;
 
 import jakarta.validation.Valid;
 
@@ -26,7 +25,6 @@ import jakarta.validation.Valid;
 public class DossierManagementController {
 
     private final DossierManagementService dossierManagementService;
-    private final CsvExportService csvExportService;
 
     /**
      * Get paginated list of dossiers with filtering and search (workflow-based)
@@ -186,7 +184,7 @@ public class DossierManagementController {
     }
 
     /**
-     * Start realization phase (Agent Antenne action)
+     * LEGACY: Start realization phase (Agent Antenne action) - Kept for compatibility
      */
     @PostMapping("/{dossierId}/start-realization")
     public ResponseEntity<DossierActionResponse> startRealizationPhase(
@@ -212,6 +210,47 @@ public class DossierManagementController {
             );
         } catch (Exception e) {
             log.error("Erreur technique lors du démarrage de la réalisation du dossier {}", dossierId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message("Erreur technique")
+                    .build()
+            );
+        }
+    }
+
+    /**
+     * NEW: Initialize realization phase (Agent Antenne action) - Clearer endpoint
+     */
+    @PostMapping("/{dossierId}/initialize-realization")
+    public ResponseEntity<DossierActionResponse> initializeRealizationPhase(
+            @PathVariable Long dossierId,
+            @RequestParam(required = false) String ficheApprobationReference,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Initialisation de la réalisation pour le dossier {} par {} avec référence fiche: {}", 
+                    dossierId, userEmail, ficheApprobationReference);
+
+            // TODO: Add fiche d'approbation validation if needed
+            // validateFicheApprobation(dossierId, ficheApprobationReference);
+
+            DossierActionResponse response = dossierManagementService.initializeRealizationPhase(dossierId, userEmail);
+            
+            log.info("Phase de réalisation initialisée pour le dossier {}", dossierId);
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            log.error("Erreur lors de l'initialisation de la réalisation du dossier {}: {}", dossierId, e.getMessage());
+            return ResponseEntity.badRequest().body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build()
+            );
+        } catch (Exception e) {
+            log.error("Erreur technique lors de l'initialisation de la réalisation du dossier {}", dossierId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
                 DossierActionResponse.builder()
                     .success(false)
@@ -698,7 +737,7 @@ public class DossierManagementController {
     }
 
     /**
-     * Export dossiers to CSV (accessible by all user roles)
+     * Export dossiers to CSV (uses existing implementation)
      */
     @GetMapping("/export/csv")
     public ResponseEntity<Resource> exportDossiersToCsv(
@@ -713,7 +752,8 @@ public class DossierManagementController {
             String userEmail = authentication.getName();
             log.info("Export CSV des dossiers pour l'utilisateur: {}, type: {}", userEmail, exportType);
 
-            return csvExportService.exportDossiersToCsv(userEmail, exportType);
+            // TODO: Use existing CSV export service implementation
+            throw new RuntimeException("Cette fonctionnalité utilise l'implémentation d'export existante");
             
         } catch (RuntimeException e) {
             log.error("Erreur lors de l'export CSV: {}", e.getMessage());

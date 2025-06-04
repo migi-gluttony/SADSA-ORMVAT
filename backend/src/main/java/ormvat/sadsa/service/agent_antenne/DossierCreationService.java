@@ -9,6 +9,7 @@ import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
 import ormvat.sadsa.service.common.WorkflowService;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -195,6 +196,12 @@ public class DossierCreationService {
             dossier.setUtilisateurCreateur(utilisateur);
             dossier.setStatus(Dossier.DossierStatus.DRAFT);
             dossier.setDateCreation(LocalDateTime.now());
+            
+            // FIX: Set the montant demande/subvention field
+            if (request.getDossier().getMontantDemande() != null) {
+                dossier.setMontantSubvention(BigDecimal.valueOf(request.getDossier().getMontantDemande()));
+                log.info("Montant subvention défini: {}", request.getDossier().getMontantDemande());
+            }
 
             Dossier savedDossier = dossierRepository.save(dossier);
 
@@ -207,7 +214,8 @@ public class DossierCreationService {
 
             RecepisseDossierDTO recepisse = generateRecepisse(savedDossier, request);
 
-            log.info("Dossier créé avec succès - ID: {}, SABA: {}", savedDossier.getId(), savedDossier.getSaba());
+            log.info("Dossier créé avec succès - ID: {}, SABA: {}, Montant: {}", 
+                    savedDossier.getId(), savedDossier.getSaba(), savedDossier.getMontantSubvention());
 
             return CreateDossierResponse.builder()
                     .dossierId(savedDossier.getId())
@@ -322,6 +330,8 @@ public class DossierCreationService {
                             .reference(dossier.getReference())
                             .sousRubriqueId(dossier.getSousRubrique().getId())
                             .antenneId(dossier.getAntenne().getId())
+                            .montantDemande(dossier.getMontantSubvention() != null ? 
+                                    dossier.getMontantSubvention().doubleValue() : null) // Convert BigDecimal to Double
                             .build())
                     .currentStatus(dossier.getStatus().name())
                     .canEdit(true)
@@ -420,6 +430,10 @@ public class DossierCreationService {
             Antenne antenne = antenneRepository.findById(dossierInfo.getAntenneId())
                     .orElseThrow(() -> new RuntimeException("Antenne non trouvée"));
             dossier.setAntenne(antenne);
+        }
+        // Update montant subvention if provided
+        if (dossierInfo.getMontantDemande() != null) {
+            dossier.setMontantSubvention(BigDecimal.valueOf(dossierInfo.getMontantDemande()));
         }
     }
 
