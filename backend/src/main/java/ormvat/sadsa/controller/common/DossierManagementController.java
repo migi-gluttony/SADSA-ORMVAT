@@ -15,6 +15,7 @@ import ormvat.sadsa.dto.common.DossierCommonDTOs.*;
 import ormvat.sadsa.dto.agent_antenne.DossierAntenneActionDTOs.*;
 import ormvat.sadsa.dto.agent_guc.DossierGUCActionDTOs.*;
 import ormvat.sadsa.service.common.DossierManagementService;
+import ormvat.sadsa.service.agent_guc.DossierGUCService;
 
 import jakarta.validation.Valid;
 
@@ -25,6 +26,7 @@ import jakarta.validation.Valid;
 public class DossierManagementController {
 
     private final DossierManagementService dossierManagementService;
+    private final DossierGUCService dossierGUCService;
 
     /**
      * Get paginated list of dossiers with filtering and search (workflow-based)
@@ -260,10 +262,10 @@ public class DossierManagementController {
         }
     }
 
-    // ===== AGENT GUC ACTIONS =====
+    // ===== AGENT GUC ACTIONS - UPDATED to use DossierGUCService =====
 
     /**
-     * Send dossier to Commission (Agent GUC action)
+     * Send dossier to Commission (Agent GUC action) - Phase 2 → 3
      */
     @PostMapping("/{dossierId}/send-to-commission")
     public ResponseEntity<DossierActionResponse> sendDossierToCommission(
@@ -277,7 +279,8 @@ public class DossierManagementController {
 
             request.setDossierId(dossierId);
 
-            DossierActionResponse response = dossierManagementService.sendDossierToCommission(request, userEmail);
+            // Use updated GUC service
+            DossierActionResponse response = dossierGUCService.sendDossierToCommission(request, userEmail);
             
             log.info("Dossier {} envoyé à la commission avec succès", dossierId);
             return ResponseEntity.ok(response);
@@ -302,7 +305,7 @@ public class DossierManagementController {
     }
 
     /**
-     * Return dossier to Antenne (Agent GUC action)
+     * Return dossier to Antenne (Agent GUC action) - Phase 2/4 → 1
      */
     @PostMapping("/{dossierId}/return-to-antenne")
     public ResponseEntity<DossierActionResponse> returnDossierToAntenne(
@@ -316,7 +319,8 @@ public class DossierManagementController {
 
             request.setDossierId(dossierId);
 
-            DossierActionResponse response = dossierManagementService.returnDossierToAntenne(request, userEmail);
+            // Use updated GUC service
+            DossierActionResponse response = dossierGUCService.returnDossierToAntenne(request, userEmail);
             
             log.info("Dossier {} retourné à l'antenne avec succès", dossierId);
             return ResponseEntity.ok(response);
@@ -341,7 +345,7 @@ public class DossierManagementController {
     }
 
     /**
-     * Reject dossier (Agent GUC action)
+     * Reject dossier (Agent GUC action) - Phase 2/4
      */
     @PostMapping("/{dossierId}/reject")
     public ResponseEntity<DossierActionResponse> rejectDossier(
@@ -355,7 +359,8 @@ public class DossierManagementController {
 
             request.setDossierId(dossierId);
 
-            DossierActionResponse response = dossierManagementService.rejectDossier(request, userEmail);
+            // Use updated GUC service
+            DossierActionResponse response = dossierGUCService.rejectDossier(request, userEmail);
             
             log.info("Dossier {} rejeté avec succès", dossierId);
             return ResponseEntity.ok(response);
@@ -380,7 +385,7 @@ public class DossierManagementController {
     }
 
     /**
-     * Approve dossier (Agent GUC action)
+     * Approve dossier (Agent GUC action) - Phase 4 Legacy endpoint
      */
     @PostMapping("/{dossierId}/approve")
     public ResponseEntity<DossierActionResponse> approveDossier(
@@ -392,7 +397,8 @@ public class DossierManagementController {
             String userEmail = authentication.getName();
             log.info("Approbation du dossier {} par l'utilisateur: {}", dossierId, userEmail);
 
-            DossierActionResponse response = dossierManagementService.approveDossier(dossierId, userEmail, commentaire);
+            // Use updated GUC service (legacy method)
+            DossierActionResponse response = dossierGUCService.approveDossier(dossierId, userEmail, commentaire);
             
             log.info("Dossier {} approuvé avec succès", dossierId);
             return ResponseEntity.ok(response);
@@ -407,6 +413,80 @@ public class DossierManagementController {
             );
         } catch (Exception e) {
             log.error("Erreur technique lors de l'approbation du dossier {}", dossierId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message("Erreur technique")
+                    .build()
+            );
+        }
+    }
+
+    /**
+     * NEW: Process realization review (Agent GUC action) - Phase 6 → 7
+     */
+    @PostMapping("/{dossierId}/process-realization-review")
+    public ResponseEntity<DossierActionResponse> processRealizationReview(
+            @PathVariable Long dossierId,
+            @RequestParam(required = false, defaultValue = "") String commentaire,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Révision réalisation du dossier {} par l'utilisateur: {}", dossierId, userEmail);
+
+            DossierActionResponse response = dossierGUCService.processRealizationReview(dossierId, userEmail, commentaire);
+            
+            log.info("Révision réalisation du dossier {} terminée avec succès", dossierId);
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            log.error("Erreur lors de la révision réalisation du dossier {}: {}", dossierId, e.getMessage());
+            return ResponseEntity.badRequest().body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build()
+            );
+        } catch (Exception e) {
+            log.error("Erreur technique lors de la révision réalisation du dossier {}", dossierId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message("Erreur technique")
+                    .build()
+            );
+        }
+    }
+
+    /**
+     * NEW: Finalize realization (Agent GUC action) - Phase 8
+     */
+    @PostMapping("/{dossierId}/finalize-realization")
+    public ResponseEntity<DossierActionResponse> finalizeRealization(
+            @PathVariable Long dossierId,
+            @RequestParam(required = false, defaultValue = "") String commentaire,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Finalisation réalisation du dossier {} par l'utilisateur: {}", dossierId, userEmail);
+
+            DossierActionResponse response = dossierGUCService.finalizeRealization(dossierId, userEmail, commentaire);
+            
+            log.info("Finalisation réalisation du dossier {} terminée avec succès", dossierId);
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            log.error("Erreur lors de la finalisation réalisation du dossier {}: {}", dossierId, e.getMessage());
+            return ResponseEntity.badRequest().body(
+                DossierActionResponse.builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build()
+            );
+        } catch (Exception e) {
+            log.error("Erreur technique lors de la finalisation réalisation du dossier {}", dossierId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
                 DossierActionResponse.builder()
                     .success(false)

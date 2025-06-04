@@ -31,7 +31,7 @@ public class DossierGUCService {
     private final DossierCommonService dossierCommonService;
 
     /**
-     * Send dossier to Commission AHA-AF (Agent GUC action) with team-based routing
+     * Send dossier to Commission (Phase 2 → Phase 3)
      */
     @Transactional
     public DossierActionResponse sendDossierToCommission(SendToCommissionRequest request, String userEmail) {
@@ -40,11 +40,17 @@ public class DossierGUCService {
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
             if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_GUC)) {
-                throw new RuntimeException("Seul un agent GUC peut envoyer un dossier à la Commission AHA-AF");
+                throw new RuntimeException("Seul un agent GUC peut envoyer un dossier à la Commission");
             }
 
             Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+            // Verify we're in Phase 2 (AP - Phase GUC, ordre 2)
+            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            if (!"AP - Phase GUC".equals(etapeInfo.getDesignation()) || etapeInfo.getOrdre() != 2) {
+                throw new RuntimeException("Le dossier n'est pas à la phase 2 (révision initiale GUC)");
+            }
 
             // Check if user can act on current etape
             if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
@@ -64,40 +70,29 @@ public class DossierGUCService {
                         " n'est disponible pour traiter ce type de projet");
             }
 
-            // For now, assign to first available agent (could implement load balancing later)
-            Utilisateur agentAssigne = agentsCommission.get(0);
-
             // Update dossier status
             dossier.setStatus(Dossier.DossierStatus.IN_REVIEW);
             dossierRepository.save(dossier);
 
-            // Move to Commission AHA-AF etape using WorkflowService
+            // Move to Commission phase (Phase 3)
             workflowService.moveToNextEtape(dossier, utilisateur, 
-                String.format("Envoi à la Commission AHA-AF (%s) - Agent assigné: %s %s. %s",
-                        equipeRequise.getDisplayName(), 
-                        agentAssigne.getPrenom(), 
-                        agentAssigne.getNom(),
-                        request.getCommentaire()));
+                String.format("Envoi à la Commission (%s) pour inspection terrain. %s",
+                        equipeRequise.getDisplayName(), request.getCommentaire()));
 
-            // Create audit trail with team information
-            String commentaireDetaille = String.format("Dossier envoyé à la Commission AHA-AF - %s. Agent assigné: %s %s. Commentaire: %s",
-                    equipeRequise.getDisplayName(),
-                    agentAssigne.getPrenom(), 
-                    agentAssigne.getNom(),
-                    request.getCommentaire());
-            
-            dossierCommonService.createAuditTrail("ENVOI_COMMISSION_AHA_AF", dossier, utilisateur, commentaireDetaille);
+            // Create audit trail
+            dossierCommonService.createAuditTrail("ENVOI_COMMISSION_PHASE_3", dossier, utilisateur, 
+                String.format("Dossier envoyé à la Commission %s pour phase 3. Commentaire: %s",
+                        equipeRequise.getDisplayName(), request.getCommentaire()));
 
             return DossierActionResponse.builder()
                     .success(true)
-                    .message(String.format("Dossier envoyé à la Commission AHA-AF (%s) avec succès", 
-                            equipeRequise.getDisplayName()))
+                    .message("Dossier envoyé à la Commission pour inspection terrain")
                     .newStatut(dossier.getStatus().name())
                     .dateAction(LocalDateTime.now())
                     .additionalData(Map.of(
-                            "equipeAssignee", equipeRequise.getDisplayName(),
-                            "agentAssigne", agentAssigne.getPrenom() + " " + agentAssigne.getNom(),
-                            "typeProjet", dossier.getSousRubrique().getRubrique().getDesignation()
+                            "currentPhase", 3,
+                            "nextPhase", "Commission Terrain",
+                            "equipeAssignee", equipeRequise.getDisplayName()
                     ))
                     .build();
 
@@ -108,7 +103,7 @@ public class DossierGUCService {
     }
 
     /**
-     * Return dossier to Antenne (Agent GUC action)
+     * Return dossier to Antenne (from Phase 2 or 4)
      */
     @Transactional
     public DossierActionResponse returnDossierToAntenne(ReturnToAntenneRequest request, String userEmail) {
@@ -123,29 +118,40 @@ public class DossierGUCService {
             Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
+            // Verify we're in a GUC phase where return is allowed
+            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            if (!"AP - Phase GUC".equals(etapeInfo.getDesignation()) || 
+                (etapeInfo.getOrdre() != 2 && etapeInfo.getOrdre() != 4)) {
+                throw new RuntimeException("Retour à l'antenne autorisé uniquement depuis les phases 2 ou 4");
+            }
+
             // Check if user can act on current etape
             if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
                 throw new RuntimeException("Cette action n'est pas autorisée à l'étape actuelle");
             }
 
-            // Update dossier status to allow editing at antenne
+            // Update dossier status
             dossier.setStatus(Dossier.DossierStatus.RETURNED_FOR_COMPLETION);
             dossierRepository.save(dossier);
 
-            // Return to previous etape (should be AP - Phase Antenne)
-            workflowService.returnToPreviousEtape(dossier, utilisateur, 
+            // Return to Phase 1 (AP - Phase Antenne)
+            workflowService.moveToEtape(dossier, "AP - Phase Antenne", utilisateur, 
                 String.format("Retour à l'antenne - Motif: %s. Commentaire: %s", 
                         request.getMotif(), request.getCommentaire()));
 
             // Create audit trail
-            dossierCommonService.createAuditTrail("RETOUR_ANTENNE", dossier, utilisateur, 
+            dossierCommonService.createAuditTrail("RETOUR_ANTENNE_PHASE_1", dossier, utilisateur, 
                 String.format("Motif: %s - %s", request.getMotif(), request.getCommentaire()));
 
             return DossierActionResponse.builder()
                     .success(true)
-                    .message("Dossier retourné à l'antenne avec succès")
+                    .message("Dossier retourné à l'antenne pour complétion")
                     .newStatut(dossier.getStatus().name())
                     .dateAction(LocalDateTime.now())
+                    .additionalData(Map.of(
+                            "currentPhase", 1,
+                            "motifRetour", request.getMotif()
+                    ))
                     .build();
 
         } catch (Exception e) {
@@ -155,7 +161,7 @@ public class DossierGUCService {
     }
 
     /**
-     * Reject dossier (Agent GUC action)
+     * Reject dossier (from Phase 2 or 4)
      */
     @Transactional
     public DossierActionResponse rejectDossier(RejectDossierRequest request, String userEmail) {
@@ -170,6 +176,13 @@ public class DossierGUCService {
             Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
+            // Verify we're in a GUC phase where rejection is allowed
+            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            if (!"AP - Phase GUC".equals(etapeInfo.getDesignation()) || 
+                (etapeInfo.getOrdre() != 2 && etapeInfo.getOrdre() != 4)) {
+                throw new RuntimeException("Rejet autorisé uniquement depuis les phases 2 ou 4");
+            }
+
             // Check if user can act on current etape
             if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
                 throw new RuntimeException("Cette action n'est pas autorisée à l'étape actuelle");
@@ -179,19 +192,21 @@ public class DossierGUCService {
             dossier.setStatus(Dossier.DossierStatus.REJECTED);
             dossierRepository.save(dossier);
 
-            // Update workflow - keep current etape but mark as rejected
-            WorkflowService.EtapeInfo currentEtapeInfo = workflowService.getCurrentEtapeInfo(dossier);
-            
             // Create audit trail
-            dossierCommonService.createAuditTrail("REJET_DOSSIER", dossier, utilisateur, 
-                String.format("Rejet à l'étape %s - Motif: %s. Commentaire: %s", 
-                        currentEtapeInfo.getDesignation(), request.getMotif(), request.getCommentaire()));
+            dossierCommonService.createAuditTrail("REJET_DOSSIER_PHASE_" + etapeInfo.getOrdre(), dossier, utilisateur, 
+                String.format("Rejet depuis phase %d - Motif: %s. Commentaire: %s", 
+                        etapeInfo.getOrdre(), request.getMotif(), request.getCommentaire()));
 
             return DossierActionResponse.builder()
                     .success(true)
-                    .message("Dossier rejeté avec succès")
+                    .message("Dossier rejeté")
                     .newStatut(dossier.getStatus().name())
                     .dateAction(LocalDateTime.now())
+                    .additionalData(Map.of(
+                            "rejectedFromPhase", etapeInfo.getOrdre(),
+                            "motifRejet", request.getMotif(),
+                            "definitif", request.getDefinitif() != null ? request.getDefinitif() : true
+                    ))
                     .build();
 
         } catch (Exception e) {
@@ -201,7 +216,7 @@ public class DossierGUCService {
     }
 
     /**
-     * Make final approval decision with fiche generation (end of AP phase)
+     * Make final approval decision with fiche generation (Phase 4)
      */
     @Transactional
     public DossierActionResponse makeFinalApprovalDecision(FinalApprovalRequest request, String userEmail) {
@@ -216,15 +231,15 @@ public class DossierGUCService {
             Dossier dossier = dossierRepository.findById(request.getDossierId())
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
-            // Check if at final AP etape
+            // Verify we're in Phase 4 (final GUC approval phase)
             WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
             if (!"AP - Phase GUC".equals(etapeInfo.getDesignation()) || etapeInfo.getOrdre() != 4) {
-                throw new RuntimeException("Le dossier n'est pas à l'étape finale d'approbation");
+                throw new RuntimeException("Décision finale d'approbation autorisée uniquement en phase 4");
             }
 
             if (request.getApproved()) {
-                // APPROVAL CASE - Generate fiche d'approbation
-                dossier.setStatus(Dossier.DossierStatus.APPROVED);
+                // APPROVAL CASE - Generate fiche d'approbation and set special status
+                dossier.setStatus(Dossier.DossierStatus.APPROVED_AWAITING_FARMER);
                 dossier.setDateApprobation(LocalDateTime.now());
                 
                 // Use provided amount or original amount
@@ -237,13 +252,13 @@ public class DossierGUCService {
                 String numeroFiche = generateFicheNumber(dossier);
 
                 // Create audit trail for approval with fiche
-                dossierCommonService.createAuditTrail("APPROBATION_FINALE_AVEC_FICHE", dossier, utilisateur, 
+                dossierCommonService.createAuditTrail("APPROBATION_FINALE_PHASE_4", dossier, utilisateur, 
                     String.format("Approbation finale avec génération fiche %s. Montant approuvé: %s. Commentaire: %s", 
                             numeroFiche, dossier.getMontantSubvention(), request.getCommentaireApprobation()));
 
                 return DossierActionResponse.builder()
                         .success(true)
-                        .message("Dossier approuvé avec succès - Fiche d'approbation générée")
+                        .message("Dossier approuvé - Fiche d'approbation générée")
                         .newStatut(dossier.getStatus().name())
                         .dateAction(LocalDateTime.now())
                         .additionalData(Map.of(
@@ -251,7 +266,8 @@ public class DossierGUCService {
                                 "numeroFiche", numeroFiche,
                                 "montantApprouve", dossier.getMontantSubvention(),
                                 "prochainEtape", "En attente de récupération de la fiche par l'agriculteur",
-                                "ficheGenerated", true
+                                "ficheGenerated", true,
+                                "specialState", "AWAITING_FARMER_RETRIEVAL"
                         ))
                         .build();
 
@@ -261,17 +277,18 @@ public class DossierGUCService {
                 dossierRepository.save(dossier);
 
                 // Create audit trail for rejection
-                dossierCommonService.createAuditTrail("REJET_FINAL", dossier, utilisateur, 
-                    String.format("Rejet final du dossier. Motif: %s", request.getMotifRejet()));
+                dossierCommonService.createAuditTrail("REJET_FINAL_PHASE_4", dossier, utilisateur, 
+                    String.format("Rejet final du dossier en phase 4. Motif: %s", request.getMotifRejet()));
 
                 return DossierActionResponse.builder()
                         .success(true)
-                        .message("Dossier rejeté")
+                        .message("Dossier rejeté en phase finale")
                         .newStatut(dossier.getStatus().name())
                         .dateAction(LocalDateTime.now())
                         .additionalData(Map.of(
                                 "motifRejet", request.getMotifRejet(),
-                                "ficheGenerated", false
+                                "ficheGenerated", false,
+                                "phaseFinale", true
                         ))
                         .build();
             }
@@ -283,14 +300,123 @@ public class DossierGUCService {
     }
 
     /**
+     * Process realization review (Phase 6 → Phase 7) 
+     * Note: Phase 5 is the "halt" state where farmer brings fiche to antenne
+     */
+    @Transactional
+    public DossierActionResponse processRealizationReview(Long dossierId, String userEmail, String commentaire) {
+        try {
+            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+            if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_GUC)) {
+                throw new RuntimeException("Seul un agent GUC peut traiter la révision de réalisation");
+            }
+
+            Dossier dossier = dossierRepository.findById(dossierId)
+                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+            // Verify we're in Phase 6 (RP - Phase GUC, ordre 2 which corresponds to phase 6)
+            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            if (!"RP - Phase GUC".equals(etapeInfo.getDesignation()) || etapeInfo.getOrdre() != 2) {
+                throw new RuntimeException("Révision de réalisation autorisée uniquement en phase 6");
+            }
+
+            // Check if user can act on current etape
+            if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
+                throw new RuntimeException("Cette action n'est pas autorisée à l'étape actuelle");
+            }
+
+            // Update dossier status to realization in progress
+            dossier.setStatus(Dossier.DossierStatus.REALIZATION_IN_PROGRESS);
+            dossierRepository.save(dossier);
+
+            // Move to Service Technique phase (Phase 7)
+            workflowService.moveToNextEtape(dossier, utilisateur, 
+                String.format("Envoi au Service Technique pour phase 7. %s", commentaire));
+
+            // Create audit trail
+            dossierCommonService.createAuditTrail("ENVOI_SERVICE_TECHNIQUE_PHASE_7", dossier, utilisateur, 
+                String.format("Dossier envoyé au Service Technique pour phase 7. Commentaire: %s", commentaire));
+
+            return DossierActionResponse.builder()
+                    .success(true)
+                    .message("Dossier envoyé au Service Technique")
+                    .newStatut(dossier.getStatus().name())
+                    .dateAction(LocalDateTime.now())
+                    .additionalData(Map.of(
+                            "currentPhase", 7,
+                            "nextPhase", "Service Technique",
+                            "realizationPhase", true
+                    ))
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la révision de réalisation", e);
+            throw new RuntimeException("Erreur lors de la révision: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Finalize realization (Phase 8 - Final)
+     */
+    @Transactional
+    public DossierActionResponse finalizeRealization(Long dossierId, String userEmail, String commentaire) {
+        try {
+            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+            if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_GUC)) {
+                throw new RuntimeException("Seul un agent GUC peut finaliser la réalisation");
+            }
+
+            Dossier dossier = dossierRepository.findById(dossierId)
+                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+            // Verify we're in Phase 8 (RP - Phase GUC, ordre 4 which is 8th overall but 4th in RP)
+            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            if (!"RP - Phase GUC".equals(etapeInfo.getDesignation()) || etapeInfo.getOrdre() != 4) {
+                throw new RuntimeException("Finalisation autorisée uniquement en phase 8");
+            }
+
+            // Check if user can act on current etape
+            if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
+                throw new RuntimeException("Cette action n'est pas autorisée à l'étape actuelle");
+            }
+
+            // Update dossier status to completed
+            dossier.setStatus(Dossier.DossierStatus.COMPLETED);
+            dossierRepository.save(dossier);
+
+            // Create audit trail for completion
+            dossierCommonService.createAuditTrail("FINALISATION_REALISATION_PHASE_8", dossier, utilisateur, 
+                String.format("Projet finalisé et archivé en phase 8. Commentaire: %s", commentaire));
+
+            return DossierActionResponse.builder()
+                    .success(true)
+                    .message("Projet finalisé et archivé")
+                    .newStatut(dossier.getStatus().name())
+                    .dateAction(LocalDateTime.now())
+                    .additionalData(Map.of(
+                            "phaseTerminee", "RP",
+                            "archived", true,
+                            "finalPhase", 8,
+                            "projectCompleted", true
+                    ))
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la finalisation de la réalisation", e);
+            throw new RuntimeException("Erreur lors de la finalisation: " + e.getMessage());
+        }
+    }
+
+    /**
      * Legacy method for backward compatibility
      */
     @Transactional
     public DossierActionResponse approveDossier(Long dossierId, String userEmail, String commentaire) {
         try {
-            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
-                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-
             Dossier dossier = dossierRepository.findById(dossierId)
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
@@ -298,7 +424,7 @@ public class DossierGUCService {
                     .dossierId(dossierId)
                     .approved(true)
                     .commentaireApprobation(commentaire)
-                    .montantApprouve(dossier.getMontantSubvention()) // Use original amount
+                    .montantApprouve(dossier.getMontantSubvention())
                     .build();
             
             return makeFinalApprovalDecision(request, userEmail);
@@ -310,21 +436,23 @@ public class DossierGUCService {
     }
 
     /**
-     * Get available actions for Agent GUC
+     * Get available actions for Agent GUC based on current phase
      */
     public List<AvailableActionDTO> getAvailableActionsForGUC() {
         List<AvailableActionDTO> actions = new ArrayList<>();
 
+        // Phase 2 actions
         actions.add(AvailableActionDTO.builder()
                 .action("send_to_commission")
-                .label("Envoyer à la Commission AHA-AF")
+                .label("Envoyer à la Commission (Phase 3)")
                 .icon("pi-forward")
                 .severity("info")
                 .requiresComment(true)
                 .requiresConfirmation(true)
-                .description("Envoyer le dossier à la Commission AHA-AF pour inspection terrain")
+                .description("Envoyer le dossier à la Commission pour inspection terrain")
                 .build());
 
+        // Phase 2 & 4 actions
         actions.add(AvailableActionDTO.builder()
                 .action("return_to_antenne")
                 .label("Retourner à l'Antenne")
@@ -342,24 +470,47 @@ public class DossierGUCService {
                 .severity("danger")
                 .requiresComment(true)
                 .requiresConfirmation(true)
-                .description("Rejeter définitivement le dossier")
+                .description("Rejeter le dossier")
                 .build());
 
+        // Phase 4 actions
         actions.add(AvailableActionDTO.builder()
-                .action("approve")
-                .label("Approuver")
+                .action("final_approve")
+                .label("Décision Finale d'Approbation")
                 .icon("pi-check-circle")
                 .severity("success")
                 .requiresComment(false)
                 .requiresConfirmation(true)
-                .description("Approuver le dossier (fin de phase AP)")
+                .description("Prendre la décision finale d'approbation (Phase 4)")
+                .build());
+
+        // Phase 6 actions
+        actions.add(AvailableActionDTO.builder()
+                .action("process_realization_review")
+                .label("Révision Réalisation (Phase 6)")
+                .icon("pi-eye")
+                .severity("info")
+                .requiresComment(false)
+                .requiresConfirmation(true)
+                .description("Réviser et envoyer au Service Technique")
+                .build());
+
+        // Phase 8 actions
+        actions.add(AvailableActionDTO.builder()
+                .action("finalize_realization")
+                .label("Finaliser Réalisation (Phase 8)")
+                .icon("pi-check")
+                .severity("success")
+                .requiresComment(false)
+                .requiresConfirmation(true)
+                .description("Finaliser et archiver le projet")
                 .build());
 
         return actions;
     }
 
     /**
-     * Get available actions for specific dossier and GUC user
+     * Get available actions for specific dossier and GUC user based on current phase
      */
     public List<AvailableActionDTO> getAvailableActionsForDossier(Dossier dossier, Utilisateur utilisateur) {
         List<AvailableActionDTO> availableActions = new ArrayList<>();
@@ -368,46 +519,59 @@ public class DossierGUCService {
             // Check current etape
             WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
             String currentEtape = etapeInfo.getDesignation();
+            int currentOrder = etapeInfo.getOrdre();
             
             // Can only act if user can act on current etape
             if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
-                return availableActions;
+                return availableActions; // Read-only phases (3, 6, 7)
             }
 
-            DossierPermissionsDTO permissions = dossierCommonService.calculatePermissions(dossier, utilisateur);
-
-            // Actions based on current etape
+            // Phase-based actions for GUC
             if ("AP - Phase GUC".equals(currentEtape)) {
-                if (etapeInfo.getOrdre() == 2) {
-                    // First GUC phase - can send to commission or return
-                    if (permissions.getPeutEnvoyerCommission()) {
-                        availableActions.add(AvailableActionDTO.builder()
-                                .action("send_to_commission")
-                                .label("Envoyer à la Commission AHA-AF")
-                                .icon("pi-forward")
-                                .severity("info")
-                                .requiresComment(true)
-                                .requiresConfirmation(true)
-                                .description("Envoyer pour inspection terrain")
-                                .build());
-                    }
-                } else if (etapeInfo.getOrdre() == 4) {
-                    // Final GUC phase - can approve or reject
-                    if (permissions.getPeutApprouver()) {
-                        availableActions.add(AvailableActionDTO.builder()
-                                .action("final_approve")
-                                .label("Décision Finale")
-                                .icon("pi-check-circle")
-                                .severity("success")
-                                .requiresComment(false)
-                                .requiresConfirmation(true)
-                                .description("Prendre la décision finale d'approbation")
-                                .build());
-                    }
-                }
+                if (currentOrder == 2) {
+                    // Phase 2: Initial GUC review
+                    availableActions.add(AvailableActionDTO.builder()
+                            .action("send_to_commission")
+                            .label("Envoyer à la Commission")
+                            .icon("pi-forward")
+                            .severity("info")
+                            .requiresComment(true)
+                            .requiresConfirmation(true)
+                            .description("Envoyer pour inspection terrain (Phase 3)")
+                            .build());
 
-                // Common GUC actions
-                if (permissions.getPeutRetournerAntenne()) {
+                    availableActions.add(AvailableActionDTO.builder()
+                            .action("return_to_antenne")
+                            .label("Retourner à l'Antenne")
+                            .icon("pi-undo")
+                            .severity("warning")
+                            .requiresComment(true)
+                            .requiresConfirmation(true)
+                            .description("Retourner pour complétion")
+                            .build());
+
+                    availableActions.add(AvailableActionDTO.builder()
+                            .action("reject")
+                            .label("Rejeter")
+                            .icon("pi-times-circle")
+                            .severity("danger")
+                            .requiresComment(true)
+                            .requiresConfirmation(true)
+                            .description("Rejeter le dossier")
+                            .build());
+
+                } else if (currentOrder == 4) {
+                    // Phase 4: Final GUC approval
+                    availableActions.add(AvailableActionDTO.builder()
+                            .action("final_approve")
+                            .label("Décision Finale")
+                            .icon("pi-check-circle")
+                            .severity("success")
+                            .requiresComment(false)
+                            .requiresConfirmation(true)
+                            .description("Approuver ou rejeter définitivement")
+                            .build());
+
                     availableActions.add(AvailableActionDTO.builder()
                             .action("return_to_antenne")
                             .label("Retourner à l'Antenne")
@@ -418,32 +582,38 @@ public class DossierGUCService {
                             .description("Retourner pour complétion")
                             .build());
                 }
+            }
 
-                if (permissions.getPeutRejeter()) {
+            // RP Phase GUC actions
+            else if ("RP - Phase GUC".equals(currentEtape)) {
+                if (currentOrder == 2) {
+                    // Phase 6: Realization review
                     availableActions.add(AvailableActionDTO.builder()
-                            .action("reject")
-                            .label("Rejeter")
-                            .icon("pi-times-circle")
-                            .severity("danger")
-                            .requiresComment(true)
+                            .action("process_realization_review")
+                            .label("Révision Réalisation")
+                            .icon("pi-eye")
+                            .severity("info")
+                            .requiresComment(false)
                             .requiresConfirmation(true)
-                            .description("Rejeter le dossier")
+                            .description("Réviser et envoyer au Service Technique")
+                            .build());
+
+                } else if (currentOrder == 4) {
+                    // Phase 8: Final realization
+                    availableActions.add(AvailableActionDTO.builder()
+                            .action("finalize_realization")
+                            .label("Finaliser Réalisation")
+                            .icon("pi-check")
+                            .severity("success")
+                            .requiresComment(false)
+                            .requiresConfirmation(true)
+                            .description("Finaliser et archiver le projet")
                             .build());
                 }
             }
 
-            // RP Phase GUC actions
-            if ("RP - Phase GUC".equals(currentEtape)) {
-                availableActions.add(AvailableActionDTO.builder()
-                        .action("finalize_realization")
-                        .label("Finaliser Réalisation")
-                        .icon("pi-check")
-                        .severity("success")
-                        .requiresComment(false)
-                        .requiresConfirmation(true)
-                        .description("Finaliser la phase de réalisation")
-                        .build());
-            }
+            // Note: Phase 5 is the "halt" state where farmer brings fiche to antenne
+            // GUC doesn't act in Phase 5, 3, or 7 (read-only phases)
 
         } catch (Exception e) {
             log.error("Erreur lors de la récupération des actions disponibles", e);

@@ -27,7 +27,7 @@ public class FicheApprobationController {
     private final DossierGUCService dossierGUCService;
 
     /**
-     * Make final approval decision (for Agent GUC)
+     * Make final approval decision (Phase 4) - UPDATED to use phase-based workflow
      */
     @PostMapping("/final-approval")
     public ResponseEntity<DossierActionResponse> makeFinalApprovalDecision(
@@ -38,6 +38,7 @@ public class FicheApprobationController {
             String userEmail = authentication.getName();
             log.info("Décision finale d'approbation pour dossier {} par {}", request.getDossierId(), userEmail);
 
+            // Use the updated phase-based GUC service
             DossierActionResponse response = dossierGUCService.makeFinalApprovalDecision(request, userEmail);
             
             log.info("Décision finale prise avec succès pour dossier {}", request.getDossierId());
@@ -63,7 +64,7 @@ public class FicheApprobationController {
     }
 
     /**
-     * Generate fiche d'approbation (for Agent GUC)
+     * Generate fiche d'approbation (integrated with Phase 4 approval)
      */
     @PostMapping("/generate")
     public ResponseEntity<FicheApprobationResponse> generateFiche(
@@ -89,7 +90,7 @@ public class FicheApprobationController {
     }
 
     /**
-     * Mark fiche as retrieved by farmer (for Agent GUC)
+     * Mark fiche as retrieved by farmer (transitions from halt state to realization)
      */
     @PostMapping("/mark-retrieved")
     public ResponseEntity<FarmerRetrievalResponse> markFicheRetrieved(
@@ -196,7 +197,7 @@ public class FicheApprobationController {
     }
 
     /**
-     * Check if dossier is waiting for farmer retrieval
+     * Check if dossier is waiting for farmer retrieval (halt state check)
      */
     @GetMapping("/{dossierId}/status")
     public ResponseEntity<Map<String, Object>> getFicheStatus(
@@ -213,7 +214,9 @@ public class FicheApprobationController {
                     "dossierId", dossierId,
                     "waitingFarmerRetrieval", waitingRetrieval,
                     "canPrint", true,
-                    "lastCheck", java.time.LocalDateTime.now()
+                    "lastCheck", java.time.LocalDateTime.now(),
+                    "inHaltState", waitingRetrieval, // Phase 5 halt state
+                    "phase", waitingRetrieval ? 5 : "unknown"
             );
 
             return ResponseEntity.ok(status);
