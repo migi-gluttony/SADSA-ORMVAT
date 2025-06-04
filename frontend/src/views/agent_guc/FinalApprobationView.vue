@@ -35,6 +35,22 @@
         </div>
       </div>
 
+      <!-- Status Alert for Already Approved Dossiers -->
+      <div v-if="isAlreadyApproved()" class="status-alert mb-4">
+        <Message severity="success" :closable="false">
+          <template #icon>
+            <i class="pi pi-check-circle"></i>
+          </template>
+          Ce dossier a déjà été approuvé. Vous pouvez consulter la fiche d'approbation.
+          <Button 
+            label="Voir la Fiche" 
+            icon="pi pi-file-text" 
+            @click="router.push(`/agent_guc/dossiers/${dossierId}/fiche`)"
+            class="p-button-sm p-button-success ml-2"
+          />
+        </Message>
+      </div>
+
       <!-- Dossier Summary -->
       <Card class="mb-4">
         <template #title>
@@ -83,7 +99,7 @@
       </Card>
 
       <!-- Decision Form -->
-      <Card>
+      <Card v-if="!isAlreadyApproved()">
         <template #title>
           <i class="pi pi-gavel mr-2"></i>Votre Décision
         </template>
@@ -223,6 +239,7 @@ import Textarea from 'primevue/textarea';
 import ProgressSpinner from 'primevue/progressspinner';
 import Tag from 'primevue/tag';
 import Toast from 'primevue/toast';
+import Message from 'primevue/message';
 
 const router = useRouter();
 const route = useRoute();
@@ -266,6 +283,25 @@ async function loadDossierDetail() {
     
     const response = await ApiService.get(`/dossiers/${dossierId.value}`);
     dossierDetail.value = response;
+    
+    // Check if dossier is already approved
+    const isAlreadyApproved = response.dossier.statut === 'APPROVED' || 
+                             response.dossier.dateApprobation || 
+                             response.dossier.statut === 'COMPLETED';
+    
+    if (isAlreadyApproved) {
+      console.log('Dossier already approved, redirecting to fiche view');
+      toast.add({
+        severity: 'info',
+        summary: 'Information',
+        detail: 'Ce dossier a déjà été approuvé',
+        life: 3000
+      });
+      
+      // Redirect to fiche view instead
+      router.push(`/agent_guc/dossiers/${dossierId.value}/fiche`);
+      return;
+    }
     
     // Initialize form with dossier data
     formData.montantDemande = response.dossier.montantSubvention;
@@ -347,6 +383,16 @@ async function submitDecision() {
       // If approved, redirect to fiche view with a small delay to allow backend processing
       if (formData.decision === 'approve') {
         console.log('Waiting 2 seconds before redirecting to fiche view...');
+        
+        // Force refresh parent window if it exists (for list view)
+        if (window.opener && window.opener.location) {
+          try {
+            window.opener.location.reload();
+          } catch (e) {
+            console.log('Could not refresh parent window:', e);
+          }
+        }
+        
         setTimeout(() => {
           console.log('Redirecting to fiche view for dossier:', dossierId.value);
           router.push(`/agent_guc/dossiers/${dossierId.value}/fiche`);
@@ -371,6 +417,14 @@ async function submitDecision() {
   } finally {
     submitting.value = false;
   }
+}
+
+function isAlreadyApproved() {
+  if (!dossierDetail.value) return false;
+  
+  return dossierDetail.value.dossier.statut === 'APPROVED' || 
+         dossierDetail.value.dossier.dateApprobation || 
+         dossierDetail.value.dossier.statut === 'COMPLETED';
 }
 
 function goBack() {

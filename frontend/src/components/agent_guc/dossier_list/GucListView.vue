@@ -1,4 +1,22 @@
-<template>
+function showDossierDebugInfo(dossier) {
+  const info = {
+    'ID': dossier.id,
+    'Référence': dossier.reference,
+    'Statut': dossier.statut,
+    'Étape Actuelle': dossier.etapeActuelle,
+    'Emplacement': dossier.emplacementActuel,
+    'Date Approbation': dossier.dateApprobation,
+    'Needs Final Approval': needsFinalApproval(dossier),
+    'Has Approved Fiche': hasApprovedFiche(dossier)
+  };
+  
+  let message = 'Informations de Debug:\n\n';
+  Object.entries(info).forEach(([key, value]) => {
+    message += `${key}: ${value || 'null'}\n`;
+  });
+  
+  alert(message);
+}<template>
   <DossierListBase 
     :page-title="'Dossiers - Guichet Unique Central'" 
     :status-options="statusOptions"
@@ -102,13 +120,12 @@
       <Button icon="pi pi-comment" @click="showAddNoteDialog(dossier)"
         class="p-button-info p-button-sm action-btn" v-tooltip.top="'Ajouter note'" />
 
-      <!-- DEBUG: Always show final approval button if status might need it -->
+      <!-- DEBUG: Show dossier status info -->
       <Button 
-        v-if="debugNeedsFinalApproval(dossier)"
-        icon="pi pi-gavel" 
-        @click="goToFinalApproval(dossier)"
-        class="p-button-warning p-button-sm action-btn" 
-        v-tooltip.top="'DEBUG: Décision Finale'" 
+        icon="pi pi-info-circle" 
+        @click="showDossierDebugInfo(dossier)"
+        class="p-button-help p-button-sm action-btn" 
+        v-tooltip.top="'Debug Info'" 
       />
 
       <!-- Final Approval Button (for dossiers back from commission) -->
@@ -127,15 +144,6 @@
         @click="goToFiche(dossier)"
         class="p-button-success p-button-sm action-btn" 
         v-tooltip.top="'Voir Fiche d\'Approbation'" 
-      />
-
-      <!-- DEBUG: Always show fiche button for testing -->
-      <Button 
-        v-if="!hasApprovedFiche(dossier) && (dossier.statut === 'IN_REVIEW' || dossier.statut === 'SUBMITTED')"
-        icon="pi pi-file-text" 
-        @click="goToFiche(dossier)"
-        class="p-button-help p-button-sm action-btn" 
-        v-tooltip.top="'DEBUG: Essayer Fiche'" 
       />
 
       <!-- Standard GUC Actions (send to commission, return, reject) -->
@@ -309,14 +317,21 @@ function hasApprovedFiche(dossier) {
   const isApproved = dossier.statut === 'APPROVED';
   const hasApprovalDate = dossier.dateApprobation && dossier.dateApprobation !== null && dossier.dateApprobation !== undefined;
   
-  // Also check if the workflow shows completion
+  // Also check if the workflow shows completion or realization phase
   const isInApprovedState = dossier.etapeActuelle && 
     (dossier.etapeActuelle.includes('Approuvé') || 
      dossier.etapeActuelle.includes('APPROVED') ||
      dossier.etapeActuelle.includes('terminé') ||
-     dossier.etapeActuelle.includes('Terminé'));
+     dossier.etapeActuelle.includes('Terminé') ||
+     dossier.etapeActuelle.includes('RP -') || // Realization phase
+     dossier.etapeActuelle.includes('Réalisation'));
   
-  const result = isApproved || hasApprovalDate || isInApprovedState;
+  // Check if status indicates completion
+  const hasCompletedStatus = dossier.statut === 'COMPLETED' || 
+                            dossier.statut === 'PENDING_CORRECTION' ||
+                            dossier.statut === 'REALIZED';
+  
+  const result = isApproved || hasApprovalDate || isInApprovedState || hasCompletedStatus;
   
   console.log('hasApprovedFiche check:', {
     id: dossier.id,
@@ -327,6 +342,7 @@ function hasApprovedFiche(dossier) {
     isApproved,
     hasApprovalDate,
     isInApprovedState,
+    hasCompletedStatus,
     result
   });
   
