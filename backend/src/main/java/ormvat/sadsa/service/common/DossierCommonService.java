@@ -30,25 +30,29 @@ public class DossierCommonService {
     private final WorkflowService workflowService;
 
     /**
-     * Get dossiers for user role - UPDATED to show dossiers that have passed through user's phase
+     * Get dossiers for user role - UPDATED to show dossiers that have passed
+     * through user's phase
      */
     public List<Dossier> getDossiersForUserRole(Utilisateur utilisateur, DossierFilterRequest filterRequest) {
         switch (utilisateur.getRole()) {
             case AGENT_ANTENNE:
-                // Agent Antenne can see ALL dossiers from their antenne, regardless of current phase
+                // Agent Antenne can see ALL dossiers from their antenne, regardless of current
+                // phase
                 if (utilisateur.getAntenne() != null) {
                     return dossierRepository.findByAntenneId(utilisateur.getAntenne().getId());
                 }
                 return List.of();
 
             case AGENT_GUC:
-                // Agent GUC can see all dossiers that have passed the initial antenne phase (not DRAFT)
+                // Agent GUC can see all dossiers that have passed the initial antenne phase
+                // (not DRAFT)
                 return dossierRepository.findAll().stream()
                         .filter(d -> hasPassedAntennePhase(d))
                         .collect(Collectors.toList());
 
             case AGENT_COMMISSION_TERRAIN:
-                // Agent Commission can see all dossiers that have reached or passed commission phase
+                // Agent Commission can see all dossiers that have reached or passed commission
+                // phase
                 return dossierRepository.findAll().stream()
                         .filter(d -> hasReachedCommissionPhase(d, utilisateur))
                         .collect(Collectors.toList());
@@ -96,29 +100,31 @@ public class DossierCommonService {
      */
     private boolean hasReachedCommissionPhase(Dossier dossier, Utilisateur utilisateur) {
         try {
-            // Check if dossier has ever been at commission phase by looking at workflow history
+            // Check if dossier has ever been at commission phase by looking at workflow
+            // history
             List<HistoriqueWorkflow> history = historiqueWorkflowRepository.findByDossierId(dossier.getId());
-            
+
             boolean hasBeenAtCommission = history.stream()
                     .anyMatch(h -> h.getEmplacementType() == WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
-            
+
             if (hasBeenAtCommission) {
                 // If it has been at commission, check team assignment
                 return isAssignedToCommissionTeam(dossier, utilisateur);
             }
-            
+
             // Check if currently at commission phase
             try {
                 WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
-                boolean currentlyAtCommission = etapeInfo.getEmplacementActuel() == WorkflowInstance.EmplacementType.COMMISSION_AHA_AF;
-                
+                boolean currentlyAtCommission = etapeInfo
+                        .getEmplacementActuel() == WorkflowInstance.EmplacementType.COMMISSION_AHA_AF;
+
                 if (currentlyAtCommission) {
                     return isAssignedToCommissionTeam(dossier, utilisateur);
                 }
             } catch (Exception e) {
                 log.debug("Could not get current etape info for dossier {}", dossier.getId());
             }
-            
+
             return false;
         } catch (Exception e) {
             log.error("Error checking commission phase access for dossier {}", dossier.getId(), e);
@@ -134,11 +140,11 @@ public class DossierCommonService {
         if (utilisateur.getEquipeCommission() == null) {
             return true;
         }
-        
+
         // Check if user's team matches the required team for this project type
         Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
         Utilisateur.EquipeCommission requiredTeam = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
-        
+
         return requiredTeam.equals(utilisateur.getEquipeCommission());
     }
 
@@ -180,7 +186,8 @@ public class DossierCommonService {
                 .antenneDesignation(dossier.getAntenne().getDesignation())
                 .cdaNom(dossier.getAntenne().getCda() != null ? dossier.getAntenne().getCda().getDescription() : "N/A")
                 .montantSubvention(dossier.getMontantSubvention())
-                .etapeActuelle(etapeInfo != null ? etapeInfo.getDesignation() : "Non définie")
+                .etapeActuelle(
+                        etapeInfo != null ? getEtapeDesignationFromId(etapeInfo.getEtape().getId()) : "Non définie")
                 .emplacementActuel(etapeInfo != null ? etapeInfo.getEmplacementActuel() : null)
                 .joursRestants(etapeInfo != null ? etapeInfo.getJoursRestants() : 0)
                 .enRetard(etapeInfo != null ? etapeInfo.getEnRetard() : false)
@@ -197,8 +204,32 @@ public class DossierCommonService {
                 .build();
     }
 
+    private String getEtapeDesignationFromId(Long etapeId) {
+        switch (etapeId.intValue()) {
+            case 1:
+                return "AP - Phase Antenne (Phase 1: Création & Documents)";
+            case 2:
+                return "AP - Phase GUC (Phase 2: Validation GUC Initiale)";
+            case 3:
+                return "AP - Phase Commission Visite Terrain (Phase 3: Commission Terrain)";
+            case 4:
+                return "AP - Phase GUC (Phase 4: Approbation Finale GUC)";
+            case 5:
+                return "RP - Phase Antenne (Phase 5: Réalisation - Antenne)";
+            case 6:
+                return "RP - Phase GUC (Phase 6: Réalisation - GUC)";
+            case 7:
+                return "RP - Phase service technique (Phase 7: Réalisation - Service Technique)";
+            case 8:
+                return "RP - Phase GUC (Phase 8: Réalisation - GUC Final)";
+            default:
+                return "Phase inconnue";
+        }
+    }
+
     /**
-     * Calculate dossier permissions based on user role and current etape - UPDATED for Agent Antenne only
+     * Calculate dossier permissions based on user role and current etape - UPDATED
+     * for Agent Antenne only
      */
     public DossierPermissionsDTO calculatePermissions(Dossier dossier, Utilisateur utilisateur) {
         boolean canUserActOnCurrentEtape = false;
@@ -253,12 +284,11 @@ public class DossierCommonService {
         }
     }
 
-
-/**
+    /**
      * NEW: Calculate specific permissions for Agent GUC based on phase
      */
-    private DossierPermissionsDTO calculateGUCAgentPermissions(Dossier dossier, Utilisateur utilisateur, 
-                                                              boolean canUserActOnCurrentEtape) {
+    private DossierPermissionsDTO calculateGUCAgentPermissions(Dossier dossier, Utilisateur utilisateur,
+            boolean canUserActOnCurrentEtape) {
         // Get current etape information
         WorkflowService.EtapeInfo etapeInfo = null;
         try {
@@ -279,7 +309,7 @@ public class DossierCommonService {
         if ("AP - Phase GUC".equals(etapeDesignation) && currentOrder == 2 && canUserActOnCurrentEtape) {
             return DossierPermissionsDTO.builder()
                     .peutEtreModifie(false) // GUC cannot modify documents
-                    .peutEtreEnvoye(true)   // Can send to commission
+                    .peutEtreEnvoye(true) // Can send to commission
                     .peutEtreSupprime(false)
                     .peutAjouterNotes(true)
                     .peutRetournerAntenne(true)
@@ -363,16 +393,11 @@ public class DossierCommonService {
         return createReadOnlyPermissions();
     }
 
-
-
-
-
-
     /**
      * NEW: Calculate specific permissions for Agent Antenne based on phase
      */
-    private DossierPermissionsDTO calculateAntenneAgentPermissions(Dossier dossier, Utilisateur utilisateur, 
-                                                                  boolean canUserActOnCurrentEtape) {
+    private DossierPermissionsDTO calculateAntenneAgentPermissions(Dossier dossier, Utilisateur utilisateur,
+            boolean canUserActOnCurrentEtape) {
         // Check if user is from correct antenne
         boolean isCorrectAntenneAgent = utilisateur.getAntenne() != null &&
                 dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId());
@@ -399,7 +424,7 @@ public class DossierCommonService {
         // PHASE 1: AP - Phase Antenne (etapeId=1) - Full permissions
         if (etapeId == 1 && canUserActOnCurrentEtape) {
             boolean isDraftOrReturned = dossier.getStatus() == Dossier.DossierStatus.DRAFT ||
-                                       dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
+                    dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
             boolean isDraft = dossier.getStatus() == Dossier.DossierStatus.DRAFT;
 
             return DossierPermissionsDTO.builder()
@@ -476,10 +501,10 @@ public class DossierCommonService {
     public String getDisplayStatus(Dossier.DossierStatus status, WorkflowService.EtapeInfo etapeInfo) {
         if (etapeInfo != null && etapeInfo.getEtape() != null) {
             String phaseInfo = "";
-            
+
             // Map etape ID directly to phase number
             int phaseNumber = getPhaseNumberByEtapeId(etapeInfo.getEtape().getId());
-            
+
             switch (phaseNumber) {
                 case 1:
                     phaseInfo = " (Phase 1: Création & Documents)";
@@ -508,33 +533,33 @@ public class DossierCommonService {
                 default:
                     phaseInfo = " (Phase " + phaseNumber + ")";
             }
-            
+
             return etapeInfo.getDesignation() + phaseInfo +
-                   (etapeInfo.getEnRetard() ? " - EN RETARD" : "") +
-                   (etapeInfo.getJoursRestants() > 0 ? " (" + etapeInfo.getJoursRestants() + "j restants)" : "");
+                    (etapeInfo.getEnRetard() ? " - EN RETARD" : "") +
+                    (etapeInfo.getJoursRestants() > 0 ? " (" + etapeInfo.getJoursRestants() + "j restants)" : "");
         }
 
         // Fallback to status-based display
         switch (status) {
-            case DRAFT: 
+            case DRAFT:
                 return "Brouillon - Phase 1";
-            case SUBMITTED: 
+            case SUBMITTED:
                 return "Soumis au GUC - Phase 2";
-            case IN_REVIEW: 
+            case IN_REVIEW:
                 return "En cours d'examen";
-            case APPROVED: 
+            case APPROVED:
                 return "Approuvé - Phase 4";
             case APPROVED_AWAITING_FARMER:
                 return "Approuvé - En attente fermier";
             case REALIZATION_IN_PROGRESS:
                 return "Réalisation en cours";
-            case REJECTED: 
+            case REJECTED:
                 return "Rejeté";
-            case COMPLETED: 
+            case COMPLETED:
                 return "Terminé";
-            case RETURNED_FOR_COMPLETION: 
+            case RETURNED_FOR_COMPLETION:
                 return "Retourné pour complétion - Phase 1";
-            default: 
+            default:
                 return status.name();
         }
     }
@@ -543,19 +568,29 @@ public class DossierCommonService {
      * Add helper method to map etape ID to phase number
      */
     public int getPhaseNumberByEtapeId(Long etapeId) {
-        if (etapeId == null) return 0;
-        
+        if (etapeId == null)
+            return 0;
+
         // Direct mapping: etape ID = phase number
         switch (etapeId.intValue()) {
-            case 1: return 1; // AP - Phase Antenne
-            case 2: return 2; // AP - Phase GUC (Initial)
-            case 3: return 3; // AP - Phase AHA-AF  
-            case 4: return 4; // AP - Phase GUC (Final)
-            case 5: return 5; // RP - Phase Antenne
-            case 6: return 6; // RP - Phase GUC
-            case 7: return 7; // RP - Phase service technique
-            case 8: return 8; // RP - Phase GUC (Final)
-            default: return 0;
+            case 1:
+                return 1; // AP - Phase Antenne
+            case 2:
+                return 2; // AP - Phase GUC (Initial)
+            case 3:
+                return 3; // AP - Phase AHA-AF
+            case 4:
+                return 4; // AP - Phase GUC (Final)
+            case 5:
+                return 5; // RP - Phase Antenne
+            case 6:
+                return 6; // RP - Phase GUC
+            case 7:
+                return 7; // RP - Phase service technique
+            case 8:
+                return 8; // RP - Phase GUC (Final)
+            default:
+                return 0;
         }
     }
 
@@ -564,14 +599,13 @@ public class DossierCommonService {
      */
     public DossierStatisticsDTO calculateStatistics(List<Dossier> dossiers, Utilisateur utilisateur) {
         long total = dossiers.size();
-        long enCours = dossiers.stream().filter(d -> 
-            d.getStatus() == Dossier.DossierStatus.IN_REVIEW ||
-            d.getStatus() == Dossier.DossierStatus.REALIZATION_IN_PROGRESS).count();
-        long approuves = dossiers.stream().filter(d -> 
-            d.getStatus() == Dossier.DossierStatus.APPROVED ||
-            d.getStatus() == Dossier.DossierStatus.APPROVED_AWAITING_FARMER).count();
+        long enCours = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.IN_REVIEW ||
+                d.getStatus() == Dossier.DossierStatus.REALIZATION_IN_PROGRESS).count();
+        long approuves = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.APPROVED ||
+                d.getStatus() == Dossier.DossierStatus.APPROVED_AWAITING_FARMER).count();
         long rejetes = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.REJECTED).count();
-        long attenteTraitement = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.SUBMITTED).count();
+        long attenteTraitement = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.SUBMITTED)
+                .count();
 
         // Count dossiers in commission phase
         long dossiersEnCommission = dossiers.stream()
@@ -619,7 +653,8 @@ public class DossierCommonService {
      * Calculate completion percentage
      */
     public double calculateCompletionPercentage(List<PieceJointe> pieceJointes, List<DocumentRequis> documentsRequis) {
-        if (documentsRequis.isEmpty()) return 100.0;
+        if (documentsRequis.isEmpty())
+            return 100.0;
 
         long completedDocs = pieceJointes.stream()
                 .filter(pj -> pj.getStatus() == PieceJointe.DocumentStatus.COMPLETE)
@@ -753,7 +788,8 @@ public class DossierCommonService {
                 .collect(Collectors.toList());
     }
 
-    public List<AvailableFormDTO> getAvailableForms(Long sousRubriqueId, List<PieceJointe> pieceJointes, Utilisateur currentUser) {
+    public List<AvailableFormDTO> getAvailableForms(Long sousRubriqueId, List<PieceJointe> pieceJointes,
+            Utilisateur currentUser) {
         List<DocumentRequis> documentsRequis = documentRequisRepository.findBySousRubriqueId(sousRubriqueId);
 
         return documentsRequis.stream()
@@ -802,7 +838,7 @@ public class DossierCommonService {
                         d.getDateCreation().isBefore(filter.getDateFinCreation()))
                 .filter(d -> filter.getAntenneId() == null ||
                         d.getAntenne().getId().equals(filter.getAntenneId()))
-                .collect(Collectors.toList());  
+                .collect(Collectors.toList());
     }
 
     private boolean containsSearchTerm(Dossier dossier, String searchTerm) {
@@ -810,9 +846,11 @@ public class DossierCommonService {
         return (dossier.getSaba() != null && dossier.getSaba().toLowerCase().contains(term)) ||
                 (dossier.getReference() != null && dossier.getReference().toLowerCase().contains(term)) ||
                 (dossier.getAgriculteur().getCin() != null
-                        && dossier.getAgriculteur().getCin().toLowerCase().contains(term)) ||
+                        && dossier.getAgriculteur().getCin().toLowerCase().contains(term))
+                ||
                 (dossier.getAgriculteur().getNom() != null
-                        && dossier.getAgriculteur().getNom().toLowerCase().contains(term)) ||
+                        && dossier.getAgriculteur().getNom().toLowerCase().contains(term))
+                ||
                 (dossier.getAgriculteur().getPrenom() != null
                         && dossier.getAgriculteur().getPrenom().toLowerCase().contains(term));
     }

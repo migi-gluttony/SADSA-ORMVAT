@@ -1,55 +1,46 @@
 <template>
-  <div class="final-approval-container">
-    <!-- Loading State -->
-    <div v-if="loading" class="loading-container">
+  <div class="final-approval-container p-4">
+    <div v-if="loading" class="text-center py-8">
       <ProgressSpinner size="50px" />
-      <span>Chargement du dossier...</span>
+      <div class="mt-3">Chargement du dossier...</div>
     </div>
 
-    <!-- Error State -->
-    <div v-else-if="error" class="error-container">
-      <i class="pi pi-exclamation-triangle"></i>
+    <div v-else-if="error" class="text-center py-8">
+      <i class="pi pi-exclamation-triangle text-6xl text-red-500 mb-4"></i>
       <h3>Erreur</h3>
-      <p>{{ error }}</p>
-      <Button label="Retour" icon="pi pi-arrow-left" @click="goBack" />
+      <p class="text-600">{{ error }}</p>
+      <Button label="Retour" icon="pi pi-arrow-left" @click="goBack" outlined />
     </div>
 
-    <!-- Main Content -->
-    <div v-else-if="dossierDetail" class="approval-content">
+    <div v-else-if="dossierDetail" class="max-w-6xl mx-auto">
       <!-- Header -->
-      <div class="approval-header">
-        <div class="header-nav">
+      <div class="flex justify-content-between align-items-center mb-4">
+        <div class="flex align-items-center gap-3">
           <Button 
             label="Retour aux dossiers" 
             icon="pi pi-arrow-left" 
             @click="goBack"
-            class="p-button-outlined"
+            outlined
           />
-          <div class="breadcrumb">
-            <span>Dossiers GUC</span>
-            <i class="pi pi-angle-right"></i>
-            <span>{{ dossierDetail.dossier.reference }}</span>
-            <i class="pi pi-angle-right"></i>
-            <span>Décision Finale</span>
-          </div>
+          <Breadcrumb :model="breadcrumbItems" />
         </div>
       </div>
 
-      <!-- Status Alert for Already Approved Dossiers -->
-      <div v-if="isAlreadyApproved()" class="status-alert mb-4">
-        <Message severity="success" :closable="false">
-          <template #icon>
-            <i class="pi pi-check-circle"></i>
-          </template>
-          Ce dossier a déjà été approuvé. Vous pouvez consulter la fiche d'approbation.
+      <!-- Already Approved Alert -->
+      <Message v-if="isAlreadyApproved()" severity="success" class="mb-4">
+        <div class="flex justify-content-between align-items-center">
+          <div>
+            <strong>Dossier déjà approuvé</strong>
+            <p class="mt-1 mb-0">Vous pouvez consulter la fiche d'approbation.</p>
+          </div>
           <Button 
             label="Voir la Fiche" 
             icon="pi pi-file-text" 
             @click="router.push(`/agent_guc/dossiers/${dossierId}/fiche`)"
-            class="p-button-sm p-button-success ml-2"
+            size="small"
           />
-        </Message>
-      </div>
+        </div>
+      </Message>
 
       <!-- Dossier Summary -->
       <Card class="mb-4">
@@ -59,23 +50,25 @@
         <template #content>
           <div class="grid">
             <div class="col-12 md:col-6">
-              <h5>Informations Dossier</h5>
-              <div class="field-group">
-                <div><strong>Référence:</strong> {{ dossierDetail.dossier.reference }}</div>
-                <div><strong>SABA:</strong> {{ dossierDetail.dossier.saba }}</div>
-                <div><strong>Agriculteur:</strong> {{ dossierDetail.agriculteur.prenom }} {{ dossierDetail.agriculteur.nom }}</div>
-                <div><strong>CIN:</strong> {{ dossierDetail.agriculteur.cin }}</div>
-              </div>
+              <Panel header="Informations Dossier">
+                <div class="flex flex-column gap-2">
+                  <div><strong>Référence:</strong> {{ dossierDetail.dossier.reference }}</div>
+                  <div><strong>SABA:</strong> {{ dossierDetail.dossier.saba }}</div>
+                  <div><strong>Agriculteur:</strong> {{ dossierDetail.agriculteur.prenom }} {{ dossierDetail.agriculteur.nom }}</div>
+                  <div><strong>CIN:</strong> {{ dossierDetail.agriculteur.cin }}</div>
+                </div>
+              </Panel>
             </div>
             
             <div class="col-12 md:col-6">
-              <h5>Projet</h5>
-              <div class="field-group">
-                <div><strong>Type:</strong> {{ dossierDetail.dossier.sousRubriqueDesignation }}</div>
-                <div><strong>Rubrique:</strong> {{ dossierDetail.dossier.rubriqueDesignation }}</div>
-                <div><strong>Montant demandé:</strong> {{ formatCurrency(dossierDetail.dossier.montantSubvention) }}</div>
-                <div><strong>Antenne:</strong> {{ dossierDetail.dossier.antenneDesignation }}</div>
-              </div>
+              <Panel header="Projet">
+                <div class="flex flex-column gap-2">
+                  <div><strong>Type:</strong> {{ dossierDetail.dossier.sousRubriqueDesignation }}</div>
+                  <div><strong>Rubrique:</strong> {{ dossierDetail.dossier.rubriqueDesignation }}</div>
+                  <div><strong>Montant demandé:</strong> {{ formatCurrency(dossierDetail.dossier.montantSubvention) }}</div>
+                  <div><strong>Antenne:</strong> {{ dossierDetail.dossier.antenneDesignation }}</div>
+                </div>
+              </Panel>
             </div>
           </div>
         </template>
@@ -87,14 +80,12 @@
           <i class="pi pi-chat-square-text mr-2"></i>Retour de la Commission AHA-AF
         </template>
         <template #content>
-          <div class="commission-feedback">
-            <div class="feedback-status flex justify-content-between align-items-center mb-3">
-              <Tag value="TERRAIN APPROUVÉ" severity="success" />
-              <span class="text-sm text-500">Visite effectuée le {{ formatDate(new Date()) }}</span>
-            </div>
-            <p class="mb-2"><strong>Observations:</strong> Terrain conforme aux exigences du projet. Infrastructure existante adéquate pour l'installation des équipements.</p>
-            <p class="mb-0"><strong>Recommandations:</strong> Procéder à l'approbation du projet. Respecter les spécifications techniques lors de l'installation.</p>
+          <div class="flex justify-content-between align-items-center mb-3">
+            <Tag value="TERRAIN APPROUVÉ" severity="success" />
+            <span class="text-sm text-500">Visite effectuée</span>
           </div>
+          <p class="mb-2"><strong>Observations:</strong> Terrain conforme aux exigences du projet.</p>
+          <p class="mb-0"><strong>Recommandations:</strong> Procéder à l'approbation du projet.</p>
         </template>
       </Card>
 
@@ -130,8 +121,9 @@
                     v-model="formData.montantApprouve" 
                     :min="0"
                     :max="formData.montantDemande * 1.1"
-                    :step="0.01"
-                    placeholder="Montant à approuver"
+                    mode="currency"
+                    currency="MAD"
+                    locale="fr-MA"
                     class="w-full"
                   />
                   <small class="text-500">Montant demandé: {{ formatCurrency(formData.montantDemande) }}</small>
@@ -147,7 +139,6 @@
                     id="commentaireApprobation"
                     v-model="formData.commentaireApprobation" 
                     rows="3"
-                    placeholder="Commentaire sur l'approbation du dossier"
                     class="w-full"
                   />
                 </div>
@@ -160,41 +151,30 @@
                     id="conditionsSpecifiques"
                     v-model="formData.conditionsSpecifiques" 
                     rows="3"
-                    placeholder="Conditions particulières pour l'approbation"
                     class="w-full"
                   />
                 </div>
               </div>
             </div>
 
-            <div v-if="formData.decision === 'reject'" class="grid">
-              <div class="col-12">
-                <div class="field">
-                  <label for="motifRejet">Motif de Rejet *</label>
-                  <Textarea 
-                    id="motifRejet"
-                    v-model="formData.motifRejet" 
-                    rows="3"
-                    placeholder="Raison du rejet du dossier"
-                    class="w-full"
-                  />
-                </div>
-              </div>
+            <div v-if="formData.decision === 'reject'" class="field">
+              <label for="motifRejet">Motif de Rejet *</label>
+              <Textarea 
+                id="motifRejet"
+                v-model="formData.motifRejet" 
+                rows="3"
+                class="w-full"
+              />
             </div>
 
-            <div class="grid">
-              <div class="col-12">
-                <div class="field">
-                  <label for="observationsCommission">Résumé des Observations Commission</label>
-                  <Textarea 
-                    id="observationsCommission"
-                    v-model="formData.observationsCommission" 
-                    rows="2"
-                    placeholder="Résumé des observations de la commission"
-                    class="w-full"
-                  />
-                </div>
-              </div>
+            <div class="field">
+              <label for="observationsCommission">Résumé des Observations Commission</label>
+              <Textarea 
+                id="observationsCommission"
+                v-model="formData.observationsCommission" 
+                rows="2"
+                class="w-full"
+              />
             </div>
 
             <div class="flex justify-content-end gap-2 pt-3">
@@ -202,14 +182,14 @@
                 label="Annuler" 
                 icon="pi pi-times" 
                 @click="goBack"
-                class="p-button-outlined"
+                outlined
                 :disabled="submitting"
               />
               <Button 
                 type="submit" 
                 :label="getSubmitButtonLabel()"
                 :icon="getSubmitButtonIcon()"
-                :class="getSubmitButtonClass()"
+                :severity="getSubmitButtonSeverity()"
                 :loading="submitting"
                 :disabled="!isFormValid()"
               />
@@ -228,11 +208,10 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import ApiService from '@/services/ApiService';
-import AuthService from '@/services/AuthService';
 
-// PrimeVue components
 import Button from 'primevue/button';
 import Card from 'primevue/card';
+import Panel from 'primevue/panel';
 import Select from 'primevue/select';
 import InputNumber from 'primevue/inputnumber';
 import Textarea from 'primevue/textarea';
@@ -240,18 +219,17 @@ import ProgressSpinner from 'primevue/progressspinner';
 import Tag from 'primevue/tag';
 import Toast from 'primevue/toast';
 import Message from 'primevue/message';
+import Breadcrumb from 'primevue/breadcrumb';
 
 const router = useRouter();
 const route = useRoute();
 const toast = useToast();
 
-// State
 const loading = ref(true);
 const error = ref(null);
 const submitting = ref(false);
 const dossierDetail = ref(null);
 
-// Form data
 const formData = reactive({
   decision: null,
   montantApprouve: null,
@@ -262,16 +240,19 @@ const formData = reactive({
   observationsCommission: 'Terrain conforme selon visite commission'
 });
 
-// Decision options
 const decisionOptions = [
   { label: 'Approuver le dossier', value: 'approve' },
   { label: 'Rejeter le dossier', value: 'reject' }
 ];
 
-// Computed properties
 const dossierId = computed(() => route.params.dossierId);
 
-// Methods
+const breadcrumbItems = computed(() => [
+  { label: 'Dossiers GUC', route: '/agent_guc/dossiers' },
+  { label: dossierDetail.value?.dossier?.reference || 'Dossier' },
+  { label: 'Décision Finale' }
+]);
+
 onMounted(async () => {
   await loadDossierDetail();
 });
@@ -284,31 +265,21 @@ async function loadDossierDetail() {
     const response = await ApiService.get(`/dossiers/${dossierId.value}`);
     dossierDetail.value = response;
     
-    // Check if dossier is already approved
-    const isAlreadyApproved = response.dossier.statut === 'APPROVED' || 
-                             response.dossier.dateApprobation || 
-                             response.dossier.statut === 'COMPLETED';
-    
-    if (isAlreadyApproved) {
-      console.log('Dossier already approved, redirecting to fiche view');
+    // Check if already approved
+    if (isAlreadyApproved()) {
       toast.add({
         severity: 'info',
         summary: 'Information',
         detail: 'Ce dossier a déjà été approuvé',
         life: 3000
       });
-      
-      // Redirect to fiche view instead
-      router.push(`/agent_guc/dossiers/${dossierId.value}/fiche`);
-      return;
     }
     
-    // Initialize form with dossier data
+    // Initialize form
     formData.montantDemande = response.dossier.montantSubvention;
     formData.montantApprouve = response.dossier.montantSubvention;
     
   } catch (err) {
-    console.error('Error loading dossier:', err);
     error.value = err.message || 'Impossible de charger le dossier';
   } finally {
     loading.value = false;
@@ -316,7 +287,6 @@ async function loadDossierDetail() {
 }
 
 function onDecisionChange() {
-  // Reset form fields when decision changes
   if (formData.decision === 'approve') {
     formData.motifRejet = '';
     formData.montantApprouve = formData.montantDemande;
@@ -333,7 +303,7 @@ function isFormValid() {
   if (formData.decision === 'approve') {
     return formData.montantApprouve > 0;
   } else {
-    return formData.motifRejet && formData.motifRejet.trim();
+    return formData.motifRejet?.trim();
   }
 }
 
@@ -345,8 +315,8 @@ function getSubmitButtonIcon() {
   return formData.decision === 'approve' ? 'pi pi-check-circle' : 'pi pi-times-circle';
 }
 
-function getSubmitButtonClass() {
-  return formData.decision === 'approve' ? 'p-button-success' : 'p-button-danger';
+function getSubmitButtonSeverity() {
+  return formData.decision === 'approve' ? 'success' : 'danger';
 }
 
 async function submitDecision() {
@@ -367,12 +337,7 @@ async function submitDecision() {
 
     const response = await ApiService.post('/fiche-approbation/final-approval', requestData);
     
-    console.log('Final approval response:', response);
-    
-    // Check if response indicates success (could be response.success or just a successful HTTP response)
-    const isSuccess = response.success === true || response.success !== false;
-    
-    if (isSuccess) {
+    if (response.success !== false) {
       toast.add({
         severity: 'success',
         summary: 'Succès',
@@ -380,34 +345,16 @@ async function submitDecision() {
         life: 3000
       });
       
-      // If approved, redirect to fiche view with a small delay to allow backend processing
       if (formData.decision === 'approve') {
-        console.log('Waiting 2 seconds before redirecting to fiche view...');
-        
-        // Force refresh parent window if it exists (for list view)
-        if (window.opener && window.opener.location) {
-          try {
-            window.opener.location.reload();
-          } catch (e) {
-            console.log('Could not refresh parent window:', e);
-          }
-        }
-        
         setTimeout(() => {
-          console.log('Redirecting to fiche view for dossier:', dossierId.value);
           router.push(`/agent_guc/dossiers/${dossierId.value}/fiche`);
-        }, 2000); // Wait 2 seconds for backend to process
+        }, 2000);
       } else {
-        // If rejected, go back to list immediately
-        console.log('Redirecting to dossier list after rejection');
         router.push('/agent_guc/dossiers');
       }
-    } else {
-      throw new Error(response.message || 'Erreur lors de la décision');
     }
     
   } catch (err) {
-    console.error('Error submitting decision:', err);
     toast.add({
       severity: 'error',
       summary: 'Erreur',
@@ -423,6 +370,7 @@ function isAlreadyApproved() {
   if (!dossierDetail.value) return false;
   
   return dossierDetail.value.dossier.statut === 'APPROVED' || 
+         dossierDetail.value.dossier.statut === 'APPROVED_AWAITING_FARMER' ||
          dossierDetail.value.dossier.dateApprobation || 
          dossierDetail.value.dossier.statut === 'COMPLETED';
 }
@@ -437,11 +385,6 @@ function formatCurrency(amount) {
     style: 'currency',
     currency: 'MAD'
   }).format(amount);
-}
-
-function formatDate(date) {
-  if (!date) return '';
-  return new Intl.DateTimeFormat('fr-FR').format(new Date(date));
 }
 </script>
 
