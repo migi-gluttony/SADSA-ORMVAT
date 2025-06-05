@@ -12,7 +12,6 @@ import ormvat.sadsa.service.common.WorkflowService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -24,31 +23,27 @@ public class FicheApprobationService {
     private final AuditTrailRepository auditTrailRepository;
     private final WorkflowService workflowService;
 
+    // ============================================================================
+    // FICHE GENERATION - SIMPLIFIED WITH ID-BASED LOGIC
+    // ============================================================================
+
     /**
      * Generate fiche d'approbation when GUC makes final approval
      */
     @Transactional
     public FicheApprobationResponse generateFicheApprobation(GenerateFicheRequest request, String userEmail) {
         try {
-            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
-                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+            Utilisateur utilisateur = validateGUCUser(userEmail);
+            Dossier dossier = getDossier(request.getDossierId());
 
-            Dossier dossier = dossierRepository.findById(request.getDossierId())
-                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
-
-            // Verify user is GUC agent and can approve
-            if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_GUC)) {
-                throw new RuntimeException("Seul un agent GUC peut générer une fiche d'approbation");
-            }
-
-            // Check current workflow stage
+            // Check current workflow stage - UPDATED to use ID-based logic
             WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
-            if (!"AP - Phase GUC".equals(etapeInfo.getDesignation()) || etapeInfo.getOrdre() != 4) {
-                throw new RuntimeException("Le dossier n'est pas à l'étape finale d'approbation");
+            if (etapeInfo.getEtapeId() != 4L) {
+                throw new RuntimeException("Le dossier n'est pas à l'étape finale d'approbation (Phase 4). Etape actuelle: Phase " + etapeInfo.getEtapeId());
             }
 
             // Update dossier with approval details
-            dossier.setStatus(Dossier.DossierStatus.APPROVED);
+            dossier.setStatus(Dossier.DossierStatus.APPROVED_AWAITING_FARMER);
             dossier.setDateApprobation(LocalDateTime.now());
             dossier.setMontantSubvention(request.getMontantApprouve());
             dossierRepository.save(dossier);
@@ -75,7 +70,7 @@ public class FicheApprobationService {
     }
 
     /**
-     * Mark fiche as retrieved by farmer and send to Antenne
+     * Mark fiche as retrieved by farmer and prepare for realization
      */
     @Transactional
     public FarmerRetrievalResponse markFicheRetrieved(FarmerRetrievalRequest request, String userEmail) {
@@ -83,8 +78,7 @@ public class FicheApprobationService {
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
-            Dossier dossier = dossierRepository.findById(request.getDossierId())
-                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+            Dossier dossier = getDossier(request.getDossierId());
 
             // Verify CIN matches
             if (!dossier.getAgriculteur().getCin().equals(request.getFarmerCin())) {
@@ -92,26 +86,27 @@ public class FicheApprobationService {
             }
 
             // Verify dossier is approved and waiting for retrieval
-            if (!dossier.getStatus().equals(Dossier.DossierStatus.APPROVED)) {
-                throw new RuntimeException("Le dossier n'est pas approuvé");
+            if (!dossier.getStatus().equals(Dossier.DossierStatus.APPROVED_AWAITING_FARMER)) {
+                throw new RuntimeException("Le dossier n'est pas en attente de récupération par l'agriculteur");
             }
 
             // Update dossier status to indicate farmer has retrieved fiche
-            dossier.setStatus(Dossier.DossierStatus.COMPLETED); // Temporary status
-            dossierRepository.save(dossier);
-
-            // Now send to Antenne WITHOUT setting workflow delays
-            sendToAntenneWithoutDelay(dossier, utilisateur, request.getCommentaire());
+            // This will be handled by the Agent Antenne when they initialize realization
+            // For now, just mark it in audit trail
 
             // Create audit trail
             createAuditTrail("FICHE_RETIREE_FERMIER", dossier, utilisateur, 
-                "Fiche récupérée par: " + request.getRetrievedBy() + ". " + request.getCommentaire());
+                String.format("Fiche récupérée par: %s (CIN: %s). %s", 
+                        request.getRetrievedBy(), request.getFarmerCin(), request.getCommentaire()));
+
+            log.info("Fiche marquée comme récupérée - Dossier: {}, Par: {}", 
+                    dossier.getId(), request.getRetrievedBy());
 
             return FarmerRetrievalResponse.builder()
                     .success(true)
-                    .message("Fiche récupérée avec succès")
+                    .message("Fiche récupérée avec succès - Agriculteur doit se présenter à l'antenne pour initialiser la réalisation")
                     .dateRetrieval(request.getDateRetrieval())
-                    .nextStep("Dossier envoyé à l'antenne pour phase réalisation")
+                    .nextStep("L'agriculteur doit se présenter à l'antenne avec la fiche pour initialiser la réalisation")
                     .antenneDestination(dossier.getAntenne().getDesignation())
                     .build();
 
@@ -129,8 +124,7 @@ public class FicheApprobationService {
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
-            Dossier dossier = dossierRepository.findById(dossierId)
-                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+            Dossier dossier = getDossier(dossierId);
 
             // Check if user can access this dossier for printing
             if (!canPrintFiche(dossier, utilisateur)) {
@@ -138,9 +132,10 @@ public class FicheApprobationService {
             }
 
             // Check if dossier has been approved
-            if (!dossier.getStatus().equals(Dossier.DossierStatus.APPROVED) && 
+            if (!dossier.getStatus().equals(Dossier.DossierStatus.APPROVED_AWAITING_FARMER) && 
+                !dossier.getStatus().equals(Dossier.DossierStatus.REALIZATION_IN_PROGRESS) &&
                 !dossier.getStatus().equals(Dossier.DossierStatus.COMPLETED)) {
-                throw new RuntimeException("Le dossier n'est pas approuvé");
+                throw new RuntimeException("Le dossier n'est pas approuvé ou sa fiche n'est pas encore générée");
             }
 
             String numeroFiche = generateFicheNumber(dossier);
@@ -149,6 +144,7 @@ public class FicheApprobationService {
             GenerateFicheRequest mockRequest = GenerateFicheRequest.builder()
                     .dossierId(dossierId)
                     .montantApprouve(dossier.getMontantSubvention())
+                    .commentaireApprobation("Fiche d'approbation pour impression")
                     .build();
 
             FicheApprobationResponse ficheResponse = buildFicheResponse(dossier, mockRequest, numeroFiche, utilisateur);
@@ -166,22 +162,52 @@ public class FicheApprobationService {
     }
 
     /**
-     * Check if dossier is waiting for farmer retrieval
+     * Check if dossier is waiting for farmer retrieval - UPDATED for new workflow
      */
     public boolean isWaitingFarmerRetrieval(Long dossierId) {
         try {
-            Dossier dossier = dossierRepository.findById(dossierId)
-                    .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
-
-            return dossier.getStatus().equals(Dossier.DossierStatus.APPROVED) && 
+            Dossier dossier = getDossier(dossierId);
+            
+            // A dossier is waiting for farmer retrieval if:
+            // 1. Status is APPROVED_AWAITING_FARMER
+            // 2. Has approval date
+            return dossier.getStatus().equals(Dossier.DossierStatus.APPROVED_AWAITING_FARMER) && 
                    dossier.getDateApprobation() != null;
         } catch (Exception e) {
+            log.warn("Error checking farmer retrieval status for dossier {}: {}", dossierId, e.getMessage());
             return false;
         }
     }
 
-    // Private helper methods
+    // ============================================================================
+    // HELPER METHODS - SIMPLIFIED
+    // ============================================================================
 
+    /**
+     * Validate that user is GUC agent
+     */
+    private Utilisateur validateGUCUser(String userEmail) {
+        Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+        if (!utilisateur.getRole().equals(Utilisateur.UserRole.AGENT_GUC)) {
+            throw new RuntimeException("Seul un agent GUC peut effectuer cette action");
+        }
+
+        return utilisateur;
+    }
+
+    /**
+     * Get dossier by ID
+     */
+    private Dossier getDossier(Long dossierId) {
+        return dossierRepository.findById(dossierId)
+                .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+    }
+
+    /**
+     * Generate fiche number
+     */
     private String generateFicheNumber(Dossier dossier) {
         LocalDate today = LocalDate.now();
         String year = String.valueOf(today.getYear());
@@ -191,15 +217,26 @@ public class FicheApprobationService {
         return String.format("FA-%s-%s-%06d", year, month, dossier.getId());
     }
 
+    /**
+     * Build fiche response with all required information
+     */
     private FicheApprobationResponse buildFicheResponse(Dossier dossier, GenerateFicheRequest request, 
                                                        String numeroFiche, Utilisateur utilisateur) {
         
         LocalDateTime now = LocalDateTime.now();
         LocalDate validiteDate = now.toLocalDate().plusMonths(6); // Valid for 6 months
         
+        // Get current workflow info
+        WorkflowService.EtapeInfo etapeInfo = null;
+        try {
+            etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+        } catch (Exception e) {
+            log.warn("Cannot get etape info for fiche: {}", e.getMessage());
+        }
+        
         return FicheApprobationResponse.builder()
                 .numeroFiche(numeroFiche)
-                .dateApprobation(dossier.getDateApprobation().toLocalDate())
+                .dateApprobation(dossier.getDateApprobation() != null ? dossier.getDateApprobation().toLocalDate() : LocalDate.now())
                 .dateGeneration(now)
                 
                 // Dossier info
@@ -222,10 +259,7 @@ public class FicheApprobationService {
                         dossier.getAgriculteur().getCommuneRurale().getDesignation() : "")
                 .agriculteurDouar(dossier.getAgriculteur().getDouar() != null ? 
                         dossier.getAgriculteur().getDouar().getDesignation() : "")
-                .agriculteurProvince(dossier.getAgriculteur().getCommuneRurale() != null && 
-                        dossier.getAgriculteur().getCommuneRurale().getCercle() != null &&
-                        dossier.getAgriculteur().getCommuneRurale().getCercle().getProvince() != null ? 
-                        dossier.getAgriculteur().getCommuneRurale().getCercle().getProvince().getDesignation() : "")
+                .agriculteurProvince(getAgriculteurProvince(dossier))
                 
                 // Administrative info
                 .antenneDesignation(dossier.getAntenne().getDesignation())
@@ -234,9 +268,9 @@ public class FicheApprobationService {
                 
                 // Approval details
                 .statutApprobation("APPROUVÉ")
-                .commentaireApprobation(request.getCommentaireApprobation())
-                .observationsCommission(request.getObservationsCommission())
-                .conditionsSpecifiques(request.getConditionsSpecifiques())
+                .commentaireApprobation(request.getCommentaireApprobation() != null ? request.getCommentaireApprobation() : "")
+                .observationsCommission(request.getObservationsCommission() != null ? request.getObservationsCommission() : "")
+                .conditionsSpecifiques(request.getConditionsSpecifiques() != null ? request.getConditionsSpecifiques() : "")
                 .validiteJusquau(validiteDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")))
                 
                 // Signature info
@@ -245,34 +279,33 @@ public class FicheApprobationService {
                 .responsableNom("Responsable ORMVAT")
                 .responsableSignature("Signature autorisée")
                 
-                // Workflow info
-                .etapeActuelle("Phase d'approbation terminée")
-                .prochainEtape("En attente de récupération par l'agriculteur")
-                .farmersRetrieved(false)
+                // Workflow info - UPDATED to use ID-based logic
+                .etapeActuelle(etapeInfo != null ? workflowService.getPhaseDisplayName(etapeInfo.getEtapeId()) : "Phase d'approbation terminée")
+                .prochainEtape("En attente de récupération par l'agriculteur puis initialisation réalisation")
+                .farmersRetrieved(false) // This would be tracked separately in real implementation
                 .dateRetrievalFermier(null)
                 .build();
     }
 
-    private void sendToAntenneWithoutDelay(Dossier dossier, Utilisateur utilisateur, String commentaire) {
+    /**
+     * Get agriculteur province safely
+     */
+    private String getAgriculteurProvince(Dossier dossier) {
         try {
-            // Move to RP - Phase Antenne but without setting workflow delays
-            // This is a special transition that puts the dossier "on hold" at antenne
-            
-            // We need to manually update the workflow to indicate it's at antenne but waiting
-            // for farmer to bring the fiche
-            
-            // For now, we'll use a custom status to indicate this state
-            dossier.setStatus(Dossier.DossierStatus.PENDING_CORRECTION); // Reusing existing status
-            dossierRepository.save(dossier);
-            
-            log.info("Dossier {} envoyé à l'antenne sans délai - En attente fiche récupérée", dossier.getId());
-            
+            if (dossier.getAgriculteur().getCommuneRurale() != null && 
+                dossier.getAgriculteur().getCommuneRurale().getCercle() != null &&
+                dossier.getAgriculteur().getCommuneRurale().getCercle().getProvince() != null) {
+                return dossier.getAgriculteur().getCommuneRurale().getCercle().getProvince().getDesignation();
+            }
         } catch (Exception e) {
-            log.error("Erreur lors de l'envoi à l'antenne sans délai", e);
-            throw new RuntimeException("Erreur lors de l'envoi à l'antenne: " + e.getMessage());
+            log.warn("Error getting province for agriculteur: {}", e.getMessage());
         }
+        return "";
     }
 
+    /**
+     * Check if user can print fiche
+     */
     private boolean canPrintFiche(Dossier dossier, Utilisateur utilisateur) {
         switch (utilisateur.getRole()) {
             case ADMIN:
@@ -288,6 +321,9 @@ public class FicheApprobationService {
         }
     }
 
+    /**
+     * Create audit trail
+     */
     private void createAuditTrail(String action, Dossier dossier, Utilisateur utilisateur, String description) {
         try {
             AuditTrail audit = new AuditTrail();

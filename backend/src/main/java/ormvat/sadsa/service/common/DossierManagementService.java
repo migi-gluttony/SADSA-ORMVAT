@@ -13,6 +13,9 @@ import ormvat.sadsa.dto.agent_guc.DossierGUCActionDTOs.*;
 import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
 import ormvat.sadsa.service.agent_antenne.DossierAntenneService;
+import ormvat.sadsa.service.agent_guc.DossierGUCService;
+import ormvat.sadsa.service.agent_commission.DossierCommissionService;
+import ormvat.sadsa.service.service_technique.ServiceTechniqueService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -31,10 +34,16 @@ public class DossierManagementService {
     private final NoteRepository noteRepository;
     private final WorkflowService workflowService;
 
-    // Services
+    // Simplified services - delegate to role-specific services
     private final DossierCommonService dossierCommonService;
     private final DossierAntenneService dossierAntenneService;
-    // Note: Other role-specific services are already implemented elsewhere
+    private final DossierGUCService dossierGUCService;
+    private final DossierCommissionService dossierCommissionService;
+    private final ServiceTechniqueService serviceTechniqueService;
+
+    // ============================================================================
+    // MAIN QUERY METHODS - SIMPLIFIED
+    // ============================================================================
 
     /**
      * Get paginated list of dossiers with filtering based on user role and workflow
@@ -54,7 +63,7 @@ public class DossierManagementService {
             int size = filterRequest.getSize() != null ? filterRequest.getSize() : 20;
             Pageable pageable = PageRequest.of(page, size, sort);
 
-            // Get dossiers based on user role using workflow system
+            // Get dossiers based on user role using simplified workflow system
             List<Dossier> allDossiers = dossierCommonService.getDossiersForUserRole(utilisateur, filterRequest);
 
             // Apply filters
@@ -170,100 +179,100 @@ public class DossierManagementService {
         }
     }
 
+    // ============================================================================
+    // ROLE-SPECIFIC ACTION DELEGATION - SIMPLIFIED
+    // ============================================================================
+
     /**
-     * Send dossier to GUC (Agent Antenne action)
+     * AGENT ANTENNE ACTIONS - Delegate to DossierAntenneService
      */
     @Transactional
     public DossierActionResponse sendDossierToGUC(SendToGUCRequest request, String userEmail) {
         return dossierAntenneService.sendDossierToGUC(request, userEmail);
     }
 
-    /**
-     * Send dossier to Commission (Agent GUC action) - Uses existing implementation
-     */
-    @Transactional
-    public DossierActionResponse sendDossierToCommission(SendToCommissionRequest request, String userEmail) {
-        // TODO: Delegate to existing GUC service implementation
-        throw new RuntimeException("Cette fonctionnalité utilise l'implémentation GUC existante");
-    }
-
-    /**
-     * Return dossier to Antenne (Agent GUC action) - Uses existing implementation
-     */
-    @Transactional
-    public DossierActionResponse returnDossierToAntenne(ReturnToAntenneRequest request, String userEmail) {
-        // TODO: Delegate to existing GUC service implementation
-        throw new RuntimeException("Cette fonctionnalité utilise l'implémentation GUC existante");
-    }
-
-    /**
-     * Reject dossier (Agent GUC action) - Uses existing implementation
-     */
-    @Transactional
-    public DossierActionResponse rejectDossier(RejectDossierRequest request, String userEmail) {
-        // TODO: Delegate to existing GUC service implementation
-        throw new RuntimeException("Cette fonctionnalité utilise l'implémentation GUC existante");
-    }
-
-    /**
-     * Approve dossier (Agent GUC action) - Uses existing implementation
-     */
-    @Transactional
-    public DossierActionResponse approveDossier(Long dossierId, String userEmail, String commentaire) {
-        // TODO: Delegate to existing GUC service implementation
-        throw new RuntimeException("Cette fonctionnalité utilise l'implémentation GUC existante");
-    }
-
-    /**
-     * Approve terrain (Commission action) - Uses existing implementation
-     */
-    @Transactional
-    public DossierActionResponse approveTerrain(Long dossierId, String userEmail, String commentaire) {
-        // TODO: Delegate to existing Commission service implementation
-        throw new RuntimeException("Cette fonctionnalité utilise l'implémentation Commission existante");
-    }
-
-    /**
-     * Reject terrain (Commission action) - Uses existing implementation
-     */
-    @Transactional
-    public DossierActionResponse rejectTerrain(Long dossierId, String userEmail, String motif, String commentaire) {
-        // TODO: Delegate to existing Commission service implementation
-        throw new RuntimeException("Cette fonctionnalité utilise l'implémentation Commission existante");
-    }
-
-    /**
-     * Return to GUC from Commission - Uses existing implementation
-     */
-    @Transactional
-    public DossierActionResponse returnToGUCFromCommission(Long dossierId, String userEmail, String motif, String commentaire) {
-        // TODO: Delegate to existing Commission service implementation
-        throw new RuntimeException("Cette fonctionnalité utilise l'implémentation Commission existante");
-    }
-
-    /**
-     * Initialize realization phase (Agent Antenne action) - Updated to use new workflow
-     */
     @Transactional
     public DossierActionResponse startRealizationPhase(Long dossierId, String userEmail) {
         return dossierAntenneService.startRealizationPhase(dossierId, userEmail);
     }
 
-    /**
-     * NEW: Initialize realization phase - Separate endpoint for clarity
-     */
     @Transactional
     public DossierActionResponse initializeRealizationPhase(Long dossierId, String userEmail) {
         return dossierAntenneService.startRealizationPhase(dossierId, userEmail);
     }
 
-    /**
-     * Delete dossier (role-based)
-     */
     @Transactional
     public DossierActionResponse deleteDossier(DeleteDossierRequest request, String userEmail) {
         return dossierAntenneService.deleteDossier(request, userEmail);
     }
+
+    /**
+     * AGENT GUC ACTIONS - Delegate to DossierGUCService
+     */
+    @Transactional
+    public DossierActionResponse sendDossierToCommission(SendToCommissionRequest request, String userEmail) {
+        return dossierGUCService.sendDossierToCommission(request, userEmail);
+    }
+
+    @Transactional
+    public DossierActionResponse returnDossierToAntenne(ReturnToAntenneRequest request, String userEmail) {
+        return dossierGUCService.returnDossierToAntenne(request, userEmail);
+    }
+
+    @Transactional
+    public DossierActionResponse rejectDossier(RejectDossierRequest request, String userEmail) {
+        return dossierGUCService.rejectDossier(request, userEmail);
+    }
+
+    @Transactional
+    public DossierActionResponse approveDossier(Long dossierId, String userEmail, String commentaire) {
+        return dossierGUCService.approveDossier(dossierId, userEmail, commentaire);
+    }
+
+    @Transactional
+    public DossierActionResponse processRealizationReview(Long dossierId, String userEmail, String commentaire) {
+        return dossierGUCService.processRealizationReview(dossierId, userEmail, commentaire);
+    }
+
+    @Transactional
+    public DossierActionResponse finalizeRealization(Long dossierId, String userEmail, String commentaire) {
+        return dossierGUCService.finalizeRealization(dossierId, userEmail, commentaire);
+    }
+
+    /**
+     * AGENT COMMISSION ACTIONS - Delegate to DossierCommissionService
+     */
+    @Transactional
+    public DossierActionResponse approveTerrain(Long dossierId, String userEmail, String commentaire) {
+        return dossierCommissionService.approveTerrain(dossierId, userEmail, commentaire);
+    }
+
+    @Transactional
+    public DossierActionResponse rejectTerrain(Long dossierId, String userEmail, String motif, String commentaire) {
+        return dossierCommissionService.rejectTerrain(dossierId, userEmail, motif, commentaire);
+    }
+
+    @Transactional
+    public DossierActionResponse returnToGUCFromCommission(Long dossierId, String userEmail, String motif, String commentaire) {
+        return dossierCommissionService.returnToGUC(dossierId, userEmail, motif, commentaire);
+    }
+
+    /**
+     * SERVICE TECHNIQUE ACTIONS - Delegate to ServiceTechniqueService
+     */
+    @Transactional
+    public DossierActionResponse completeImplementation(Long dossierId, String userEmail, String commentaire) {
+        return serviceTechniqueService.completeImplementation(dossierId, userEmail, commentaire);
+    }
+
+    @Transactional
+    public DossierActionResponse reportImplementationIssues(Long dossierId, String userEmail, String motif, String commentaire) {
+        return serviceTechniqueService.reportImplementationIssues(dossierId, userEmail, motif, commentaire);
+    }
+
+    // ============================================================================
+    // COMMON ACTIONS
+    // ============================================================================
 
     /**
      * Add note to dossier
@@ -312,7 +321,7 @@ public class DossierManagementService {
     }
 
     /**
-     * Process workflow action based on action type
+     * Process generic workflow action
      */
     @Transactional
     public DossierActionResponse processWorkflowAction(Long dossierId, String action, Map<String, Object> parameters, String userEmail) {
@@ -323,13 +332,9 @@ public class DossierManagementService {
             Dossier dossier = dossierRepository.findById(dossierId)
                     .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
-            // Check if user can act on current etape
-            if (!workflowService.canUserActOnCurrentEtape(dossier, utilisateur)) {
-                throw new RuntimeException("Cette action n'est pas autorisée à l'étape actuelle");
-            }
-
             String commentaire = (String) parameters.getOrDefault("commentaire", "");
 
+            // Simple workflow actions
             switch (action) {
                 case "move_to_next":
                     workflowService.moveToNextEtape(dossier, utilisateur, commentaire);
@@ -369,6 +374,7 @@ public class DossierManagementService {
 
             return WorkflowInfoResponse.builder()
                     .currentEtape(etapeInfo.getDesignation())
+                    .currentPhase(etapeInfo.getPhaseNumber())
                     .phase(etapeInfo.getPhase())
                     .ordre(etapeInfo.getOrdre())
                     .dureeJours(etapeInfo.getDureeJours())
@@ -386,44 +392,73 @@ public class DossierManagementService {
         }
     }
 
-    // Private helper methods for delegation
+    // ============================================================================
+    // HELPER METHODS - SIMPLIFIED
+    // ============================================================================
 
+    /**
+     * Get available actions for user role - delegate to role-specific services
+     */
     private List<AvailableActionDTO> getAvailableActionsForRole(Utilisateur.UserRole role) {
         switch (role) {
             case AGENT_ANTENNE:
                 return dossierAntenneService.getAvailableActionsForAntenne();
             case AGENT_GUC:
+                return dossierGUCService.getAvailableActionsForGUC();
             case AGENT_COMMISSION_TERRAIN:
+                return dossierCommissionService.getAvailableActionsForCommission();
+            case SERVICE_TECHNIQUE:
+                return serviceTechniqueService.getAvailableActionsForServiceTechnique();
             case ADMIN:
-                // These roles use existing implementations
-                return new ArrayList<>();
+                // Admin gets all actions
+                List<AvailableActionDTO> allActions = new ArrayList<>();
+                allActions.addAll(dossierAntenneService.getAvailableActionsForAntenne());
+                allActions.addAll(dossierGUCService.getAvailableActionsForGUC());
+                allActions.addAll(dossierCommissionService.getAvailableActionsForCommission());
+                allActions.addAll(serviceTechniqueService.getAvailableActionsForServiceTechnique());
+                return allActions;
             default:
                 return new ArrayList<>();
         }
     }
 
+    /**
+     * Get available actions for specific dossier - delegate to role-specific services
+     */
     private List<AvailableActionDTO> getAvailableActionsForDossier(Dossier dossier, Utilisateur utilisateur) {
         switch (utilisateur.getRole()) {
             case AGENT_ANTENNE:
                 return dossierAntenneService.getAvailableActionsForDossier(dossier, utilisateur);
             case AGENT_GUC:
+                return dossierGUCService.getAvailableActionsForDossier(dossier, utilisateur);
             case AGENT_COMMISSION_TERRAIN:
+                return dossierCommissionService.getAvailableActionsForDossier(dossier, utilisateur);
+            case SERVICE_TECHNIQUE:
+                return serviceTechniqueService.getAvailableActionsForDossier(dossier, utilisateur);
             case ADMIN:
-                // These roles use existing implementations - return empty for now
-                return new ArrayList<>();
+                // Admin gets actions from all roles
+                List<AvailableActionDTO> allActions = new ArrayList<>();
+                allActions.addAll(dossierAntenneService.getAvailableActionsForDossier(dossier, utilisateur));
+                allActions.addAll(dossierGUCService.getAvailableActionsForDossier(dossier, utilisateur));
+                allActions.addAll(dossierCommissionService.getAvailableActionsForDossier(dossier, utilisateur));
+                allActions.addAll(serviceTechniqueService.getAvailableActionsForDossier(dossier, utilisateur));
+                return allActions;
             default:
                 return new ArrayList<>();
         }
     }
 
-    // DTO for workflow information
+    // ============================================================================
+    // DTO for workflow information - UPDATED
+    // ============================================================================
     @lombok.Data
     @lombok.Builder
     @lombok.AllArgsConstructor
     @lombok.NoArgsConstructor
     public static class WorkflowInfoResponse {
         private String currentEtape;
-        private String phase;
+        private Integer currentPhase;        // NEW: Phase number (1-8)
+        private String phase;               // AP or RP
         private Integer ordre;
         private Integer dureeJours;
         private Integer joursRestants;

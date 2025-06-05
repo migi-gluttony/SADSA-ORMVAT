@@ -27,7 +27,7 @@ public class FicheApprobationController {
     private final DossierGUCService dossierGUCService;
 
     /**
-     * Make final approval decision (Phase 4) - UPDATED to use phase-based workflow
+     * Make final approval decision (Phase 4) - UPDATED to use approveDossier method
      */
     @PostMapping("/final-approval")
     public ResponseEntity<DossierActionResponse> makeFinalApprovalDecision(
@@ -38,8 +38,61 @@ public class FicheApprobationController {
             String userEmail = authentication.getName();
             log.info("Décision finale d'approbation pour dossier {} par {}", request.getDossierId(), userEmail);
 
-            // Use the updated phase-based GUC service
-            DossierActionResponse response = dossierGUCService.makeFinalApprovalDecision(request, userEmail);
+            DossierActionResponse response;
+
+            if (request.getApproved()) {
+                // Use approveDossier for approval case
+                String commentaire = request.getCommentaireApprobation() != null ? 
+                    request.getCommentaireApprobation() : "Approbation finale";
+                
+                response = dossierGUCService.approveDossier(request.getDossierId(), userEmail, commentaire);
+                
+                // Add fiche-specific information to response
+                if (response.getSuccess()) {
+                    Map<String, Object> additionalData = response.getAdditionalData() != null ? 
+                        new java.util.HashMap<>(response.getAdditionalData()) : new java.util.HashMap<>();
+                    
+                    additionalData.put("approved", true);
+                    additionalData.put("montantApprouve", request.getMontantApprouve());
+                    additionalData.put("conditionsSpecifiques", request.getConditionsSpecifiques());
+                    
+                    response = DossierActionResponse.builder()
+                            .success(response.getSuccess())
+                            .message(response.getMessage())
+                            .newStatut(response.getNewStatut())
+                            .dateAction(response.getDateAction())
+                            .additionalData(additionalData)
+                            .build();
+                }
+            } else {
+                // Use rejectDossier for rejection case
+                ormvat.sadsa.dto.agent_guc.DossierGUCActionDTOs.RejectDossierRequest rejectRequest = 
+                    ormvat.sadsa.dto.agent_guc.DossierGUCActionDTOs.RejectDossierRequest.builder()
+                        .dossierId(request.getDossierId())
+                        .motif(request.getMotifRejet() != null ? request.getMotifRejet() : "Rejet final")
+                        .commentaire("Rejet en phase finale d'approbation")
+                        .definitif(true)
+                        .build();
+                
+                response = dossierGUCService.rejectDossier(rejectRequest, userEmail);
+                
+                // Add rejection-specific information
+                if (response.getSuccess()) {
+                    Map<String, Object> additionalData = response.getAdditionalData() != null ? 
+                        new java.util.HashMap<>(response.getAdditionalData()) : new java.util.HashMap<>();
+                    
+                    additionalData.put("approved", false);
+                    additionalData.put("motifRejet", request.getMotifRejet());
+                    
+                    response = DossierActionResponse.builder()
+                            .success(response.getSuccess())
+                            .message(response.getMessage())
+                            .newStatut(response.getNewStatut())
+                            .dateAction(response.getDateAction())
+                            .additionalData(additionalData)
+                            .build();
+                }
+            }
             
             log.info("Décision finale prise avec succès pour dossier {}", request.getDossierId());
             return ResponseEntity.ok(response);
@@ -215,8 +268,10 @@ public class FicheApprobationController {
                     "waitingFarmerRetrieval", waitingRetrieval,
                     "canPrint", true,
                     "lastCheck", java.time.LocalDateTime.now(),
-                    "inHaltState", waitingRetrieval, // Phase 5 halt state
-                    "phase", waitingRetrieval ? 5 : "unknown"
+                    "inHaltState", waitingRetrieval,
+                    "statusMessage", waitingRetrieval ? 
+                        "En attente de récupération par l'agriculteur" : 
+                        "Fiche non disponible ou déjà récupérée"
             );
 
             return ResponseEntity.ok(status);

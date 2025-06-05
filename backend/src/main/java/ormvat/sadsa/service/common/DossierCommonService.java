@@ -29,35 +29,36 @@ public class DossierCommonService {
     private final HistoriqueWorkflowRepository historiqueWorkflowRepository;
     private final WorkflowService workflowService;
 
+    // ============================================================================
+    // DOSSIER VISIBILITY LOGIC - SIMPLIFIED
+    // ============================================================================
+
     /**
-     * Get dossiers for user role - UPDATED to show dossiers that have passed
-     * through user's phase
+     * Get dossiers for user role - SIMPLIFIED: Users see dossiers based on their role
      */
     public List<Dossier> getDossiersForUserRole(Utilisateur utilisateur, DossierFilterRequest filterRequest) {
         switch (utilisateur.getRole()) {
             case AGENT_ANTENNE:
-                // Agent Antenne can see ALL dossiers from their antenne, regardless of current
-                // phase
+                // Agent Antenne: Only their antenne's dossiers
                 if (utilisateur.getAntenne() != null) {
                     return dossierRepository.findByAntenneId(utilisateur.getAntenne().getId());
                 }
                 return List.of();
 
             case AGENT_GUC:
-                // Agent GUC can see all dossiers that have passed the initial antenne phase
-                // (not DRAFT)
-                return dossierRepository.findAll().stream()
-                        .filter(d -> hasPassedAntennePhase(d))
-                        .collect(Collectors.toList());
+                // Agent GUC: All dossiers (they coordinate everything)
+                return dossierRepository.findAll();
 
             case AGENT_COMMISSION_TERRAIN:
-                // Agent Commission can see all dossiers that have reached or passed commission
-                // phase
-                return dossierRepository.findAll().stream()
-                        .filter(d -> hasReachedCommissionPhase(d, utilisateur))
-                        .collect(Collectors.toList());
+                // Agent Commission: All dossiers (they might inspect any project)
+                return dossierRepository.findAll();
+
+            case SERVICE_TECHNIQUE:
+                // Service Technique: All dossiers (they might work on any infrastructure project)
+                return dossierRepository.findAll();
 
             case ADMIN:
+                // Admin: All dossiers
                 return dossierRepository.findAll();
 
             default:
@@ -66,90 +67,35 @@ public class DossierCommonService {
     }
 
     /**
-     * Check if user can access dossier - UPDATED for new visibility logic
+     * Check if user can access dossier - SIMPLIFIED
      */
     public boolean canAccessDossier(Dossier dossier, Utilisateur utilisateur) {
         switch (utilisateur.getRole()) {
             case ADMIN:
                 return true;
+                
             case AGENT_ANTENNE:
                 // Can access any dossier from their antenne
                 return utilisateur.getAntenne() != null &&
                         dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId());
+                
             case AGENT_GUC:
-                // Can access any dossier that has passed antenne phase
-                return hasPassedAntennePhase(dossier);
             case AGENT_COMMISSION_TERRAIN:
-                // Can access any dossier that has reached commission phase
-                return hasReachedCommissionPhase(dossier, utilisateur);
+            case SERVICE_TECHNIQUE:
+                // These roles can see all dossiers for coordination purposes
+                return true;
+                
             default:
                 return false;
         }
     }
 
-    /**
-     * Check if dossier has passed the initial antenne phase
-     */
-    private boolean hasPassedAntennePhase(Dossier dossier) {
-        // A dossier has passed antenne phase if it's not in DRAFT status
-        return !dossier.getStatus().equals(Dossier.DossierStatus.DRAFT);
-    }
+    // ============================================================================
+    // DOSSIER SUMMARY MAPPING - ID-BASED
+    // ============================================================================
 
     /**
-     * Check if dossier has reached commission phase
-     */
-    private boolean hasReachedCommissionPhase(Dossier dossier, Utilisateur utilisateur) {
-        try {
-            // Check if dossier has ever been at commission phase by looking at workflow
-            // history
-            List<HistoriqueWorkflow> history = historiqueWorkflowRepository.findByDossierId(dossier.getId());
-
-            boolean hasBeenAtCommission = history.stream()
-                    .anyMatch(h -> h.getEmplacementType() == WorkflowInstance.EmplacementType.COMMISSION_AHA_AF);
-
-            if (hasBeenAtCommission) {
-                // If it has been at commission, check team assignment
-                return isAssignedToCommissionTeam(dossier, utilisateur);
-            }
-
-            // Check if currently at commission phase
-            try {
-                WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
-                boolean currentlyAtCommission = etapeInfo
-                        .getEmplacementActuel() == WorkflowInstance.EmplacementType.COMMISSION_AHA_AF;
-
-                if (currentlyAtCommission) {
-                    return isAssignedToCommissionTeam(dossier, utilisateur);
-                }
-            } catch (Exception e) {
-                log.debug("Could not get current etape info for dossier {}", dossier.getId());
-            }
-
-            return false;
-        } catch (Exception e) {
-            log.error("Error checking commission phase access for dossier {}", dossier.getId(), e);
-            return false;
-        }
-    }
-
-    /**
-     * Check if user is assigned to the appropriate commission team for this dossier
-     */
-    private boolean isAssignedToCommissionTeam(Dossier dossier, Utilisateur utilisateur) {
-        // If user has no team assignment, they can see all commission dossiers
-        if (utilisateur.getEquipeCommission() == null) {
-            return true;
-        }
-
-        // Check if user's team matches the required team for this project type
-        Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
-        Utilisateur.EquipeCommission requiredTeam = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
-
-        return requiredTeam.equals(utilisateur.getEquipeCommission());
-    }
-
-    /**
-     * Map to DossierSummaryDTO using workflow system
+     * Map to DossierSummaryDTO using ID-based workflow system
      */
     public DossierSummaryDTO mapToDossierSummaryDTO(Dossier dossier, Utilisateur currentUser) {
         List<PieceJointe> pieceJointes = pieceJointeRepository.findByDossierId(dossier.getId());
@@ -161,7 +107,7 @@ public class DossierCommonService {
 
         int notesCount = noteRepository.findByDossierId(dossier.getId()).size();
 
-        // Get current etape information
+        // Get current etape information using ID-based logic
         WorkflowService.EtapeInfo etapeInfo = null;
         try {
             etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
@@ -186,8 +132,7 @@ public class DossierCommonService {
                 .antenneDesignation(dossier.getAntenne().getDesignation())
                 .cdaNom(dossier.getAntenne().getCda() != null ? dossier.getAntenne().getCda().getDescription() : "N/A")
                 .montantSubvention(dossier.getMontantSubvention())
-                .etapeActuelle(
-                        etapeInfo != null ? getEtapeDesignationFromId(etapeInfo.getEtape().getId()) : "Non définie")
+                .etapeActuelle(etapeInfo != null ? etapeInfo.getDesignation() : "Non définie")
                 .emplacementActuel(etapeInfo != null ? etapeInfo.getEmplacementActuel() : null)
                 .joursRestants(etapeInfo != null ? etapeInfo.getJoursRestants() : 0)
                 .enRetard(etapeInfo != null ? etapeInfo.getEnRetard() : false)
@@ -204,80 +149,42 @@ public class DossierCommonService {
                 .build();
     }
 
-    private String getEtapeDesignationFromId(Long etapeId) {
-        switch (etapeId.intValue()) {
-            case 1:
-                return "AP - Phase Antenne (Phase 1: Création & Documents)";
-            case 2:
-                return "AP - Phase GUC (Phase 2: Validation GUC Initiale)";
-            case 3:
-                return "AP - Phase Commission Visite Terrain (Phase 3: Commission Terrain)";
-            case 4:
-                return "AP - Phase GUC (Phase 4: Approbation Finale GUC)";
-            case 5:
-                return "RP - Phase Antenne (Phase 5: Réalisation - Antenne)";
-            case 6:
-                return "RP - Phase GUC (Phase 6: Réalisation - GUC)";
-            case 7:
-                return "RP - Phase service technique (Phase 7: Réalisation - Service Technique)";
-            case 8:
-                return "RP - Phase GUC (Phase 8: Réalisation - GUC Final)";
-            default:
-                return "Phase inconnue";
-        }
-    }
+    // ============================================================================
+    // PERMISSION CALCULATION - SIMPLIFIED ID-BASED
+    // ============================================================================
 
     /**
-     * Calculate dossier permissions based on user role and current etape - UPDATED
-     * for Agent Antenne only
+     * Calculate dossier permissions based on user role and current etape ID
      */
     public DossierPermissionsDTO calculatePermissions(Dossier dossier, Utilisateur utilisateur) {
-        boolean canUserActOnCurrentEtape = false;
-
+        // Get current etape ID
+        Long currentEtapeId = null;
         try {
-            canUserActOnCurrentEtape = workflowService.canUserActOnCurrentEtape(dossier, utilisateur);
+            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            currentEtapeId = etapeInfo.getEtapeId();
         } catch (Exception e) {
-            log.warn("Impossible de vérifier les permissions pour le dossier {}: {}", dossier.getId(), e.getMessage());
+            log.warn("Cannot get etape info for permissions: {}", e.getMessage());
+            return createReadOnlyPermissions();
         }
 
+        // Check if user can act on current etape
+        boolean canUserAct = workflowService.canUserActOnCurrentEtape(dossier, utilisateur);
+
         switch (utilisateur.getRole()) {
+            case ADMIN:
+                return createAdminPermissions();
+
             case AGENT_ANTENNE:
-                // Use existing Agent Antenne logic
-                return calculateAntenneAgentPermissions(dossier, utilisateur, canUserActOnCurrentEtape);
+                return calculateAntenneAgentPermissions(dossier, utilisateur, currentEtapeId, canUserAct);
 
             case AGENT_GUC:
-                // NEW: Use phase-based GUC permissions
-                return calculateGUCAgentPermissions(dossier, utilisateur, canUserActOnCurrentEtape);
+                return calculateGUCAgentPermissions(dossier, utilisateur, currentEtapeId, canUserAct);
 
             case AGENT_COMMISSION_TERRAIN:
-                // Keep existing Commission logic
-                return DossierPermissionsDTO.builder()
-                        .peutEtreModifie(false)
-                        .peutEtreEnvoye(false)
-                        .peutEtreSupprime(false)
-                        .peutAjouterNotes(true)
-                        .peutRetournerAntenne(false)
-                        .peutEnvoyerCommission(false)
-                        .peutRejeter(canUserActOnCurrentEtape)
-                        .peutApprouver(canUserActOnCurrentEtape)
-                        .peutVoirDocuments(true)
-                        .peutTelechargerDocuments(true)
-                        .build();
+                return calculateCommissionAgentPermissions(dossier, utilisateur, currentEtapeId, canUserAct);
 
-            case ADMIN:
-                // Keep existing Admin logic
-                return DossierPermissionsDTO.builder()
-                        .peutEtreModifie(true)
-                        .peutEtreEnvoye(true)
-                        .peutEtreSupprime(true)
-                        .peutAjouterNotes(true)
-                        .peutRetournerAntenne(true)
-                        .peutEnvoyerCommission(true)
-                        .peutRejeter(true)
-                        .peutApprouver(true)
-                        .peutVoirDocuments(true)
-                        .peutTelechargerDocuments(true)
-                        .build();
+            case SERVICE_TECHNIQUE:
+                return calculateServiceTechniquePermissions(dossier, utilisateur, currentEtapeId, canUserAct);
 
             default:
                 return createReadOnlyPermissions();
@@ -285,196 +192,185 @@ public class DossierCommonService {
     }
 
     /**
-     * NEW: Calculate specific permissions for Agent GUC based on phase
+     * Calculate Agent Antenne permissions based on current phase
      */
-    private DossierPermissionsDTO calculateGUCAgentPermissions(Dossier dossier, Utilisateur utilisateur,
-            boolean canUserActOnCurrentEtape) {
-        // Get current etape information
-        WorkflowService.EtapeInfo etapeInfo = null;
-        try {
-            etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
-        } catch (Exception e) {
-            log.warn("Cannot get etape info for GUC permissions: {}", e.getMessage());
-        }
-
-        if (etapeInfo == null || etapeInfo.getEtape() == null) {
+    private DossierPermissionsDTO calculateAntenneAgentPermissions(Dossier dossier, Utilisateur utilisateur, 
+                                                                  Long currentEtapeId, boolean canUserAct) {
+        // Must be from correct antenne
+        if (utilisateur.getAntenne() == null || 
+            !dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId())) {
             return createReadOnlyPermissions();
         }
 
-        Long etapeId = etapeInfo.getEtape().getId();
-        String etapeDesignation = etapeInfo.getDesignation();
-        int currentOrder = etapeInfo.getOrdre();
+        if (currentEtapeId == null) return createReadOnlyPermissions();
 
-        // PHASE 2: AP - Phase GUC (Initial Review) - etapeId=2, ordre=2
-        if ("AP - Phase GUC".equals(etapeDesignation) && currentOrder == 2 && canUserActOnCurrentEtape) {
-            return DossierPermissionsDTO.builder()
-                    .peutEtreModifie(false) // GUC cannot modify documents
-                    .peutEtreEnvoye(true) // Can send to commission
-                    .peutEtreSupprime(false)
-                    .peutAjouterNotes(true)
-                    .peutRetournerAntenne(true)
-                    .peutEnvoyerCommission(true)
-                    .peutRejeter(true)
-                    .peutApprouver(false) // Not final approval phase
-                    .peutVoirDocuments(true)
-                    .peutTelechargerDocuments(true)
-                    .build();
+        switch (currentEtapeId.intValue()) {
+            case 1: // Phase 1: AP - Phase Antenne
+                if (canUserAct) {
+                    boolean canModify = dossier.getStatus() == Dossier.DossierStatus.DRAFT ||
+                                      dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
+                    boolean canDelete = dossier.getStatus() == Dossier.DossierStatus.DRAFT;
+                    
+                    return DossierPermissionsDTO.builder()
+                            .peutEtreModifie(canModify)
+                            .peutEtreEnvoye(canModify)
+                            .peutEtreSupprime(canDelete)
+                            .peutAjouterNotes(true)
+                            .peutRetournerAntenne(false)
+                            .peutEnvoyerCommission(false)
+                            .peutRejeter(false)
+                            .peutApprouver(false)
+                            .peutVoirDocuments(true)
+                            .peutTelechargerDocuments(true)
+                            .build();
+                }
+                break;
+
+            case 5: // Phase 5: RP - Phase Antenne
+                if (canUserAct) {
+                    return DossierPermissionsDTO.builder()
+                            .peutEtreModifie(false)
+                            .peutEtreEnvoye(true)
+                            .peutEtreSupprime(false)
+                            .peutAjouterNotes(true)
+                            .peutRetournerAntenne(false)
+                            .peutEnvoyerCommission(false)
+                            .peutRejeter(false)
+                            .peutApprouver(false)
+                            .peutVoirDocuments(true)
+                            .peutTelechargerDocuments(true)
+                            .build();
+                }
+                break;
         }
 
-        // PHASE 3: AP - Phase AHA-AF (Commission) - READ ONLY for GUC
-        else if ("AP - Phase AHA-AF".equals(etapeDesignation) && currentOrder == 3) {
-            return createReadOnlyPermissions();
-        }
-
-        // PHASE 4: AP - Phase GUC (Final Approval) - etapeId=4, ordre=4
-        else if ("AP - Phase GUC".equals(etapeDesignation) && currentOrder == 4 && canUserActOnCurrentEtape) {
-            return DossierPermissionsDTO.builder()
-                    .peutEtreModifie(false)
-                    .peutEtreEnvoye(false)
-                    .peutEtreSupprime(false)
-                    .peutAjouterNotes(true)
-                    .peutRetournerAntenne(true)
-                    .peutEnvoyerCommission(false) // Already been to commission
-                    .peutRejeter(true)
-                    .peutApprouver(true) // FINAL APPROVAL PHASE
-                    .peutVoirDocuments(true)
-                    .peutTelechargerDocuments(true)
-                    .build();
-        }
-
-        // PHASE 5: RP - Phase Antenne (Halt State) - READ ONLY for GUC
-        else if ("RP - Phase Antenne".equals(etapeDesignation) && currentOrder == 1) {
-            return createReadOnlyPermissions();
-        }
-
-        // PHASE 6: RP - Phase GUC (Realization Review) - etapeId=6, ordre=2
-        else if ("RP - Phase GUC".equals(etapeDesignation) && currentOrder == 2 && canUserActOnCurrentEtape) {
-            return DossierPermissionsDTO.builder()
-                    .peutEtreModifie(false)
-                    .peutEtreEnvoye(true) // Can send to Service Technique
-                    .peutEtreSupprime(false)
-                    .peutAjouterNotes(true)
-                    .peutRetournerAntenne(false)
-                    .peutEnvoyerCommission(false)
-                    .peutRejeter(false) // Cannot reject in realization phase
-                    .peutApprouver(false) // Not approval, just review
-                    .peutVoirDocuments(true)
-                    .peutTelechargerDocuments(true)
-                    .build();
-        }
-
-        // PHASE 7: RP - Phase Service Technique - READ ONLY for GUC
-        else if ("RP - Phase service technique".equals(etapeDesignation) && currentOrder == 3) {
-            return createReadOnlyPermissions();
-        }
-
-        // PHASE 8: RP - Phase GUC (Final Realization) - etapeId=8, ordre=4
-        else if ("RP - Phase GUC".equals(etapeDesignation) && currentOrder == 4 && canUserActOnCurrentEtape) {
-            return DossierPermissionsDTO.builder()
-                    .peutEtreModifie(false)
-                    .peutEtreEnvoye(false)
-                    .peutEtreSupprime(false)
-                    .peutAjouterNotes(true)
-                    .peutRetournerAntenne(false)
-                    .peutEnvoyerCommission(false)
-                    .peutRejeter(false)
-                    .peutApprouver(true) // FINALIZE REALIZATION
-                    .peutVoirDocuments(true)
-                    .peutTelechargerDocuments(true)
-                    .build();
-        }
-
-        // SPECIAL CASE: Approved and waiting for farmer (Halt State)
-        else if (dossier.getStatus() == Dossier.DossierStatus.APPROVED_AWAITING_FARMER) {
-            return createReadOnlyPermissions();
-        }
-
-        // ALL OTHER CASES: Read-only
+        // For all other phases, antenne has read-only access
         return createReadOnlyPermissions();
     }
 
     /**
-     * NEW: Calculate specific permissions for Agent Antenne based on phase
+     * Calculate Agent GUC permissions based on current phase
      */
-    private DossierPermissionsDTO calculateAntenneAgentPermissions(Dossier dossier, Utilisateur utilisateur,
-            boolean canUserActOnCurrentEtape) {
-        // Check if user is from correct antenne
-        boolean isCorrectAntenneAgent = utilisateur.getAntenne() != null &&
-                dossier.getAntenne().getId().equals(utilisateur.getAntenne().getId());
+    private DossierPermissionsDTO calculateGUCAgentPermissions(Dossier dossier, Utilisateur utilisateur, 
+                                                              Long currentEtapeId, boolean canUserAct) {
+        if (currentEtapeId == null || !canUserAct) return createReadOnlyPermissions();
 
-        // Agent Antenne can only act on their own antenne's dossiers
-        if (!isCorrectAntenneAgent) {
-            return createReadOnlyPermissions();
+        switch (currentEtapeId.intValue()) {
+            case 2: // Phase 2: AP - Phase GUC (Initial Review)
+                return DossierPermissionsDTO.builder()
+                        .peutEtreModifie(false)
+                        .peutEtreEnvoye(true) // Can send to commission
+                        .peutEtreSupprime(false)
+                        .peutAjouterNotes(true)
+                        .peutRetournerAntenne(true)
+                        .peutEnvoyerCommission(true)
+                        .peutRejeter(true)
+                        .peutApprouver(false) // Not final approval phase
+                        .peutVoirDocuments(true)
+                        .peutTelechargerDocuments(true)
+                        .build();
+
+            case 4: // Phase 4: AP - Phase GUC (Final Approval)
+                return DossierPermissionsDTO.builder()
+                        .peutEtreModifie(false)
+                        .peutEtreEnvoye(false)
+                        .peutEtreSupprime(false)
+                        .peutAjouterNotes(true)
+                        .peutRetournerAntenne(true)
+                        .peutEnvoyerCommission(false) // Already been to commission
+                        .peutRejeter(true)
+                        .peutApprouver(true) // FINAL APPROVAL PHASE
+                        .peutVoirDocuments(true)
+                        .peutTelechargerDocuments(true)
+                        .build();
+
+            case 6: // Phase 6: RP - Phase GUC (Realization Review)
+                return DossierPermissionsDTO.builder()
+                        .peutEtreModifie(false)
+                        .peutEtreEnvoye(true) // Can send to Service Technique
+                        .peutEtreSupprime(false)
+                        .peutAjouterNotes(true)
+                        .peutRetournerAntenne(false)
+                        .peutEnvoyerCommission(false)
+                        .peutRejeter(false)
+                        .peutApprouver(false)
+                        .peutVoirDocuments(true)
+                        .peutTelechargerDocuments(true)
+                        .build();
+
+            case 8: // Phase 8: RP - Phase GUC (Final Realization)
+                return DossierPermissionsDTO.builder()
+                        .peutEtreModifie(false)
+                        .peutEtreEnvoye(false)
+                        .peutEtreSupprime(false)
+                        .peutAjouterNotes(true)
+                        .peutRetournerAntenne(false)
+                        .peutEnvoyerCommission(false)
+                        .peutRejeter(false)
+                        .peutApprouver(true) // FINALIZE REALIZATION
+                        .peutVoirDocuments(true)
+                        .peutTelechargerDocuments(true)
+                        .build();
         }
 
-        // Get current etape information
-        WorkflowService.EtapeInfo etapeInfo = null;
-        try {
-            etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
-        } catch (Exception e) {
-            log.warn("Cannot get etape info for Agent Antenne permissions: {}", e.getMessage());
-        }
-
-        if (etapeInfo == null || etapeInfo.getEtape() == null) {
-            return createReadOnlyPermissions();
-        }
-
-        Long etapeId = etapeInfo.getEtape().getId();
-
-        // PHASE 1: AP - Phase Antenne (etapeId=1) - Full permissions
-        if (etapeId == 1 && canUserActOnCurrentEtape) {
-            boolean isDraftOrReturned = dossier.getStatus() == Dossier.DossierStatus.DRAFT ||
-                    dossier.getStatus() == Dossier.DossierStatus.RETURNED_FOR_COMPLETION;
-            boolean isDraft = dossier.getStatus() == Dossier.DossierStatus.DRAFT;
-
-            return DossierPermissionsDTO.builder()
-                    .peutEtreModifie(isDraftOrReturned)
-                    .peutEtreEnvoye(isDraftOrReturned)
-                    .peutEtreSupprime(isDraft)
-                    .peutAjouterNotes(true)
-                    .peutRetournerAntenne(false)
-                    .peutEnvoyerCommission(false)
-                    .peutRejeter(false)
-                    .peutApprouver(false)
-                    .peutVoirDocuments(true)
-                    .peutTelechargerDocuments(true)
-                    .build();
-        }
-
-        // PHASE 5: RP - Phase Antenne (etapeId=5) - Realization antenne phase
-        else if (etapeId == 5 && canUserActOnCurrentEtape) {
-            return DossierPermissionsDTO.builder()
-                    .peutEtreModifie(false)
-                    .peutEtreEnvoye(true) // Can send to GUC for realization
-                    .peutEtreSupprime(false)
-                    .peutAjouterNotes(true)
-                    .peutRetournerAntenne(false)
-                    .peutEnvoyerCommission(false)
-                    .peutRejeter(false)
-                    .peutApprouver(false)
-                    .peutVoirDocuments(true)
-                    .peutTelechargerDocuments(true)
-                    .build();
-        }
-
-        // SPECIAL CASE: Approved and waiting for farmer (Realization initialization)
-        else if (dossier.getStatus() == Dossier.DossierStatus.APPROVED_AWAITING_FARMER) {
-            return DossierPermissionsDTO.builder()
-                    .peutEtreModifie(false)
-                    .peutEtreEnvoye(false) // Special action: initialize_realization
-                    .peutEtreSupprime(false)
-                    .peutAjouterNotes(true)
-                    .peutRetournerAntenne(false)
-                    .peutEnvoyerCommission(false)
-                    .peutRejeter(false)
-                    .peutApprouver(false)
-                    .peutVoirDocuments(true)
-                    .peutTelechargerDocuments(true)
-                    .build();
-        }
-
-        // ALL OTHER PHASES: Read-only (etapeId 2,3,4,6,7,8)
         return createReadOnlyPermissions();
+    }
+
+    /**
+     * Calculate Commission Agent permissions
+     */
+    private DossierPermissionsDTO calculateCommissionAgentPermissions(Dossier dossier, Utilisateur utilisateur, 
+                                                                     Long currentEtapeId, boolean canUserAct) {
+        if (currentEtapeId == null || !canUserAct || currentEtapeId != 3) {
+            return createReadOnlyPermissions();
+        }
+
+        // Check if dossier belongs to agent's team
+        if (utilisateur.getEquipeCommission() != null) {
+            Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
+            Utilisateur.EquipeCommission equipeRequise = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
+            if (!equipeRequise.equals(utilisateur.getEquipeCommission())) {
+                return createReadOnlyPermissions();
+            }
+        }
+
+        // Phase 3: Commission terrain inspection
+        return DossierPermissionsDTO.builder()
+                .peutEtreModifie(false)
+                .peutEtreEnvoye(false)
+                .peutEtreSupprime(false)
+                .peutAjouterNotes(true)
+                .peutRetournerAntenne(false)
+                .peutEnvoyerCommission(false)
+                .peutRejeter(true)
+                .peutApprouver(true)
+                .peutVoirDocuments(true)
+                .peutTelechargerDocuments(true)
+                .build();
+    }
+
+    /**
+     * Calculate Service Technique permissions
+     */
+    private DossierPermissionsDTO calculateServiceTechniquePermissions(Dossier dossier, Utilisateur utilisateur, 
+                                                                      Long currentEtapeId, boolean canUserAct) {
+        if (currentEtapeId == null || !canUserAct || currentEtapeId != 7) {
+            return createReadOnlyPermissions();
+        }
+
+        // Phase 7: Service Technique implementation
+        return DossierPermissionsDTO.builder()
+                .peutEtreModifie(false)
+                .peutEtreEnvoye(true) // Can send back to GUC when done
+                .peutEtreSupprime(false)
+                .peutAjouterNotes(true)
+                .peutRetournerAntenne(false)
+                .peutEnvoyerCommission(false)
+                .peutRejeter(false)
+                .peutApprouver(true) // Approve implementation completion
+                .peutVoirDocuments(true)
+                .peutTelechargerDocuments(true)
+                .build();
     }
 
     /**
@@ -496,47 +392,43 @@ public class DossierCommonService {
     }
 
     /**
-     * UPDATED: Get display status using etape information and new statuses
+     * Helper method for admin permissions
+     */
+    private DossierPermissionsDTO createAdminPermissions() {
+        return DossierPermissionsDTO.builder()
+                .peutEtreModifie(true)
+                .peutEtreEnvoye(true)
+                .peutEtreSupprime(true)
+                .peutAjouterNotes(true)
+                .peutRetournerAntenne(true)
+                .peutEnvoyerCommission(true)
+                .peutRejeter(true)
+                .peutApprouver(true)
+                .peutVoirDocuments(true)
+                .peutTelechargerDocuments(true)
+                .build();
+    }
+
+    // ============================================================================
+    // DISPLAY STATUS - ID-BASED
+    // ============================================================================
+
+    /**
+     * Get display status using etape ID instead of complex string matching
      */
     public String getDisplayStatus(Dossier.DossierStatus status, WorkflowService.EtapeInfo etapeInfo) {
-        if (etapeInfo != null && etapeInfo.getEtape() != null) {
-            String phaseInfo = "";
-
-            // Map etape ID directly to phase number
-            int phaseNumber = getPhaseNumberByEtapeId(etapeInfo.getEtape().getId());
-
-            switch (phaseNumber) {
-                case 1:
-                    phaseInfo = " (Phase 1: Création & Documents)";
-                    break;
-                case 2:
-                    phaseInfo = " (Phase 2: Validation GUC Initiale)";
-                    break;
-                case 3:
-                    phaseInfo = " (Phase 3: Commission Terrain)";
-                    break;
-                case 4:
-                    phaseInfo = " (Phase 4: Approbation Finale GUC)";
-                    break;
-                case 5:
-                    phaseInfo = " (Phase 5: Réalisation - Antenne)";
-                    break;
-                case 6:
-                    phaseInfo = " (Phase 6: Réalisation - GUC)";
-                    break;
-                case 7:
-                    phaseInfo = " (Phase 7: Réalisation - Service Technique)";
-                    break;
-                case 8:
-                    phaseInfo = " (Phase 8: Réalisation - GUC Final)";
-                    break;
-                default:
-                    phaseInfo = " (Phase " + phaseNumber + ")";
+        if (etapeInfo != null && etapeInfo.getEtapeId() != null) {
+            String phaseInfo = etapeInfo.getDesignation();
+            
+            String statusSuffix = "";
+            if (etapeInfo.getEnRetard()) {
+                statusSuffix += " - EN RETARD";
             }
-
-            return etapeInfo.getDesignation() + phaseInfo +
-                    (etapeInfo.getEnRetard() ? " - EN RETARD" : "") +
-                    (etapeInfo.getJoursRestants() > 0 ? " (" + etapeInfo.getJoursRestants() + "j restants)" : "");
+            if (etapeInfo.getJoursRestants() > 0) {
+                statusSuffix += " (" + etapeInfo.getJoursRestants() + "j restants)";
+            }
+            
+            return phaseInfo + statusSuffix;
         }
 
         // Fallback to status-based display
@@ -564,35 +456,9 @@ public class DossierCommonService {
         }
     }
 
-    /**
-     * Add helper method to map etape ID to phase number
-     */
-    public int getPhaseNumberByEtapeId(Long etapeId) {
-        if (etapeId == null)
-            return 0;
-
-        // Direct mapping: etape ID = phase number
-        switch (etapeId.intValue()) {
-            case 1:
-                return 1; // AP - Phase Antenne
-            case 2:
-                return 2; // AP - Phase GUC (Initial)
-            case 3:
-                return 3; // AP - Phase AHA-AF
-            case 4:
-                return 4; // AP - Phase GUC (Final)
-            case 5:
-                return 5; // RP - Phase Antenne
-            case 6:
-                return 6; // RP - Phase GUC
-            case 7:
-                return 7; // RP - Phase service technique
-            case 8:
-                return 8; // RP - Phase GUC (Final)
-            default:
-                return 0;
-        }
-    }
+    // ============================================================================
+    // STATISTICS CALCULATION - SIMPLIFIED
+    // ============================================================================
 
     /**
      * Calculate statistics using workflow system
@@ -607,12 +473,12 @@ public class DossierCommonService {
         long attenteTraitement = dossiers.stream().filter(d -> d.getStatus() == Dossier.DossierStatus.SUBMITTED)
                 .count();
 
-        // Count dossiers in commission phase
+        // Count dossiers in commission phase (Phase 3)
         long dossiersEnCommission = dossiers.stream()
                 .filter(d -> {
                     try {
                         WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(d);
-                        return "AP - Phase AHA-AF".equals(etapeInfo.getDesignation());
+                        return etapeInfo.getEtapeId() == 3L;
                     } catch (Exception e) {
                         return false;
                     }
@@ -649,6 +515,10 @@ public class DossierCommonService {
                 .build();
     }
 
+    // ============================================================================
+    // UTILITY METHODS - UNCHANGED
+    // ============================================================================
+
     /**
      * Calculate completion percentage
      */
@@ -677,7 +547,42 @@ public class DossierCommonService {
         auditTrailRepository.save(audit);
     }
 
-    // Rest of mapping methods remain the same
+    // Apply filters (keep existing implementation)
+    public List<Dossier> applyFilters(List<Dossier> dossiers, DossierFilterRequest filter) {
+        return dossiers.stream()
+                .filter(d -> filter.getSearchTerm() == null ||
+                        containsSearchTerm(d, filter.getSearchTerm()))
+                .filter(d -> filter.getStatut() == null ||
+                        d.getStatus().name().equals(filter.getStatut()))
+                .filter(d -> filter.getSousRubriqueId() == null ||
+                        d.getSousRubrique().getId().equals(filter.getSousRubriqueId()))
+                .filter(d -> filter.getDateDebutCreation() == null ||
+                        d.getDateCreation().isAfter(filter.getDateDebutCreation()))
+                .filter(d -> filter.getDateFinCreation() == null ||
+                        d.getDateCreation().isBefore(filter.getDateFinCreation()))
+                .filter(d -> filter.getAntenneId() == null ||
+                        d.getAntenne().getId().equals(filter.getAntenneId()))
+                .collect(Collectors.toList());
+    }
+
+    private boolean containsSearchTerm(Dossier dossier, String searchTerm) {
+        String term = searchTerm.toLowerCase();
+        return (dossier.getSaba() != null && dossier.getSaba().toLowerCase().contains(term)) ||
+                (dossier.getReference() != null && dossier.getReference().toLowerCase().contains(term)) ||
+                (dossier.getAgriculteur().getCin() != null
+                        && dossier.getAgriculteur().getCin().toLowerCase().contains(term))
+                ||
+                (dossier.getAgriculteur().getNom() != null
+                        && dossier.getAgriculteur().getNom().toLowerCase().contains(term))
+                ||
+                (dossier.getAgriculteur().getPrenom() != null
+                        && dossier.getAgriculteur().getPrenom().toLowerCase().contains(term));
+    }
+
+    // ============================================================================
+    // MAPPING METHODS - UNCHANGED BUT SIMPLIFIED
+    // ============================================================================
+
     public DossierDetailDTO mapToDossierDetailDTO(Dossier dossier) {
         return DossierDetailDTO.builder()
                 .id(dossier.getId())
@@ -821,37 +726,5 @@ public class DossierCommonService {
 
     public List<String> getValidationErrors(Dossier dossier, List<PieceJointe> pieceJointes) {
         return List.of();
-    }
-
-    // Apply filters (keep existing implementation)
-    public List<Dossier> applyFilters(List<Dossier> dossiers, DossierFilterRequest filter) {
-        return dossiers.stream()
-                .filter(d -> filter.getSearchTerm() == null ||
-                        containsSearchTerm(d, filter.getSearchTerm()))
-                .filter(d -> filter.getStatut() == null ||
-                        d.getStatus().name().equals(filter.getStatut()))
-                .filter(d -> filter.getSousRubriqueId() == null ||
-                        d.getSousRubrique().getId().equals(filter.getSousRubriqueId()))
-                .filter(d -> filter.getDateDebutCreation() == null ||
-                        d.getDateCreation().isAfter(filter.getDateDebutCreation()))
-                .filter(d -> filter.getDateFinCreation() == null ||
-                        d.getDateCreation().isBefore(filter.getDateFinCreation()))
-                .filter(d -> filter.getAntenneId() == null ||
-                        d.getAntenne().getId().equals(filter.getAntenneId()))
-                .collect(Collectors.toList());
-    }
-
-    private boolean containsSearchTerm(Dossier dossier, String searchTerm) {
-        String term = searchTerm.toLowerCase();
-        return (dossier.getSaba() != null && dossier.getSaba().toLowerCase().contains(term)) ||
-                (dossier.getReference() != null && dossier.getReference().toLowerCase().contains(term)) ||
-                (dossier.getAgriculteur().getCin() != null
-                        && dossier.getAgriculteur().getCin().toLowerCase().contains(term))
-                ||
-                (dossier.getAgriculteur().getNom() != null
-                        && dossier.getAgriculteur().getNom().toLowerCase().contains(term))
-                ||
-                (dossier.getAgriculteur().getPrenom() != null
-                        && dossier.getAgriculteur().getPrenom().toLowerCase().contains(term));
     }
 }
