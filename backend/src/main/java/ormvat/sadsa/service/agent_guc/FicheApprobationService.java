@@ -7,7 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.*;
 import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
-import ormvat.sadsa.service.common.WorkflowService;
+import ormvat.sadsa.service.workflow.WorkflowService;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -34,12 +34,11 @@ public class FicheApprobationService {
     public FicheApprobationResponse generateFicheApprobation(GenerateFicheRequest request, String userEmail) {
         try {
             Utilisateur utilisateur = validateGUCUser(userEmail);
-            Dossier dossier = getDossier(request.getDossierId());
-
-            // Check current workflow stage - UPDATED to use ID-based logic
-            WorkflowService.EtapeInfo etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
-            if (etapeInfo.getEtapeId() != 4L) {
-                throw new RuntimeException("Le dossier n'est pas à l'étape finale d'approbation (Phase 4). Etape actuelle: Phase " + etapeInfo.getEtapeId());
+            Dossier dossier = getDossier(request.getDossierId());            // Check current workflow stage - UPDATED to use ID-based logic
+            WorkflowInstance currentStep = workflowService.getCurrentStep(dossier.getId());
+            if (currentStep == null || currentStep.getIdEtape() != 4L) {
+                Long currentEtapeId = currentStep != null ? currentStep.getIdEtape() : null;
+                throw new RuntimeException("Le dossier n'est pas à l'étape finale d'approbation (Phase 4). Etape actuelle: Phase " + currentEtapeId);
             }
 
             // Update dossier with approval details
@@ -225,13 +224,12 @@ public class FicheApprobationService {
         
         LocalDateTime now = LocalDateTime.now();
         LocalDate validiteDate = now.toLocalDate().plusMonths(6); // Valid for 6 months
-        
-        // Get current workflow info
-        WorkflowService.EtapeInfo etapeInfo = null;
+          // Get current workflow info
+        WorkflowInstance currentStep = null;
         try {
-            etapeInfo = workflowService.getCurrentEtapeInfo(dossier);
+            currentStep = workflowService.getCurrentStep(dossier.getId());
         } catch (Exception e) {
-            log.warn("Cannot get etape info for fiche: {}", e.getMessage());
+            log.warn("Cannot get current step for fiche: {}", e.getMessage());
         }
         
         return FicheApprobationResponse.builder()
@@ -278,9 +276,8 @@ public class FicheApprobationService {
                 .agentGucSignature("Signature électronique - " + now.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")))
                 .responsableNom("Responsable ORMVAT")
                 .responsableSignature("Signature autorisée")
-                
-                // Workflow info - UPDATED to use ID-based logic
-                .etapeActuelle(etapeInfo != null ? workflowService.getPhaseDisplayName(etapeInfo.getEtapeId()) : "Phase d'approbation terminée")
+                  // Workflow info - UPDATED to use ID-based logic
+                .etapeActuelle(currentStep != null ? "Phase " + currentStep.getIdEtape() : "Phase d'approbation terminée")
                 .prochainEtape("En attente de récupération par l'agriculteur puis initialisation réalisation")
                 .farmersRetrieved(false) // This would be tracked separately in real implementation
                 .dateRetrievalFermier(null)
@@ -319,20 +316,18 @@ public class FicheApprobationService {
             default:
                 return false;
         }
-    }
-
-    /**
+    }    /**
      * Create audit trail
      */
     private void createAuditTrail(String action, Dossier dossier, Utilisateur utilisateur, String description) {
         try {
             AuditTrail audit = new AuditTrail();
             audit.setAction(action);
-            audit.setEntite("Dossier");
-            audit.setEntiteId(dossier.getId());
-            audit.setDateAction(LocalDateTime.now());
-            audit.setUtilisateur(utilisateur);
-            audit.setDescription(description);
+            audit.setEntityType("Dossier");
+            audit.setEntityId(dossier.getId());
+            audit.setTimestamp(LocalDateTime.now());
+            audit.setUserId(utilisateur.getId());
+            audit.setDetails(description);
             auditTrailRepository.save(audit);
         } catch (Exception e) {
             log.warn("Erreur lors de la création de l'audit trail", e);

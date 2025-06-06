@@ -1,7 +1,7 @@
 package ormvat.sadsa.service.agent_antenne;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -652,21 +652,18 @@ public class DocumentFillingService {
     private Map<String, Object> parseFormStructure(String jsonFilePath) {
         if (jsonFilePath == null || jsonFilePath.isEmpty()) {
             return new HashMap<>();
-        }
-
-        try {
+        }        try {
             String jsonContent = Files.readString(Paths.get(getStorageLocation().toString(), jsonFilePath));
-            return objectMapper.readValue(jsonContent, Map.class);
+            return objectMapper.readValue(jsonContent, new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
             log.warn("Erreur lors du parsing de la structure de formulaire: {}", jsonFilePath, e);
             return new HashMap<>();
         }
     }
 
-    private Map<String, Object> parseFormDataFromFile(String formDataFilePath) {
-        try {
+    private Map<String, Object> parseFormDataFromFile(String formDataFilePath) {        try {
             String jsonContent = Files.readString(Paths.get(getStorageLocation().toString(), formDataFilePath));
-            return objectMapper.readValue(jsonContent, Map.class);
+            return objectMapper.readValue(jsonContent, new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
             log.warn("Erreur lors du parsing des données de formulaire depuis le fichier: {}", formDataFilePath, e);
             return new HashMap<>();
@@ -742,19 +739,19 @@ public class DocumentFillingService {
             return "";
         }
         return fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase();
-    }
-
-    private void createAuditTrail(String action, Long dossierId, String description, String userEmail) {
+    }    private void createAuditTrail(String action, Long dossierId, String description, String userEmail) {
         try {
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail).orElse(null);
             
             AuditTrail auditTrail = new AuditTrail();
+            auditTrail.setTimestamp(LocalDateTime.now());
+            auditTrail.setUserId(utilisateur != null ? utilisateur.getId() : null);
             auditTrail.setAction(action);
-            auditTrail.setEntite("Dossier");
-            auditTrail.setEntiteId(dossierId);
-            auditTrail.setDateAction(LocalDateTime.now());
-            auditTrail.setUtilisateur(utilisateur);
-            auditTrail.setDescription(description);
+            auditTrail.setEntityType("Dossier");
+            auditTrail.setEntityId(dossierId);
+            auditTrail.setOldValue(null);
+            auditTrail.setNewValue(null);
+            auditTrail.setDetails(description);
             
             auditTrailRepository.save(auditTrail);
         } catch (Exception e) {

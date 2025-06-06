@@ -10,9 +10,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.*;
-import ormvat.sadsa.dto.common.DossierCommonDTOs.*;
+import ormvat.sadsa.dto.role_based.RoleBasedDossierDTOs.*;
 import ormvat.sadsa.service.agent_guc.FicheApprobationService;
-import ormvat.sadsa.service.agent_guc.DossierGUCService;
+import ormvat.sadsa.service.agent_guc.AgentGUCDossierService;
 
 import jakarta.validation.Valid;
 import java.util.Map;
@@ -21,16 +21,12 @@ import java.util.Map;
 @RequestMapping("/api/fiche-approbation")
 @RequiredArgsConstructor
 @Slf4j
-public class FicheApprobationController {
-
-    private final FicheApprobationService ficheApprobationService;
-    private final DossierGUCService dossierGUCService;
-
-    /**
-     * Make final approval decision (Phase 4) - UPDATED to use approveDossier method
+public class FicheApprobationController {    private final FicheApprobationService ficheApprobationService;
+    private final AgentGUCDossierService agentGUCDossierService;    /**
+     * Make final approval decision (Phase 4) - UPDATED to use AgentGUCDossierService methods
      */
     @PostMapping("/final-approval")
-    public ResponseEntity<DossierActionResponse> makeFinalApprovalDecision(
+    public ResponseEntity<FinalApprovalResponse> makeFinalApprovalDecision(
             @Valid @RequestBody FinalApprovalRequest request,
             Authentication authentication) {
         
@@ -38,60 +34,46 @@ public class FicheApprobationController {
             String userEmail = authentication.getName();
             log.info("Décision finale d'approbation pour dossier {} par {}", request.getDossierId(), userEmail);
 
-            DossierActionResponse response;
+            FinalApprovalResponse response;
 
             if (request.getApproved()) {
                 // Use approveDossier for approval case
-                String commentaire = request.getCommentaireApprobation() != null ? 
-                    request.getCommentaireApprobation() : "Approbation finale";
+                ApproveRequest approveRequest = ApproveRequest.builder()
+                    .commentaire(request.getCommentaireApprobation() != null ? 
+                        request.getCommentaireApprobation() : "Approbation finale")
+                    .build();
                 
-                response = dossierGUCService.approveDossier(request.getDossierId(), userEmail, commentaire);
+                ActionResponse actionResponse = agentGUCDossierService.approveDossier(
+                    request.getDossierId(), approveRequest, userEmail);
                 
-                // Add fiche-specific information to response
-                if (response.getSuccess()) {
-                    Map<String, Object> additionalData = response.getAdditionalData() != null ? 
-                        new java.util.HashMap<>(response.getAdditionalData()) : new java.util.HashMap<>();
-                    
-                    additionalData.put("approved", true);
-                    additionalData.put("montantApprouve", request.getMontantApprouve());
-                    additionalData.put("conditionsSpecifiques", request.getConditionsSpecifiques());
-                    
-                    response = DossierActionResponse.builder()
-                            .success(response.getSuccess())
-                            .message(response.getMessage())
-                            .newStatut(response.getNewStatut())
-                            .dateAction(response.getDateAction())
-                            .additionalData(additionalData)
-                            .build();
-                }
+                // Build fiche-specific response
+                response = FinalApprovalResponse.builder()
+                        .success(actionResponse.getSuccess())
+                        .message(actionResponse.getMessage())
+                        .newStatut("APPROVED_AWAITING_FARMER")
+                        .dateAction(actionResponse.getTimestamp())
+                        .ficheGenerated(true)
+                        .nextStep("En attente de récupération par l'agriculteur")
+                        .build();
             } else {
                 // Use rejectDossier for rejection case
-                ormvat.sadsa.dto.agent_guc.DossierGUCActionDTOs.RejectDossierRequest rejectRequest = 
-                    ormvat.sadsa.dto.agent_guc.DossierGUCActionDTOs.RejectDossierRequest.builder()
-                        .dossierId(request.getDossierId())
+                RejectRequest rejectRequest = RejectRequest.builder()
                         .motif(request.getMotifRejet() != null ? request.getMotifRejet() : "Rejet final")
                         .commentaire("Rejet en phase finale d'approbation")
-                        .definitif(true)
                         .build();
                 
-                response = dossierGUCService.rejectDossier(rejectRequest, userEmail);
+                ActionResponse actionResponse = agentGUCDossierService.rejectDossier(
+                    request.getDossierId(), rejectRequest, userEmail);
                 
-                // Add rejection-specific information
-                if (response.getSuccess()) {
-                    Map<String, Object> additionalData = response.getAdditionalData() != null ? 
-                        new java.util.HashMap<>(response.getAdditionalData()) : new java.util.HashMap<>();
-                    
-                    additionalData.put("approved", false);
-                    additionalData.put("motifRejet", request.getMotifRejet());
-                    
-                    response = DossierActionResponse.builder()
-                            .success(response.getSuccess())
-                            .message(response.getMessage())
-                            .newStatut(response.getNewStatut())
-                            .dateAction(response.getDateAction())
-                            .additionalData(additionalData)
-                            .build();
-                }
+                // Build rejection response
+                response = FinalApprovalResponse.builder()
+                        .success(actionResponse.getSuccess())
+                        .message(actionResponse.getMessage())
+                        .newStatut("REJECTED")
+                        .dateAction(actionResponse.getTimestamp())
+                        .ficheGenerated(false)
+                        .nextStep("Dossier rejeté définitivement")
+                        .build();
             }
             
             log.info("Décision finale prise avec succès pour dossier {}", request.getDossierId());
@@ -100,7 +82,7 @@ public class FicheApprobationController {
         } catch (RuntimeException e) {
             log.error("Erreur lors de la décision finale pour dossier {}: {}", request.getDossierId(), e.getMessage());
             return ResponseEntity.badRequest().body(
-                DossierActionResponse.builder()
+                FinalApprovalResponse.builder()
                     .success(false)
                     .message(e.getMessage())
                     .build()
@@ -108,7 +90,7 @@ public class FicheApprobationController {
         } catch (Exception e) {
             log.error("Erreur technique lors de la décision finale pour dossier {}", request.getDossierId(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
-                DossierActionResponse.builder()
+                FinalApprovalResponse.builder()
                     .success(false)
                     .message("Erreur technique")
                     .build()

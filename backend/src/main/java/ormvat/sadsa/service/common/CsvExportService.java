@@ -10,6 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
+import ormvat.sadsa.service.workflow.WorkflowService;
+import ormvat.sadsa.dto.role_based.RoleBasedDossierDTOs.*;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -25,8 +27,7 @@ public class CsvExportService {
     private final DossierRepository dossierRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final WorkflowInstanceRepository workflowInstanceRepository;
-    private final PieceJointeRepository pieceJointeRepository;
-    private final DocumentRequisRepository documentRequisRepository;
+    private final WorkflowService workflowService;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
@@ -149,10 +150,17 @@ public class CsvExportService {
      */
     private String createCsvRow(Dossier dossier) {
         StringJoiner row = new StringJoiner(",");
-        
-        // Get workflow information
-        List<WorkflowInstance> workflows = workflowInstanceRepository.findByDossierId(dossier.getId());
+          // Get workflow information
+        List<WorkflowInstance> workflows = workflowInstanceRepository.findByIdDossierOrderByDateEntreeDesc(dossier.getId());
         WorkflowInstance currentWorkflow = workflows.isEmpty() ? null : workflows.get(0);
+        
+        // Get timing information from WorkflowService
+        TimingDTO timingInfo = null;
+        try {
+            timingInfo = workflowService.getTimingInfo(dossier.getId());
+        } catch (Exception e) {
+            log.warn("Could not get timing info for dossier {}: {}", dossier.getId(), e.getMessage());
+        }
         
         // Basic dossier info
         row.add(csvValue(dossier.getId()))
@@ -194,17 +202,17 @@ public class CsvExportService {
         row.add(csvValue(dossier.getDateSubmission() != null ? 
                    dossier.getDateSubmission().format(DATE_FORMATTER) : ""))
            .add(csvValue(dossier.getDateApprobation() != null ? 
-                   dossier.getDateApprobation().format(DATE_FORMATTER) : ""));
-
-        // Workflow info
-        if (currentWorkflow != null) {
-            row.add(csvValue(currentWorkflow.getEtapeDesignation()))
-               .add(csvValue(currentWorkflow.getEmplacementActuel() != null ? 
-                       currentWorkflow.getEmplacementActuel().name() : ""))
-               .add(csvValue(currentWorkflow.getJoursRestants() != null ? 
-                       currentWorkflow.getJoursRestants().toString() : "0"))
-               .add(csvValue(currentWorkflow.getEnRetard() != null ? 
-                       (currentWorkflow.getEnRetard() ? "Oui" : "Non") : "Non"));
+                   dossier.getDateApprobation().format(DATE_FORMATTER) : ""));        // Workflow info
+        if (currentWorkflow != null && timingInfo != null) {
+            row.add(csvValue(timingInfo.getCurrentStep()))
+               .add(csvValue(timingInfo.getAssignedTo()))
+               .add(csvValue(timingInfo.getJoursRestants().toString()))
+               .add(csvValue(timingInfo.getEnRetard() ? "Oui" : "Non"));
+        } else if (currentWorkflow != null) {
+            row.add(csvValue("Phase " + currentWorkflow.getIdEtape()))
+               .add(csvValue("Non défini"))
+               .add(csvValue("0"))
+               .add(csvValue("Non"));
         } else {
             row.add(csvValue("Phase Antenne"))
                .add(csvValue("ANTENNE"))

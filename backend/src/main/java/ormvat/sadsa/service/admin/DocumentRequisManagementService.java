@@ -25,7 +25,6 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -431,22 +430,20 @@ public class DocumentRequisManagementService {
 
     private void createAuditTrail(String action, Long entityId, String description, String userEmail) {
         createAuditTrailWithValues(action, entityId, description, null, null, userEmail);
-    }
-
-    private void createAuditTrailWithValues(String action, Long entityId, String description, 
+    }    private void createAuditTrailWithValues(String action, Long entityId, String description, 
                                          String oldValues, String newValues, String userEmail) {
         try {
             Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail).orElse(null);
 
             AuditTrail auditTrail = new AuditTrail();
+            auditTrail.setTimestamp(LocalDateTime.now());
+            auditTrail.setUserId(utilisateur != null ? utilisateur.getId() : null);
             auditTrail.setAction(action);
-            auditTrail.setEntite("DocumentRequis");
-            auditTrail.setEntiteId(entityId);
-            auditTrail.setValeurAvant(oldValues);
-            auditTrail.setValeurApres(newValues);
-            auditTrail.setDateAction(LocalDateTime.now());
-            auditTrail.setUtilisateur(utilisateur);
-            auditTrail.setDescription(description);
+            auditTrail.setEntityType("DocumentRequis");
+            auditTrail.setEntityId(entityId);
+            auditTrail.setOldValue(oldValues);
+            auditTrail.setNewValue(newValues);
+            auditTrail.setDetails(description);
 
             auditTrailRepository.save(auditTrail);
         } catch (Exception e) {

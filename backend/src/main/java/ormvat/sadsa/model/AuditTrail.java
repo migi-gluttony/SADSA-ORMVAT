@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.Date;
 
@@ -13,37 +14,32 @@ import java.util.Date;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class AuditTrail {
+public class AuditTrail implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_audit_trail")
     private Long id;
 
-    @Column(nullable = false)
+    @Column(name = "timestamp")
+    private LocalDateTime timestamp;
+
+    @Column(name = "user_id")
+    private Long userId;
+
+    @Column(name = "action")
     private String action;
 
-    @Column
-    private String entite;
+    @Column(name = "entity_type")
+    private String entityType;
 
-    @Column(name = "entite_id")
-    private Long entiteId;
+    @Column(name = "entity_id")
+    private Long entityId;
 
-    @Column(name = "valeur_avant", columnDefinition = "TEXT")
-    private String valeurAvant;
+    @Column(name = "old_value", length = 500)
+    private String oldValue;
 
-    @Column(name = "valeur_apres", columnDefinition = "TEXT")
-    private String valeurApres;
+    @Column(name = "new_value", length = 500)
+    private String newValue;
 
-    @Column(name = "date_action")
-    private LocalDateTime dateAction;
-
-    @ManyToOne
-    @JoinColumn(name = "id_utilisateur")
-    private Utilisateur utilisateur;
-
-    @Column(name = "adresse_ip")
-    private String adresseIP;
-
-    @Column(columnDefinition = "TEXT")
-    private String description;
+    @Column(name = "details", length = 1000)
+    private String details;
 }

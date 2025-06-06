@@ -7,7 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ormvat.sadsa.dto.agent_antenne.DossierCreationDTOs.*;
 import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
-import ormvat.sadsa.service.common.WorkflowService;
+import ormvat.sadsa.service.workflow.WorkflowService;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -206,7 +206,8 @@ public class DossierCreationService {
             Dossier savedDossier = dossierRepository.save(dossier);
 
             // Initialize workflow using WorkflowService (starts at AP - Phase Antenne)
-            workflowService.initializeWorkflow(savedDossier, utilisateur);
+            workflowService.initializeWorkflow(savedDossier.getId(), utilisateur.getId(), 
+                    "Initialisation du workflow pour le dossier " + savedDossier.getNumeroDossier());
 
             // Create audit trail
             createAuditTrail("CREATION_DOSSIER", savedDossier, utilisateur, 
@@ -536,12 +537,14 @@ public class DossierCreationService {
 
     private void createAuditTrail(String action, Dossier dossier, Utilisateur utilisateur, String description) {
         AuditTrail auditTrail = new AuditTrail();
+        auditTrail.setTimestamp(LocalDateTime.now());
+        auditTrail.setUserId(utilisateur.getId());
         auditTrail.setAction(action);
-        auditTrail.setEntite("Dossier");
-        auditTrail.setEntiteId(dossier.getId());
-        auditTrail.setDateAction(LocalDateTime.now());
-        auditTrail.setUtilisateur(utilisateur);
-        auditTrail.setDescription(description);
+        auditTrail.setEntityType("Dossier");
+        auditTrail.setEntityId(dossier.getId());
+        auditTrail.setOldValue(null);
+        auditTrail.setNewValue(null);
+        auditTrail.setDetails(description);
         auditTrailRepository.save(auditTrail);
     }
 }

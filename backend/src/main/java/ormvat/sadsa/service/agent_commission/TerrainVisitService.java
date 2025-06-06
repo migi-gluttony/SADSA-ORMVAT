@@ -9,7 +9,7 @@ import org.springframework.web.multipart.MultipartFile;
 import ormvat.sadsa.dto.agent_commission.TerrainVisitDTOs.*;
 import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
-import ormvat.sadsa.service.common.WorkflowService;
+import ormvat.sadsa.service.workflow.WorkflowService;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,14 +25,10 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class TerrainVisitService {
-
-    private final VisiteTerrainRepository visiteTerrainRepository;
+public class TerrainVisitService {    private final VisiteTerrainRepository visiteTerrainRepository;
     private final PhotoVisiteRepository photoVisiteRepository;
     private final DossierRepository dossierRepository;
     private final UtilisateurRepository utilisateurRepository;
-    private final WorkflowInstanceRepository workflowInstanceRepository;
-    private final HistoriqueWorkflowRepository historiqueWorkflowRepository;
     private final AuditTrailRepository auditTrailRepository;
 
     // Optional WorkflowService injection to avoid circular dependencies
@@ -348,16 +344,15 @@ public class TerrainVisitService {
                 dossier.setStatus(Dossier.DossierStatus.REJECTED);
                 log.info("Terrain rejeté pour le dossier {}", dossier.getId());
             }
-            dossierRepository.save(dossier);
-
-            // ✅ NEW: Automatically advance workflow to next phase (only if approved)
+            dossierRepository.save(dossier);            // ✅ NEW: Automatically advance workflow to next phase (only if approved)
             String workflowMessage = "Visite terrain terminée";
             if (request.getApprouve() && workflowService != null) {
                 try {
                     String comment = (request.getApprouve() ? "Terrain approuvé" : "Terrain rejeté") + 
                             " par " + (utilisateur.getEquipeCommission() != null ? utilisateur.getEquipeCommission().getDisplayName() : "Commission");
                     
-                    workflowService.moveToNextEtape(dossier, utilisateur, comment);
+                    // Move to next workflow step (assuming step 4 is next after terrain visit)
+                    workflowService.moveToStep(dossier.getId(), 4L, utilisateur.getId(), comment);
                     workflowMessage = "Visite terrain terminée avec succès. Le dossier a été automatiquement transféré à la phase suivante.";
                     log.info("Workflow automatiquement avancé pour le dossier {}", dossier.getId());
                 } catch (Exception workflowError) {
@@ -821,16 +816,16 @@ public class TerrainVisitService {
             extension = originalFilename.substring(originalFilename.lastIndexOf("."));
         }
         return UUID.randomUUID().toString() + extension;
-    }
-
-    private void createAuditTrail(String action, Dossier dossier, Utilisateur utilisateur, String description) {
+    }    private void createAuditTrail(String action, Dossier dossier, Utilisateur utilisateur, String description) {
         AuditTrail audit = new AuditTrail();
+        audit.setTimestamp(LocalDateTime.now());
+        audit.setUserId(utilisateur.getId());
         audit.setAction(action);
-        audit.setEntite("Dossier");
-        audit.setEntiteId(dossier.getId());
-        audit.setDateAction(LocalDateTime.now());
-        audit.setUtilisateur(utilisateur);
-        audit.setDescription(description);
+        audit.setEntityType("Dossier");
+        audit.setEntityId(dossier.getId());
+        audit.setOldValue(null);
+        audit.setNewValue(null);
+        audit.setDetails(description);
         auditTrailRepository.save(audit);
     }
 }

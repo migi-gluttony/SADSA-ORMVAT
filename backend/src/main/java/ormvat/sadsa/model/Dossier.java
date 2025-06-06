@@ -65,9 +65,6 @@ public class Dossier {
     private List<WorkflowInstance> workflowInstances;
 
     @OneToMany(mappedBy = "dossier", cascade = CascadeType.ALL)
-    private List<HistoriqueWorkflow> historiqueWorkflows;
-
-    @OneToMany(mappedBy = "dossier", cascade = CascadeType.ALL)
     private List<PieceJointe> pieceJointes;
 
     @OneToMany(mappedBy = "dossier", cascade = CascadeType.ALL)
