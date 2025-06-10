@@ -1341,3 +1341,504 @@ function formatDate(date) {
 }
 </script>
 
+<style scoped>
+.create-dossier-container {
+  padding: 1.5rem;
+  background: #f8f9fa;
+  min-height: 100vh;
+}
+
+/* Component Card Base */
+.component-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+/* Stepper Styling */
+.stepper-container {
+  padding: 1rem 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.stepper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+}
+
+.stepper::before {
+  content: '';
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  height: 2px;
+  background: #e5e7eb;
+  z-index: 1;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  max-width: 200px;
+}
+
+.step-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+.step.active .step-number {
+  background: #3b82f6;
+  color: white;
+}
+
+.step.completed .step-number {
+  background: #10b981;
+  color: white;
+}
+
+.step-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.step.active .step-label {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.step.completed .step-label {
+  color: #10b981;
+}
+
+/* Section Headers */
+h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 1.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 1rem 0;
+}
+
+/* Search Section */
+.search-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.search-container {
+  position: relative;
+  flex: 1;
+  max-width: 400px;
+}
+
+.search-input {
+  width: 100%;
+  padding-left: 2.5rem;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+}
+
+.clear-search-btn {
+  min-width: auto;
+  padding: 0.5rem;
+}
+
+/* Project Types Grid */
+.project-types-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.rubrique-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.25rem;
+  background: #f9fafb;
+}
+
+.rubrique-card h3 {
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.rubrique-description {
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.sous-rubriques {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.project-type {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.project-type:hover {
+  border-color: #3b82f6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+}
+
+.project-type.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.project-icon {
+  width: 40px;
+  height: 40px;
+  background: #f3f4f6;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.project-type.selected .project-icon {
+  background: #3b82f6;
+  color: white;
+}
+
+.project-info h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 0.25rem 0;
+}
+
+.project-info p {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.4;
+}
+
+.documents-list {
+  margin-top: 0.5rem;
+}
+
+.documents-list small {
+  color: #374151;
+  font-weight: 500;
+}
+
+.documents-list ul {
+  margin: 0.25rem 0 0 0;
+  padding-left: 1rem;
+  list-style-type: disc;
+}
+
+.documents-list li {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-bottom: 0.125rem;
+}
+
+/* Search Results */
+.search-results {
+  margin-bottom: 1.5rem;
+}
+
+.search-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 1rem;
+}
+
+.search-result {
+  border: 2px solid #fbbf24;
+  background: #fffbeb;
+}
+
+.search-result:hover {
+  border-color: #f59e0b;
+}
+
+.search-result.selected {
+  border-color: #f59e0b;
+  background: #fef3c7;
+}
+
+/* Form Sections */
+.form-section {
+  margin-bottom: 2rem;
+}
+
+.form-section:last-child {
+  margin-bottom: 0;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.form-group label.required::after {
+  content: ' *';
+  color: #ef4444;
+}
+
+:deep(.p-inputtext),
+:deep(.p-dropdown),
+:deep(.p-calendar input) {
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  padding: 0.75rem;
+  transition: border-color 0.2s ease;
+}
+
+:deep(.p-inputtext:focus),
+:deep(.p-dropdown:focus),
+:deep(.p-calendar input:focus) {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+:deep(.p-dropdown .p-dropdown-label) {
+  padding: 0.75rem;
+}
+
+/* Summary Section */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.summary-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.summary-card h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.summary-item:last-child {
+  border-bottom: none;
+}
+
+.summary-label {
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.summary-value {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+/* Navigation Buttons */
+.step-navigation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.nav-buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+/* Loading and Error States */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: #6b7280;
+}
+
+.loading-text {
+  margin-top: 1rem;
+  font-size: 0.95rem;
+}
+
+.error-container {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+/* Validation Errors */
+.error-message {
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+:deep(.p-inputtext.p-invalid),
+:deep(.p-dropdown.p-invalid) {
+  border-color: #dc2626;
+}
+
+/* Toast Messages */
+:deep(.p-toast) {
+  z-index: 1050;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .create-dossier-container {
+    padding: 1rem;
+  }
+  
+  .component-card {
+    padding: 1rem;
+  }
+  
+  .stepper {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .stepper::before {
+    display: none;
+  }
+  
+  .step {
+    flex-direction: row;
+    justify-content: flex-start;
+    width: 100%;
+    max-width: none;
+  }
+  
+  .step-number {
+    margin-bottom: 0;
+    margin-right: 0.75rem;
+  }
+  
+  .step-label {
+    text-align: left;
+  }
+  
+  .sous-rubriques {
+    grid-template-columns: 1fr;
+  }
+  
+  .search-results-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .step-navigation {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .nav-buttons {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 480px) {
+  .project-type {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .project-icon {
+    align-self: center;
+  }
+}
+</style>
+

@@ -6,12 +6,25 @@ import ApiService from './ApiService';
  */
 const AuthService = {
   /**
+   * Clear all authentication data
+   */
+  clearAuthData() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
+  },
+
+  /**
    * Register a new user
    * @param {Object} userData - User registration data
    * @returns {Promise} - Promise with registration response
    */
   async register(userData) {
     try {
+      // Clear any existing auth data before registration
+      this.clearAuthData();
+      
       const response = await ApiService.post('/auth/register', userData);
       
       // Store token if registration includes immediate login
@@ -29,9 +42,7 @@ const AuthService = {
       console.error('Registration error:', error);
       
       // Improve error handling
-      if (error.response?.data?.message) {
-        throw new Error(error.response.data.message);
-      } else if (error.message) {
+      if (error.message) {
         throw new Error(error.message);
       } else {
         throw new Error('Erreur lors de la création du compte');
@@ -82,8 +93,8 @@ const AuthService = {
         return true; // Invalid token or no expiration
       }
 
-      // exp is in seconds, Date.now() is in milliseconds
-      const currentTime = Math.floor(Date.now() / 1000);
+      // Add 30 seconds buffer to account for network delays
+      const currentTime = Math.floor(Date.now() / 1000) + 30;
 
       return tokenData.exp < currentTime;
     } catch (error) {
@@ -112,6 +123,9 @@ const AuthService = {
    */
   async login(email, motDePasse, rememberMe = false) {
     try {
+      // Clear any existing auth data before login attempt
+      this.clearAuthData();
+
       // Match the field names expected by the backend (LoginRequest.java)
       const response = await ApiService.post('/auth/login', {
         email,
@@ -123,17 +137,22 @@ const AuthService = {
         // Parse token to extract user info
         const userInfo = this.parseToken(response.token);
 
+        if (!userInfo) {
+          throw new Error('Token invalide reçu du serveur');
+        }
+
+        // Store based on remember me preference
         if (rememberMe) {
           localStorage.setItem('token', response.token);
-          if (userInfo) {
-            localStorage.setItem('user', JSON.stringify(userInfo));
-          }
+          localStorage.setItem('user', JSON.stringify(userInfo));
         } else {
           sessionStorage.setItem('token', response.token);
-          if (userInfo) {
-            sessionStorage.setItem('user', JSON.stringify(userInfo));
-          }
+          sessionStorage.setItem('user', JSON.stringify(userInfo));
         }
+
+        console.log('Login successful, user:', userInfo);
+      } else {
+        throw new Error('Aucun token reçu du serveur');
       }
 
       // Dispatch event when authentication state changes
@@ -143,13 +162,14 @@ const AuthService = {
     } catch (error) {
       console.error('Login error:', error);
       
-      // Improve error handling
-      if (error.response?.status === 401) {
+      // Clear any auth data on login failure
+      this.clearAuthData();
+      
+      // Improve error handling based on status codes and messages
+      if (error.message.includes('401') || error.message.includes('incorrect')) {
         throw new Error('Email ou mot de passe incorrect');
-      } else if (error.response?.status === 403) {
+      } else if (error.message.includes('403') || error.message.includes('activé')) {
         throw new Error('Votre compte n\'est pas encore activé');
-      } else if (error.response?.data?.message) {
-        throw new Error(error.response.data.message);
       } else if (error.message) {
         throw new Error(error.message);
       } else {
@@ -162,10 +182,8 @@ const AuthService = {
    * Logout the current user
    */
   logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('user');
+    console.log('Logging out user');
+    this.clearAuthData();
 
     // Dispatch event when authentication state changes
     window.dispatchEvent(new CustomEvent('auth-state-changed'));
@@ -187,10 +205,10 @@ const AuthService = {
       console.error('Password change error:', error);
       
       // Improve error handling
-      if (error.response?.status === 400) {
+      if (error.message.includes('400') || error.message.includes('incorrect')) {
         throw new Error('Mot de passe actuel incorrect');
-      } else if (error.response?.data?.message) {
-        throw new Error(error.response.data.message);
+      } else if (error.message) {
+        throw new Error(error.message);
       } else {
         throw new Error('Erreur lors du changement de mot de passe');
       }
@@ -203,7 +221,14 @@ const AuthService = {
    */
   isAuthenticated() {
     const token = this.getToken();
-    return token !== null && !this.isTokenExpired();
+    const isValid = token !== null && !this.isTokenExpired();
+    
+    if (!isValid && token) {
+      // If token exists but is invalid/expired, clear it
+      this.clearAuthData();
+    }
+    
+    return isValid;
   },
 
   /**
@@ -220,7 +245,40 @@ const AuthService = {
    */
   getCurrentUser() {
     const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
-    return userStr ? JSON.parse(userStr) : null;
+    
+    if (!userStr) {
+      return null;
+    }
+    
+    try {
+      const user = JSON.parse(userStr);
+      
+      // Verify the token is still valid
+      if (this.isTokenExpired()) {
+        this.clearAuthData();
+        return null;
+      }
+      
+      return user;
+    } catch (error) {
+      console.error('Error parsing user data:', error);
+      this.clearAuthData();
+      return null;
+    }
+  },
+
+  /**
+   * Refresh authentication state - useful for checking after page reload
+   */
+  refreshAuthState() {
+    const isAuth = this.isAuthenticated();
+    
+    if (!isAuth) {
+      this.clearAuthData();
+    }
+    
+    window.dispatchEvent(new CustomEvent('auth-state-changed'));
+    return isAuth;
   }
 };
 

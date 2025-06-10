@@ -6,12 +6,14 @@ import AuthService from '../services/AuthService'
 import RegisterView from '@/views/auth/RegisterView.vue'
 import LandingPage from '@/views/LandingPage.vue'
 import CreateDossierView from '@/views/agent_antenne/CreateDossierView.vue'
-import DossierListView from '@/views/common/DossierListView.vue'
 import DossierDetailView from '@/views/common/DossierDetailView.vue'
 import AdminDocumentRequisView from '@/views/admin/AdminDocumentRequisView.vue'
 import DocumentFillingView from '@/components/agent_antenne/document_filling/DocumentFillingView.vue'
 import ProfileView from '@/views/common/ProfileView.vue'
 import TerrainVisitsView from '@/views/agent_commission/TerrainVisitsView.vue'
+import AgentAntenneDossierListView from '@/components/agent_antenne/dossier_list/AgentAntenneDossierListView.vue'
+import AgentGUCDossierListView from '@/components/agent_guc/dossier_list/AgentGUCDossierListView.vue'
+import AgentCommissionDossierListView from '@/components/agent_commission/dossier_list/AgentCommissionDossierListView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -47,10 +49,10 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     // Agent Antenne Routes
-    {
+     {
       path: '/agent_antenne/dossiers',
       name: 'agent-antenne-dossiers-list',
-      component: DossierListView,
+      component: AgentAntenneDossierListView,
       meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE', title: 'Mes Dossiers' }
     },
     {
@@ -100,7 +102,7 @@ const router = createRouter({
     {
       path: '/agent_guc/dossiers',
       name: 'agent-guc-dossiers-list',
-      component: DossierListView,
+      component: AgentGUCDossierListView,
       meta: { requiresAuth: true, requiresRole: 'AGENT_GUC', title: 'Dossiers - Guichet Unique Central' }
     },
     {
@@ -129,7 +131,7 @@ const router = createRouter({
     {
       path: '/agent_commission/dossiers',
       name: 'agent-commission-dossiers-list',
-      component: DossierListView,
+      component: AgentCommissionDossierListView,
       meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION_TERRAIN', title: 'Dossiers - Commission AHA-AF' }
     },
     {
