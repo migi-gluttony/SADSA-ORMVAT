@@ -55,14 +55,9 @@ public class Dossier {
 
     @ManyToOne
     @JoinColumn(name = "sous_rubrique_id")
-    private SousRubrique sousRubrique;
-
-    @ManyToOne
+    private SousRubrique sousRubrique;    @ManyToOne
     @JoinColumn(name = "utilisateur_createur_id")
     private Utilisateur utilisateurCreateur;
-
-    @OneToMany(mappedBy = "dossier", cascade = CascadeType.ALL)
-    private List<WorkflowInstance> workflowInstances;
 
     @OneToMany(mappedBy = "dossier", cascade = CascadeType.ALL)
     private List<PieceJointe> pieceJointes;
