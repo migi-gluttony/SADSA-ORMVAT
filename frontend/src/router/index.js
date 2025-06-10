@@ -8,13 +8,12 @@ import LandingPage from '@/views/LandingPage.vue'
 import CreateDossierView from '@/views/agent_antenne/CreateDossierView.vue'
 import DossierDetailView from '@/views/common/DossierDetailView.vue'
 import AdminDocumentRequisView from '@/views/admin/AdminDocumentRequisView.vue'
-import DocumentFillingView from '@/components/agent_antenne/document_filling/DocumentFillingView.vue'
 import ProfileView from '@/views/common/ProfileView.vue'
 import TerrainVisitsView from '@/views/agent_commission/TerrainVisitsView.vue'
 import AgentAntenneDossierListView from '@/components/agent_antenne/dossier_list/AgentAntenneDossierListView.vue'
 import AgentGUCDossierListView from '@/components/agent_guc/dossier_list/AgentGUCDossierListView.vue'
 import AgentCommissionDossierListView from '@/components/agent_commission/dossier_list/AgentCommissionDossierListView.vue'
-
+import AgentAntenneDossierDetailView from '@/components/agent_antenne/dossier_details/AgentAntenneDossierDetailView.vue'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -64,22 +63,8 @@ const router = createRouter({
     {
       path: '/agent_antenne/dossiers/:dossierId',
       name: 'agent-antenne-dossier-detail',
-      component: DossierDetailView,
+      component: AgentAntenneDossierDetailView,
       meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE', title: 'Détails du Dossier' },
-      props: true
-    },
-    {
-      path: '/agent_antenne/dossiers/:dossierId/forms',
-      name: 'agent-antenne-dossier-forms',
-      component: DossierDetailView,
-      meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE', title: 'Formulaires du Dossier' },
-      props: true
-    },
-    {
-      path: '/agent_antenne/dossiers/documents/:dossierId',
-      name: 'dossier-documents',
-      component: DocumentFillingView,
-      meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE', title: 'Documents du Dossier' },
       props: true
     },
     {

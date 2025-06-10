@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import ormvat.sadsa.model.PieceJointe;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -16,22 +18,9 @@ public class DocumentFillingDTOs {
     @NoArgsConstructor
     public static class DossierDocumentsResponse {
         private DossierSummaryDTO dossier;
-        private List<DocumentRequisWithFilesDTO> documentsRequis;
+        private List<DocumentWithPiecesDTO> documentsRequis;
         private DocumentStatisticsDTO statistics;
         private NavigationInfoDTO navigationInfo;
-    }
-
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class NavigationInfoDTO {
-        private String backUrl;
-        private String dossierDetailUrl;
-        private String dossierManagementUrl;
-        private Boolean showBackButton;
-        private String currentStep;
-        private String nextStep;
     }
 
     @Data
@@ -69,34 +58,20 @@ public class DocumentFillingDTOs {
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor
-    public static class DocumentRequisWithFilesDTO {
-        private Long id;
+    public static class DocumentWithPiecesDTO {
+        private Long documentRequisId;
         private String nomDocument;
         private String description;
         private Boolean obligatoire;
-        private String locationFormulaire;
-        private Map<String, Object> formStructure;
-        private List<PieceJointeGroupDTO> fichierGroups; // Grouped files
-        private Map<String, Object> formData;
-        private String status;
+        private String locationFormulaire; // Path to form structure JSON if exists
+        
+        // All pieces for this document requis
+        private List<PieceJointeDTO> pieces;
+        
+        // Status and progress
+        private String status; // MISSING, PARTIAL, COMPLETE
         private DocumentProgressDTO progress;
-        private String documentCategory; // For grouping
-        private Integer order; // Display order
-    }
-
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class PieceJointeGroupDTO {
-        private String groupName; // "Fichiers téléchargés", "Données formulaire", etc.
-        private String groupType; // "FILES", "FORM_DATA", "MIXED"
-        private List<PieceJointeDTO> files;
-        private Integer totalFiles;
-        private Long totalSize;
-        private LocalDateTime lastUpdated;
-        private Boolean isComplete;
-        private String groupStatus;
+        private Map<String, Object> formStructure; // Parsed from locationFormulaire
     }
 
     @Data
@@ -107,17 +82,24 @@ public class DocumentFillingDTOs {
         private Long id;
         private String nomFichier;
         private String cheminFichier;
-        private String typeDocument;
-        private String status;
-        private LocalDateTime dateUpload;
-        private String utilisateurNom;
-        private Long tailleFichier;
-        private String formatFichier;
-        private String displayName; // User-friendly name
+        private PieceJointe.DocumentType documentType;
+        private String title;
         private String description;
+        private PieceJointe.DocumentStatus status;
+        private Boolean isRequired;
+        private LocalDateTime dateUpload;
+        private LocalDateTime lastEdited;
+        private String utilisateurNom;
+        
+        // Form data
+        private Map<String, Object> formData;
+        private Boolean hasFile;
+        private Boolean hasFormData;
+        
+        // Actions
+        private Boolean canEdit;
         private Boolean canDelete;
         private Boolean canDownload;
-        private String thumbnailUrl; // For images
     }
 
     @Data
@@ -145,12 +127,25 @@ public class DocumentFillingDTOs {
         private Integer documentsManquants;
         private Integer documentsOptionnels;
         private Double pourcentageCompletion;
-        private Integer totalFiles;
-        private Long totalFileSize;
-        private Integer formsCompleted;
-        private Integer formsTotal;
+        private Integer totalPieces;
+        private Integer piecesWithFiles;
+        private Integer piecesWithFormData;
     }
 
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class NavigationInfoDTO {
+        private String backUrl;
+        private String dossierDetailUrl;
+        private String dossierManagementUrl;
+        private Boolean showBackButton;
+        private String currentStep;
+        private String nextStep;
+    }
+
+    // Request DTOs
     @Data
     @Builder
     @AllArgsConstructor
@@ -158,23 +153,9 @@ public class DocumentFillingDTOs {
     public static class UploadDocumentRequest {
         private Long dossierId;
         private Long documentRequisId;
-        private String typeDocument;
+        private String title;
         private String description;
-        private String displayName;
-    }
-
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class UploadDocumentResponse {
-        private Long pieceJointeId;
-        private String nomFichier;
-        private String cheminFichier;
-        private String message;
-        private Boolean success;
-        private PieceJointeDTO uploadedFile;
-        private DocumentProgressDTO updatedProgress;
+        private PieceJointe.DocumentType documentType;
     }
 
     @Data
@@ -185,8 +166,34 @@ public class DocumentFillingDTOs {
         private Long dossierId;
         private Long documentRequisId;
         private Map<String, Object> formData;
-        private Boolean isProgressSave; // True for auto-save, false for final save
-        private String saveType; // "AUTO", "MANUAL", "FINAL"
+        private String title;
+        private String description;
+        private Boolean isAutoSave = false;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class SaveMixedDocumentRequest {
+        private Long dossierId;
+        private Long documentRequisId;
+        private Map<String, Object> formData;
+        private String title;
+        private String description;
+    }
+
+    // Response DTOs
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class UploadDocumentResponse {
+        private Boolean success;
+        private String message;
+        private PieceJointeDTO uploadedPiece;
+        private DocumentProgressDTO updatedProgress;
+        private LocalDateTime timestamp;
     }
 
     @Data
@@ -196,20 +203,9 @@ public class DocumentFillingDTOs {
     public static class SaveFormDataResponse {
         private Boolean success;
         private String message;
-        private Map<String, Object> savedData;
+        private PieceJointeDTO savedPiece;
         private DocumentProgressDTO updatedProgress;
-        private LocalDateTime lastSaved;
-        private String saveType;
-    }
-
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class DeleteDocumentRequest {
-        private Long pieceJointeId;
-        private String motif;
-        private Boolean confirmDelete;
+        private LocalDateTime timestamp;
     }
 
     @Data
@@ -220,84 +216,34 @@ public class DocumentFillingDTOs {
         private Boolean success;
         private String message;
         private DocumentProgressDTO updatedProgress;
+        private LocalDateTime timestamp;
     }
 
     @Data
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor
-    public static class FormValidationRequest {
-        private Long dossierId;
-        private Long documentRequisId;
-        private Map<String, Object> formData;
-    }
-
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class FormValidationResponse {
-        private Boolean isValid;
-        private List<FormValidationError> errors;
-        private List<FormValidationWarning> warnings;
-        private Map<String, Object> validatedData;
-    }
-
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class FormValidationError {
-        private String field;
-        private String message;
-        private String errorCode;
-        private String severity;
-    }
-
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class FormValidationWarning {
-        private String field;
-        private String message;
-        private String warningCode;
-    }
-
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class BulkUploadRequest {
-        private Long dossierId;
-        private List<Long> documentRequisIds;
-        private String uploadType; // "SINGLE_FORM", "MULTIPLE_FORMS"
-    }
-
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class BulkUploadResponse {
+    public static class ApiResponse<T> {
         private Boolean success;
         private String message;
-        private List<UploadDocumentResponse> uploadResults;
-        private Integer totalUploaded;
-        private Integer totalFailed;
-        private DocumentStatisticsDTO updatedStatistics;
-    }
-
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class DocumentTemplateDTO {
-        private Long documentRequisId;
-        private String templateName;
-        private String templateDescription;
-        private String templateUrl;
-        private String templateType; // "PDF", "WORD", "EXCEL"
-        private Boolean isRequired;
-        private List<String> instructions;
+        private T data;
+        private LocalDateTime timestamp;
+        
+        public static <T> ApiResponse<T> success(T data, String message) {
+            return ApiResponse.<T>builder()
+                    .success(true)
+                    .message(message)
+                    .data(data)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+        }
+        
+        public static <T> ApiResponse<T> error(String message) {
+            return ApiResponse.<T>builder()
+                    .success(false)
+                    .message(message)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+        }
     }
 }

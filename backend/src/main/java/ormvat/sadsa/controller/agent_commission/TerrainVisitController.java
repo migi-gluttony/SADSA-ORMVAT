@@ -3,20 +3,17 @@ package ormvat.sadsa.controller.agent_commission;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import ormvat.sadsa.dto.agent_commission.TerrainVisitDTOs.*;
+import ormvat.sadsa.dto.agent_antenne.DocumentFillingDTOs.*;
 import ormvat.sadsa.service.agent_commission.TerrainVisitService;
+import ormvat.sadsa.service.agent_antenne.DocumentFillingService;
 
 import jakarta.validation.Valid;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 
 @RestController
@@ -26,6 +23,7 @@ import java.util.List;
 public class TerrainVisitController {
 
     private final TerrainVisitService terrainVisitService;
+    private final DocumentFillingService documentFillingService; // NEW: For photo management
 
     /**
      * Get dashboard summary for commission agent
@@ -224,7 +222,7 @@ public class TerrainVisitController {
     }
 
     /**
-     * Upload photos for a terrain visit
+     * Upload photos for a terrain visit using new simplified structure
      */
     @PostMapping("/{visiteId}/photos")
     public ResponseEntity<TerrainVisitActionResponse> uploadVisitPhotos(
@@ -260,21 +258,75 @@ public class TerrainVisitController {
                     .build()
             );
         }
-    }
-
-    /**
-     * Delete a photo from terrain visit
+    }    /**
+     * Upload single photo for terrain visit using new simplified structure
      */
-    @DeleteMapping("/photos/{photoId}")
-    public ResponseEntity<TerrainVisitActionResponse> deleteVisitPhoto(
-            @PathVariable Long photoId,
+    @PostMapping("/{visiteId}/photos/single")
+    public ResponseEntity<ApiResponse<TerrainVisitActionResponse>> uploadSingleTerrainPhoto(
+            @PathVariable Long visiteId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "coordonneesGPS", required = false) String coordonneesGPS,
             Authentication authentication) {
         
         try {
             String userEmail = authentication.getName();
-            log.info("Suppression photo {} par: {}", photoId, userEmail);
+            log.info("Upload photo terrain unique pour visite {} par: {}", visiteId, userEmail);
 
-            TerrainVisitActionResponse response = terrainVisitService.deleteVisitPhoto(photoId, userEmail);
+            if (file.isEmpty()) {
+                return ResponseEntity.badRequest().body(
+                    ApiResponse.error("Aucun fichier sélectionné"));
+            }
+            
+            TerrainVisitActionResponse response = terrainVisitService.uploadVisitPhotos(
+                    visiteId, 
+                    List.of(file), 
+                    List.of(description != null ? description : ""), 
+                    List.of(coordonneesGPS != null ? coordonneesGPS : ""), 
+                    userEmail);
+            
+            return ResponseEntity.ok(ApiResponse.success(response, "Photo terrain uploadée avec succès"));
+
+        } catch (Exception e) {
+            log.error("Erreur lors de l'upload de la photo terrain: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error("Erreur: " + e.getMessage()));
+        }
+    }/**
+     * Get all photos for a terrain visit using new simplified structure
+     */
+    @GetMapping("/{visiteId}/photos")    public ResponseEntity<ApiResponse<List<PhotoVisiteDTO>>> getTerrainPhotos(
+            @PathVariable Long visiteId,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Récupération photos terrain pour visite {} par: {}", visiteId, userEmail);
+
+            List<PhotoVisiteDTO> photos = terrainVisitService.getVisitPhotos(visiteId, userEmail);
+            
+            return ResponseEntity.ok(ApiResponse.success(photos, "Photos récupérées avec succès"));
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération des photos terrain: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error("Erreur: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Delete a photo from terrain visit using new simplified structure
+     */
+    @DeleteMapping("/photos/{pieceJointeId}")
+    public ResponseEntity<TerrainVisitActionResponse> deleteVisitPhoto(
+            @PathVariable Long pieceJointeId,
+            Authentication authentication) {
+        
+        try {
+            String userEmail = authentication.getName();
+            log.info("Suppression photo terrain {} par: {}", pieceJointeId, userEmail);
+
+            TerrainVisitActionResponse response = terrainVisitService.deleteVisitPhoto(pieceJointeId, userEmail);
             return ResponseEntity.ok(response);
 
         } catch (RuntimeException e) {
@@ -297,29 +349,23 @@ public class TerrainVisitController {
     }
 
     /**
-     * Download a photo from terrain visit
+     * Download a photo from terrain visit using new simplified structure
      */
-    @GetMapping("/photos/{photoId}/download")
+    @GetMapping("/photos/{pieceJointeId}/download")
     public ResponseEntity<Resource> downloadVisitPhoto(
-            @PathVariable Long photoId,
+            @PathVariable Long pieceJointeId,
             Authentication authentication) {
         
         try {
             String userEmail = authentication.getName();
-            log.info("Téléchargement photo {} par: {}", photoId, userEmail);
+            log.info("Téléchargement photo terrain {} par: {}", pieceJointeId, userEmail);
 
-            // This would need implementation in the service to get photo details
-            // For now, return a placeholder implementation
-            
-            // Path photoPath = terrainVisitService.getPhotoPath(photoId, userEmail);
-            // Resource resource = new UrlResource(photoPath.toUri());
-            
-            // Placeholder - in real implementation, get actual file path from service
-            return ResponseEntity.notFound().build();
+            // Use the document service for downloads
+            return documentFillingService.downloadDocument(pieceJointeId, userEmail);
 
         } catch (Exception e) {
-            log.error("Erreur lors du téléchargement de la photo", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            log.error("Erreur lors du téléchargement de la photo terrain: {}", e.getMessage());
+            throw new RuntimeException("Erreur lors du téléchargement: " + e.getMessage());
         }
     }
 

@@ -3,6 +3,7 @@ package ormvat.sadsa.service.agent_commission;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -11,31 +12,35 @@ import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
 import ormvat.sadsa.service.workflow.WorkflowService;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
-import java.util.UUID;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class TerrainVisitService {    private final VisiteTerrainRepository visiteTerrainRepository;
-    private final PhotoVisiteRepository photoVisiteRepository;
+public class TerrainVisitService {
+    
+    private final VisiteTerrainRepository visiteTerrainRepository;
+    private final PieceJointeRepository pieceJointeRepository;
     private final DossierRepository dossierRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final AuditTrailRepository auditTrailRepository;
 
+    @Value("${app.upload.dir:./uploads/ormvat_sadsa}")
+    private String uploadDir;
+
     // Optional WorkflowService injection to avoid circular dependencies
     @Autowired(required = false)
     private WorkflowService workflowService;
-
-    private static final String UPLOAD_DIR = "uploads/terrain-visits/";
 
     /**
      * Get dashboard summary for commission agent
@@ -344,7 +349,9 @@ public class TerrainVisitService {    private final VisiteTerrainRepository visi
                 dossier.setStatus(Dossier.DossierStatus.REJECTED);
                 log.info("Terrain rejeté pour le dossier {}", dossier.getId());
             }
-            dossierRepository.save(dossier);            // ✅ NEW: Automatically advance workflow to next phase (only if approved)
+            dossierRepository.save(dossier);
+
+            // ✅ NEW: Automatically advance workflow to next phase (only if approved)
             String workflowMessage = "Visite terrain terminée";
             if (request.getApprouve() && workflowService != null) {
                 try {
@@ -384,7 +391,7 @@ public class TerrainVisitService {    private final VisiteTerrainRepository visi
     }
 
     /**
-     * Upload photos for terrain visit
+     * Upload photos for terrain visit using new simplified structure
      */
     @Transactional
     public TerrainVisitActionResponse uploadVisitPhotos(Long visiteId, List<MultipartFile> files,
@@ -400,39 +407,19 @@ public class TerrainVisitService {    private final VisiteTerrainRepository visi
                 throw new RuntimeException("Vous n'avez pas l'autorisation d'ajouter des photos à cette visite");
             }
 
-            // Create upload directory if it doesn't exist
-            Path uploadPath = Paths.get(UPLOAD_DIR);
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
-            }
-
             int photosUploaded = 0;
             for (int i = 0; i < files.size(); i++) {
                 MultipartFile file = files.get(i);
                 String description = descriptions != null && i < descriptions.size() ? descriptions.get(i) : "";
-                String gps = coordonnees != null && i < coordonnees.size() ? coordonnees.get(i) : "";
-
-                if (!file.isEmpty()) {
-                    // Validate file type and size
-                    if (!isValidImageFile(file)) {
-                        continue; // Skip invalid files
+                String gps = coordonnees != null && i < coordonnees.size() ? coordonnees.get(i) : "";                if (!file.isEmpty() && isValidImageFile(file)) {
+                    try {
+                        // Upload terrain photo directly
+                        uploadTerrainPhotoInternal(visiteId, file, description, gps, userEmail);
+                        photosUploaded++;
+                    } catch (Exception e) {
+                        log.warn("Erreur lors de l'upload de la photo {}: {}", file.getOriginalFilename(), e.getMessage());
+                        // Continue with other photos
                     }
-
-                    String fileName = generateUniqueFileName(file.getOriginalFilename());
-                    Path filePath = uploadPath.resolve(fileName);
-                    Files.copy(file.getInputStream(), filePath);
-
-                    // Create photo record
-                    PhotoVisite photo = new PhotoVisite();
-                    photo.setVisiteTerrain(visite);
-                    photo.setNomFichier(file.getOriginalFilename());
-                    photo.setCheminFichier(filePath.toString());
-                    photo.setDescription(description);
-                    photo.setCoordonneesGPS(gps);
-                    photo.setDatePrise(LocalDateTime.now());
-
-                    photoVisiteRepository.save(photo);
-                    photosUploaded++;
                 }
             }
 
@@ -449,9 +436,6 @@ public class TerrainVisitService {    private final VisiteTerrainRepository visi
                     .dateAction(LocalDateTime.now())
                     .build();
 
-        } catch (IOException e) {
-            log.error("Erreur IO lors de l'upload des photos", e);
-            throw new RuntimeException("Erreur lors de l'upload des photos: " + e.getMessage());
         } catch (Exception e) {
             log.error("Erreur lors de l'upload des photos", e);
             throw new RuntimeException("Erreur lors de l'upload: " + e.getMessage());
@@ -459,41 +443,16 @@ public class TerrainVisitService {    private final VisiteTerrainRepository visi
     }
 
     /**
-     * Delete a photo from terrain visit
-     */
-    @Transactional
-    public TerrainVisitActionResponse deleteVisitPhoto(Long photoId, String userEmail) {
+     * Delete a photo from terrain visit using new simplified structure
+     */    @Transactional
+    public TerrainVisitActionResponse deleteVisitPhoto(Long pieceJointeId, String userEmail) {
         try {
-            Utilisateur utilisateur = getCommissionAgent(userEmail);
-            PhotoVisite photo = photoVisiteRepository.findById(photoId)
-                    .orElseThrow(() -> new RuntimeException("Photo non trouvée"));
-
-            VisiteTerrain visite = photo.getVisiteTerrain();
-            
-            // Check permission
-            if (!canModifyVisit(visite, utilisateur)) {
-                throw new RuntimeException("Vous n'avez pas l'autorisation de supprimer cette photo");
-            }
-
-            // Delete physical file
-            try {
-                Path filePath = Paths.get(photo.getCheminFichier());
-                Files.deleteIfExists(filePath);
-            } catch (IOException e) {
-                log.warn("Impossible de supprimer le fichier physique: " + photo.getCheminFichier(), e);
-            }
-
-            // Delete database record
-            photoVisiteRepository.delete(photo);
-
-            createAuditTrail("PHOTO_VISITE_SUPPRIMEE", visite.getDossier(), utilisateur,
-                    "Photo supprimée: " + photo.getNomFichier() + " par " + 
-                    (utilisateur.getEquipeCommission() != null ? utilisateur.getEquipeCommission().getDisplayName() : "Commission"));
+            // Delete terrain photo directly
+            deleteTerrainPhotoInternal(pieceJointeId, userEmail);
 
             return TerrainVisitActionResponse.builder()
                     .success(true)
                     .message("Photo supprimée avec succès")
-                    .visiteId(visite.getId())
                     .dateAction(LocalDateTime.now())
                     .build();
 
@@ -503,7 +462,55 @@ public class TerrainVisitService {    private final VisiteTerrainRepository visi
         }
     }
 
-    // Private helper methods (keeping all original logic)
+    /**
+     * Get all photos for a terrain visit
+     */    public List<PhotoVisiteDTO> getVisitPhotos(Long visiteId, String userEmail) {
+        try {
+            VisiteTerrain visite = visiteTerrainRepository.findById(visiteId)
+                    .orElseThrow(() -> new RuntimeException("Visite terrain non trouvée"));
+
+            // Get all terrain photos for this dossier with the visite ID in metadata
+            List<PieceJointe> photos = pieceJointeRepository.findByDossierIdAndDocumentType(
+                    visite.getDossier().getId(), PieceJointe.DocumentType.TERRAIN_PHOTO);
+
+            // Filter photos that belong to this specific visit (stored in form data)
+            return photos.stream()
+                    .filter(photo -> {
+                        try {
+                            Map<String, Object> metadata = photo.getFormDataAsMap();
+                            Object visiteIdFromMetadata = metadata.get("visite_id");
+                            return visiteIdFromMetadata != null && 
+                                   Long.valueOf(visiteIdFromMetadata.toString()).equals(visiteId);
+                        } catch (Exception e) {
+                            return false; // Skip photos without proper metadata
+                        }
+                    })
+                    .map(this::mapToPhotoVisiteDTO)
+                    .collect(Collectors.toList());
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération des photos terrain: {}", e.getMessage());
+            throw new RuntimeException("Erreur lors de la récupération des photos: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Map PieceJointe to PhotoVisiteDTO
+     */
+    private PhotoVisiteDTO mapToPhotoVisiteDTO(PieceJointe pieceJointe) {
+        Map<String, Object> metadata = pieceJointe.getFormDataAsMap();
+        String gpsCoordinates = (String) metadata.get("gps_coordinates");
+        String photoDescription = (String) metadata.get("photo_description");        return PhotoVisiteDTO.builder()
+                .id(pieceJointe.getId())
+                .nomFichier(pieceJointe.getNomFichier())
+                .cheminFichier(pieceJointe.getCheminFichier())
+                .description(photoDescription != null ? photoDescription : pieceJointe.getDescription())
+                .coordonneesGPS(gpsCoordinates)
+                .datePrise(pieceJointe.getDateUpload())
+                .build();
+    }
+
+    // Private helper methods
 
     private Utilisateur getCommissionAgent(String userEmail) {
         Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
@@ -661,7 +668,8 @@ public class TerrainVisitService {    private final VisiteTerrainRepository visi
 
     private VisiteTerrainSummaryDTO mapToVisiteTerrainSummaryDTO(VisiteTerrain visite) {
         Dossier dossier = visite.getDossier();
-        int photosCount = photoVisiteRepository.findByVisiteTerrainId(visite.getId()).size();
+        // UPDATED: Count terrain photos using PieceJointe instead of PhotoVisite
+        int photosCount = pieceJointeRepository.findTerrainPhotosByVisiteId(visite.getId()).size();
         
         return VisiteTerrainSummaryDTO.builder()
                 .id(visite.getId())
@@ -695,9 +703,10 @@ public class TerrainVisitService {    private final VisiteTerrainRepository visi
     }
 
     private VisiteTerrainResponse mapToVisiteTerrainResponse(VisiteTerrain visite, Utilisateur currentUser) {
-        List<PhotoVisiteDTO> photos = photoVisiteRepository.findByVisiteTerrainId(visite.getId())
+        // UPDATED: Get terrain photos using PieceJointe instead of PhotoVisite
+        List<PhotoVisiteDTO> photos = pieceJointeRepository.findTerrainPhotosByVisiteId(visite.getId())
                 .stream()
-                .map(this::mapToPhotoVisiteDTO)
+                .map(this::mapToPieceJointeToPhotoDTO)
                 .collect(Collectors.toList());
 
         Dossier dossier = visite.getDossier();
@@ -739,15 +748,23 @@ public class TerrainVisitService {    private final VisiteTerrainRepository visi
                 .build();
     }
 
-    private PhotoVisiteDTO mapToPhotoVisiteDTO(PhotoVisite photo) {
+    // UPDATED: Map PieceJointe to PhotoVisiteDTO for compatibility
+    private PhotoVisiteDTO mapToPieceJointeToPhotoDTO(PieceJointe pieceJointe) {
+        // Extract GPS coordinates from form data if available
+        String coordonneesGPS = null;
+        if (pieceJointe.hasFormData()) {
+            var formData = pieceJointe.getFormDataAsMap();
+            coordonneesGPS = (String) formData.get("coordonnees_gps");
+        }
+        
         return PhotoVisiteDTO.builder()
-                .id(photo.getId())
-                .nomFichier(photo.getNomFichier())
-                .cheminFichier(photo.getCheminFichier())
-                .description(photo.getDescription())
-                .coordonneesGPS(photo.getCoordonneesGPS())
-                .datePrise(photo.getDatePrise())
-                .downloadUrl("/api/agent_commission/terrain-visits/photos/" + photo.getId() + "/download")
+                .id(pieceJointe.getId())
+                .nomFichier(pieceJointe.getNomFichier())
+                .cheminFichier(pieceJointe.getCheminFichier())
+                .description(pieceJointe.getDescription())
+                .coordonneesGPS(coordonneesGPS)
+                .datePrise(pieceJointe.getDateUpload())
+                .downloadUrl("/api/agent_commission/terrain-visits/photos/" + pieceJointe.getId() + "/download")
                 .build();
     }
 
@@ -810,22 +827,104 @@ public class TerrainVisitService {    private final VisiteTerrainRepository visi
         );
     }
 
-    private String generateUniqueFileName(String originalFilename) {
-        String extension = "";
-        if (originalFilename != null && originalFilename.contains(".")) {
-            extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-        }
-        return UUID.randomUUID().toString() + extension;
-    }    private void createAuditTrail(String action, Dossier dossier, Utilisateur utilisateur, String description) {
+    private void createAuditTrail(String action, Dossier dossier, Utilisateur utilisateur, String description) {
         AuditTrail audit = new AuditTrail();
         audit.setTimestamp(LocalDateTime.now());
-        audit.setUserId(utilisateur.getId());
-        audit.setAction(action);
+        audit.setUserId(utilisateur.getId());        audit.setAction(action);
         audit.setEntityType("Dossier");
         audit.setEntityId(dossier.getId());
         audit.setOldValue(null);
         audit.setNewValue(null);
         audit.setDetails(description);
         auditTrailRepository.save(audit);
+    }    /**
+     * Internal method to upload terrain photo
+     */
+    private void uploadTerrainPhotoInternal(Long visiteId, MultipartFile file, String description, String gps, String userEmail) {
+        try {
+            VisiteTerrain visite = visiteTerrainRepository.findById(visiteId)
+                    .orElseThrow(() -> new RuntimeException("Visite terrain non trouvée"));
+            
+            Utilisateur utilisateur = utilisateurRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+            
+            // Create storage directory
+            Path storageLocation = Paths.get(uploadDir, "terrain-visits").toAbsolutePath().normalize();
+            if (!Files.exists(storageLocation)) {
+                Files.createDirectories(storageLocation);
+            }
+            
+            // Generate unique filename
+            String originalFilename = file.getOriginalFilename();
+            String extension = originalFilename.substring(originalFilename.lastIndexOf('.'));
+            String uniqueFilename = "terrain_" + visiteId + "_" + System.currentTimeMillis() + extension;
+            Path targetLocation = storageLocation.resolve(uniqueFilename);
+            
+            // Save file
+            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+            
+            // Create PieceJointe record
+            PieceJointe pieceJointe = new PieceJointe();
+            pieceJointe.setDossier(visite.getDossier());
+            pieceJointe.setUtilisateur(utilisateur);
+            pieceJointe.setNomFichier(originalFilename);
+            pieceJointe.setCheminFichier(targetLocation.toString());
+            pieceJointe.setDateUpload(LocalDateTime.now());
+            pieceJointe.setDocumentType(PieceJointe.DocumentType.TERRAIN_PHOTO);
+            pieceJointe.setStatus(PieceJointe.DocumentStatus.COMPLETE);
+            
+            // Use description field for photo description and GPS coordinates
+            String fullDescription = description;
+            if (gps != null && !gps.trim().isEmpty()) {
+                fullDescription += " | GPS: " + gps;
+            }
+            pieceJointe.setDescription(fullDescription);
+            
+            // Store additional metadata in form data as JSON
+            if (gps != null && !gps.trim().isEmpty()) {
+                Map<String, Object> metadata = new HashMap<>();
+                metadata.put("type", "terrain_photo");
+                metadata.put("visite_id", visiteId);
+                metadata.put("gps_coordinates", gps);
+                metadata.put("photo_description", description);
+                pieceJointe.setFormDataFromMap(metadata);
+            }
+            
+            pieceJointeRepository.save(pieceJointe);
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de l'upload de la photo terrain: {}", e.getMessage());
+            throw new RuntimeException("Erreur lors de l'upload de la photo: " + e.getMessage());
+        }
+    }    /**
+     * Internal method to delete terrain photo
+     */
+    private void deleteTerrainPhotoInternal(Long pieceJointeId, String userEmail) {
+        try {
+            PieceJointe pieceJointe = pieceJointeRepository.findById(pieceJointeId)
+                    .orElseThrow(() -> new RuntimeException("Document non trouvé"));
+            
+            // Verify it's a terrain photo
+            if (pieceJointe.getDocumentType() != PieceJointe.DocumentType.TERRAIN_PHOTO) {
+                throw new RuntimeException("Ce n'est pas une photo de terrain");
+            }
+            
+            // Delete physical file
+            if (pieceJointe.getCheminFichier() != null) {
+                try {
+                    Path filePath = Paths.get(pieceJointe.getCheminFichier());
+                    Files.deleteIfExists(filePath);
+                } catch (Exception e) {
+                    log.warn("Impossible de supprimer le fichier physique: {}", e.getMessage());
+                }
+            }
+            
+            // Delete database record
+            pieceJointeRepository.delete(pieceJointe);
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de la suppression de la photo terrain: {}", e.getMessage());
+            throw new RuntimeException("Erreur lors de la suppression de la photo: " + e.getMessage());
+        }
     }
 }

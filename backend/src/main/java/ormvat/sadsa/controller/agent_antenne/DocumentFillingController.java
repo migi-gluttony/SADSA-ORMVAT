@@ -3,16 +3,16 @@ package ormvat.sadsa.controller.agent_antenne;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import ormvat.sadsa.dto.agent_antenne.DocumentFillingDTOs.*;
 import ormvat.sadsa.service.agent_antenne.DocumentFillingService;
 
+import java.security.Principal;
+
 @RestController
-@RequestMapping("/api/agent_antenne/dossiers/{dossierId}/documents")
+@RequestMapping("/api/agent_antenne/documents")
 @RequiredArgsConstructor
 @Slf4j
 public class DocumentFillingController {
@@ -20,188 +20,163 @@ public class DocumentFillingController {
     private final DocumentFillingService documentFillingService;
 
     /**
-     * Get dossier details with required documents and uploaded files
+     * Get all documents for a dossier with completion status
      */
-    @GetMapping
-    public ResponseEntity<?> getDossierDocuments(
+    @GetMapping("/dossier/{dossierId}")
+    public ResponseEntity<ApiResponse<DossierDocumentsResponse>> getDossierDocuments(
             @PathVariable Long dossierId,
-            Authentication authentication) {
+            Principal principal) {
         try {
-            String userEmail = authentication.getName();
-            log.info("Récupération des documents pour le dossier: {} par l'utilisateur: {}", dossierId, userEmail);
-            
-            DossierDocumentsResponse response = documentFillingService.getDossierDocuments(dossierId, userEmail);
-            return ResponseEntity.ok(response);
-            
-        } catch (RuntimeException e) {
-            log.error("Erreur lors de la récupération des documents du dossier: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(createErrorResponse(e.getMessage()));
+            DossierDocumentsResponse response = documentFillingService.getDossierDocuments(dossierId, principal.getName());
+            return ResponseEntity.ok(ApiResponse.success(response, "Documents récupérés avec succès"));
         } catch (Exception e) {
-            log.error("Erreur technique lors de la récupération des documents du dossier: {}", dossierId, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Erreur technique lors du chargement des documents"));
+            log.error("Erreur lors de la récupération des documents du dossier {}: {}", dossierId, e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error("Erreur: " + e.getMessage()));
         }
     }
 
     /**
-     * Upload a file for a specific document requis
+     * Upload a scanned document file
      */
-    @PostMapping("/{documentRequisId}/upload")
-    public ResponseEntity<?> uploadDocument(
+    @PostMapping("/upload-scanned/{dossierId}/{documentRequisId}")
+    public ResponseEntity<ApiResponse<UploadDocumentResponse>> uploadScannedDocument(
             @PathVariable Long dossierId,
             @PathVariable Long documentRequisId,
             @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "title", required = false) String title,
             @RequestParam(value = "description", required = false) String description,
-            Authentication authentication) {
+            Principal principal) {
         try {
-            String userEmail = authentication.getName();
-            log.info("Upload document pour dossier: {}, documentRequis: {}, fichier: {}, utilisateur: {}", 
-                    dossierId, documentRequisId, file.getOriginalFilename(), userEmail);
-
-            // Validate file
             if (file.isEmpty()) {
-                return ResponseEntity.badRequest().body(createErrorResponse("Fichier vide"));
+                return ResponseEntity.badRequest().body(ApiResponse.error("Aucun fichier sélectionné"));
             }
 
-            // Validate file type (PDF or images)
-            String contentType = file.getContentType();
-            if (!isValidFileType(contentType)) {
-                return ResponseEntity.badRequest().body(createErrorResponse(
-                    "Type de fichier non autorisé. Seuls les PDF et images sont acceptés"));
+            if (title == null || title.trim().isEmpty()) {
+                title = "Document scanné - " + file.getOriginalFilename();
             }
 
-            // Check file size (10MB max)
-            if (file.getSize() > 10 * 1024 * 1024) {
-                return ResponseEntity.badRequest().body(createErrorResponse(
-                    "Fichier trop volumineux. Taille maximum: 10MB"));
-            }
-
-            UploadDocumentResponse response = documentFillingService.uploadDocument(
-                    dossierId, documentRequisId, file, userEmail);
+            UploadDocumentResponse response = documentFillingService.uploadScannedDocument(
+                    dossierId, documentRequisId, file, title, description, principal.getName());
             
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-            
-        } catch (RuntimeException e) {
-            log.error("Erreur lors de l'upload du document: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(createErrorResponse(e.getMessage()));
+            return ResponseEntity.ok(ApiResponse.success(response, "Document uploadé avec succès"));
         } catch (Exception e) {
-            log.error("Erreur technique lors de l'upload du document", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Erreur technique lors de l'upload"));
+            log.error("Erreur lors de l'upload du document: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error("Erreur: " + e.getMessage()));
         }
     }
 
     /**
-     * Save form data for a document requis
+     * Save form data as JSON
      */
-    @PostMapping("/{documentRequisId}/form-data")
-    public ResponseEntity<?> saveFormData(
+    @PostMapping("/save-form-data")
+    public ResponseEntity<ApiResponse<SaveFormDataResponse>> saveFormData(
+            @RequestBody SaveFormDataRequest request,
+            Principal principal) {
+        try {
+            SaveFormDataResponse response = documentFillingService.saveFormData(request, principal.getName());
+            return ResponseEntity.ok(ApiResponse.success(response, "Données du formulaire sauvegardées"));
+        } catch (Exception e) {
+            log.error("Erreur lors de la sauvegarde des données: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error("Erreur: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Upload mixed document (file + form data)
+     */
+    @PostMapping("/upload-mixed/{dossierId}/{documentRequisId}")
+    public ResponseEntity<ApiResponse<UploadDocumentResponse>> uploadMixedDocument(
             @PathVariable Long dossierId,
             @PathVariable Long documentRequisId,
-            @RequestBody SaveFormDataRequest request,
-            Authentication authentication) {
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("formData") String formDataJson,
+            @RequestParam(value = "title", required = false) String title,
+            @RequestParam(value = "description", required = false) String description,
+            Principal principal) {
         try {
-            String userEmail = authentication.getName();
-            log.info("Sauvegarde données formulaire pour dossier: {}, documentRequis: {}, utilisateur: {}", 
-                    dossierId, documentRequisId, userEmail);
+            if (file.isEmpty()) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("Aucun fichier sélectionné"));
+            }
 
-            // Set path parameters in request
-            request.setDossierId(dossierId);
-            request.setDocumentRequisId(documentRequisId);
+            // Parse form data JSON
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            java.util.Map<String, Object> formDataMap = mapper.readValue(formDataJson, 
+                    new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>>() {});
 
-            SaveFormDataResponse response = documentFillingService.saveFormData(request, userEmail);
-            return ResponseEntity.ok(response);
+            SaveMixedDocumentRequest request = SaveMixedDocumentRequest.builder()
+                    .dossierId(dossierId)
+                    .documentRequisId(documentRequisId)
+                    .formData(formDataMap)
+                    .title(title != null ? title : "Document mixte - " + file.getOriginalFilename())
+                    .description(description)
+                    .build();
+
+            UploadDocumentResponse response = documentFillingService.saveMixedDocument(
+                    dossierId, documentRequisId, file, request, principal.getName());
             
-        } catch (RuntimeException e) {
-            log.error("Erreur lors de la sauvegarde des données du formulaire: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(createErrorResponse(e.getMessage()));
+            return ResponseEntity.ok(ApiResponse.success(response, "Document mixte sauvegardé avec succès"));
         } catch (Exception e) {
-            log.error("Erreur technique lors de la sauvegarde des données du formulaire", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Erreur technique lors de la sauvegarde"));
+            log.error("Erreur lors de la sauvegarde du document mixte: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error("Erreur: " + e.getMessage()));
         }
     }
 
     /**
-     * Delete an uploaded document
+     * Delete a document piece
      */
-    @DeleteMapping("/piece-jointe/{pieceJointeId}")
-    public ResponseEntity<?> deleteDocument(
-            @PathVariable Long dossierId,
+    @DeleteMapping("/piece/{pieceJointeId}")
+    public ResponseEntity<ApiResponse<DeleteDocumentResponse>> deleteDocument(
             @PathVariable Long pieceJointeId,
-            @RequestParam(value = "motif", required = false) String motif,
-            Authentication authentication) {
+            Principal principal) {
         try {
-            String userEmail = authentication.getName();
-            log.info("Suppression document ID: {} pour dossier: {}, utilisateur: {}, motif: {}", 
-                    pieceJointeId, dossierId, userEmail, motif);
-
-            documentFillingService.deleteDocument(pieceJointeId, userEmail);
-            
-            return ResponseEntity.ok(createSuccessResponse("Document supprimé avec succès"));
-            
-        } catch (RuntimeException e) {
+            DeleteDocumentResponse response = documentFillingService.deleteDocument(pieceJointeId, principal.getName());
+            return ResponseEntity.ok(ApiResponse.success(response, "Document supprimé avec succès"));
+        } catch (Exception e) {
             log.error("Erreur lors de la suppression du document: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(createErrorResponse(e.getMessage()));
-        } catch (Exception e) {
-            log.error("Erreur technique lors de la suppression du document", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Erreur technique lors de la suppression"));
+            return ResponseEntity.badRequest().body(ApiResponse.error("Erreur: " + e.getMessage()));
         }
     }
 
     /**
-     * Download an uploaded document
+     * Download a document file
      */
-    @GetMapping("/piece-jointe/{pieceJointeId}/download")
+    @GetMapping("/download/{pieceJointeId}")
     public ResponseEntity<Resource> downloadDocument(
-            @PathVariable Long dossierId,
             @PathVariable Long pieceJointeId,
-            Authentication authentication) {
+            Principal principal) {
         try {
-            String userEmail = authentication.getName();
-            log.info("Téléchargement document ID: {} pour dossier: {}, utilisateur: {}", 
-                    pieceJointeId, dossierId, userEmail);
-
-            return documentFillingService.downloadDocument(pieceJointeId, userEmail);
-            
+            return documentFillingService.downloadDocument(pieceJointeId, principal.getName());
         } catch (Exception e) {
-            log.error("Erreur lors du téléchargement du document: {}", pieceJointeId, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            log.error("Erreur lors du téléchargement du document: {}", e.getMessage());
+            throw new RuntimeException("Erreur lors du téléchargement: " + e.getMessage());
         }
     }
 
     /**
-     * Health check endpoint
+     * Get form data for a specific document (for editing)
      */
-    @GetMapping("/health")
-    public ResponseEntity<String> healthCheck() {
-        return ResponseEntity.ok("Document Filling Service is running");
-    }
-
-    // Helper methods
-
-    private boolean isValidFileType(String contentType) {
-        if (contentType == null) return false;
-        
-        return contentType.equals("application/pdf") ||
-               contentType.startsWith("image/") ||
-               contentType.equals("application/octet-stream"); // For some PDF uploads
-    }
-
-    private Object createErrorResponse(String message) {
-        return new ApiResponse(false, message);
-    }
-
-    private Object createSuccessResponse(String message) {
-        return new ApiResponse(true, message);
-    }
-
-    // Inner class for API responses
-    @lombok.Data
-    @lombok.AllArgsConstructor
-    private static class ApiResponse {
-        private boolean success;
-        private String message;
+    @GetMapping("/form-data/{dossierId}/{documentRequisId}")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getFormData(
+            @PathVariable Long dossierId,
+            @PathVariable Long documentRequisId,
+            Principal principal) {
+        try {
+            // This will be handled by the main getDossierDocuments endpoint
+            // But can be useful for targeted form data retrieval
+            DossierDocumentsResponse response = documentFillingService.getDossierDocuments(dossierId, principal.getName());
+            
+            java.util.Map<String, Object> formData = response.getDocumentsRequis().stream()
+                    .filter(doc -> doc.getDocumentRequisId().equals(documentRequisId))
+                    .flatMap(doc -> doc.getPieces().stream())
+                    .filter(piece -> piece.getHasFormData())
+                    .findFirst()
+                    .map(PieceJointeDTO::getFormData)
+                    .orElse(new java.util.HashMap<>());
+            
+            return ResponseEntity.ok(ApiResponse.success(formData, "Données du formulaire récupérées"));
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération des données du formulaire: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error("Erreur: " + e.getMessage()));
+        }
     }
 }
