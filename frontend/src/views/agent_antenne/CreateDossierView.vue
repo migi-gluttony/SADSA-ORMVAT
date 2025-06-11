@@ -804,7 +804,7 @@ onBeforeUnmount(() => {
 async function loadInitializationData() {
   try {
     loading.value.initialization = true;
-    const response = await ApiService.get('/agent_antenne/dossiers/initialization-data');
+    const response = await ApiService.get('/agent_antenne/dossier-creation/initialization-data');
     
     // Set all data from single endpoint
     userAntenne.value = response.userAntenne;
@@ -845,7 +845,7 @@ async function loadCercles(provinceId) {
   
   try {
     loading.value.geographic = true;
-    const response = await ApiService.get(`/agent_antenne/dossiers/cercles/${provinceId}`);
+    const response = await ApiService.get(`/agent_antenne/dossier-creation/cercles/${provinceId}`);
     cercles.value = response || [];
     
     // Only reset dependent selections if we're not restoring saved data
@@ -874,7 +874,7 @@ async function loadCommunes(cercleId) {
   
   try {
     loading.value.geographic = true;
-    const response = await ApiService.get(`/agent_antenne/dossiers/communes/${cercleId}`);
+    const response = await ApiService.get(`/agent_antenne/dossier-creation/communes/${cercleId}`);
     communesRurales.value = response || [];
     
     // Only reset dependent selections if we're not restoring saved data
@@ -901,7 +901,7 @@ async function loadDouars(communeId) {
   
   try {
     loading.value.geographic = true;
-    const response = await ApiService.get(`/agent_antenne/dossiers/douars/${communeId}`);
+    const response = await ApiService.get(`/agent_antenne/dossier-creation/douars/${communeId}`);
     douars.value = response || [];
     
     // Only reset douar selection if we're not restoring saved data
@@ -1045,7 +1045,7 @@ async function createDossier() {
       }
     };
     
-    const response = await ApiService.post('/agent_antenne/dossiers/create', requestData);
+    const response = await ApiService.post('/agent_antenne/dossier-creation/create', requestData);
     
     toast.add({
       severity: 'success',
@@ -1150,7 +1150,7 @@ async function checkFarmerExists() {
     farmerCheckStatus.value.checking = true;
     console.log('Checking farmer with CIN:', formData.value.agriculteur.cin); // Debug log
     
-    const response = await ApiService.get(`/agent_antenne/dossiers/check-farmer/${formData.value.agriculteur.cin.trim()}`);
+    const response = await ApiService.get(`/agent_antenne/dossier-creation/check-farmer/${formData.value.agriculteur.cin.trim()}`);
     console.log('Farmer check response:', response); // Debug log
     
     if (response.exists) {
@@ -1256,7 +1256,7 @@ async function searchProjectTypes() {
   searchTimeout = setTimeout(async () => {
     try {
       isSearching.value = true;
-      const response = await ApiService.get('/agent_antenne/dossiers/search-project-types', {
+      const response = await ApiService.get('/agent_antenne/dossier-creation/search-project-types', {
         searchTerm: projectSearchTerm.value
       });
       

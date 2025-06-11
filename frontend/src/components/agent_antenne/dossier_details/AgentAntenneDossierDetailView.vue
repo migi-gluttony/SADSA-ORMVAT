@@ -45,7 +45,8 @@
                   :severity="getStatusSeverity(dossierDetail.statut)"
                 />
               </div>
-            </div>            <div class="flex gap-2">
+            </div>
+            <div class="flex gap-2">
               <!-- Edit Mode Buttons -->
               <Button 
                 v-if="isEditing"
@@ -78,7 +79,8 @@
         </template>
         <template #content>
           <!-- Dossier Summary Info -->
-          <div class="grid">            <!-- Agriculteur Info -->
+          <div class="grid">
+            <!-- Agriculteur Info -->
             <div class="col-12 md:col-6">
               <h4 class="mt-0 mb-3">Agriculteur</h4>
               
@@ -123,7 +125,8 @@
                 </div>
               </div>
             </div>
-              <!-- Projet Info -->
+
+            <!-- Projet Info -->
             <div class="col-12 md:col-6">
               <h4 class="mt-0 mb-3">Projet</h4>
               
@@ -193,153 +196,34 @@
       </Card>
 
       <!-- Documents and Forms Section -->
-      <Card v-if="showDocuments">
+      <Card>
         <template #title>
-          <div class="flex justify-content-between align-items-center">
-            <div>
-              <i class="pi pi-file-edit mr-2"></i>
-              Documents et Formulaires
-            </div>
-            <Button 
-              :label="documentsCollapsed ? 'Afficher' : 'Masquer'"
-              :icon="documentsCollapsed ? 'pi pi-chevron-down' : 'pi pi-chevron-up'"
-              @click="documentsCollapsed = !documentsCollapsed"
-              class="p-button-text"
-            />
-          </div>
+          <i class="pi pi-file-edit mr-2"></i>
+          Documents et Formulaires
         </template>
         <template #content>
-          <div v-if="!documentsCollapsed">
-            <!-- Documents Loading -->
-            <div v-if="documentsLoading" class="text-center p-4">
-              <ProgressSpinner size="30px" />
-              <p class="mt-2">Chargement des documents...</p>
-            </div>
-
-            <!-- Documents Content -->
-            <div v-else-if="documentsData" class="space-y-4">
-              <!-- Progress Overview -->
-              <div v-if="documentsData.statistics" class="p-3 surface-100 border-round">
-                <div class="flex justify-content-between align-items-center mb-2">
-                  <h5 class="m-0">Progression des Documents</h5>
-                  <span class="text-xl font-bold text-primary">
-                    {{ Math.round(documentsData.statistics.pourcentageCompletion) }}%
-                  </span>
-                </div>
-                <ProgressBar :value="documentsData.statistics.pourcentageCompletion" />
-                <div class="flex justify-content-between text-sm text-color-secondary mt-2">
-                  <span>{{ documentsData.statistics.documentsCompletes }} complétés</span>
-                  <span>{{ documentsData.statistics.totalDocuments }} total</span>
-                </div>
-              </div>              <!-- Documents List -->
-              <div class="space-y-4">
-                <div 
-                  v-for="document in documentsData.documentsRequis" 
-                  :key="document.id"
-                  class="border-1 surface-border border-round p-4"
-                >
-                  <!-- Document Header -->
-                  <div class="flex justify-content-between align-items-start mb-3">
-                    <div class="flex-1">
-                      <h5 class="m-0 mb-2">
-                        {{ document.nomDocument }}
-                        <Tag 
-                          v-if="document.obligatoire" 
-                          value="Obligatoire" 
-                          severity="danger" 
-                          class="ml-2"
-                        />
-                        <Tag 
-                          v-else 
-                          value="Optionnel" 
-                          severity="info" 
-                          class="ml-2"
-                        />
-                      </h5>
-                      <p v-if="document.description" class="m-0 text-color-secondary">
-                        {{ document.description }}
-                      </p>
-                    </div>
-                    <Tag 
-                      :value="getDocumentStatusLabel(document.status)" 
-                      :severity="getDocumentStatusSeverity(document.status)"
-                    />
-                  </div>                  <!-- File Upload Section -->
-                  <div class="mb-4" v-if="canModifyDossier">
-                    <h6 class="mb-2">
-                      <i class="pi pi-upload mr-1"></i> Fichiers
-                    </h6>
-                    
-                    <FileUpload
-                      mode="basic"
-                      accept=".pdf,.jpg,.jpeg,.png,.gif"
-                      :maxFileSize="10000000"
-                      :multiple="true"
-                      @select="(event) => onFileSelect(event, document.id)"
-                      :auto="false"
-                      chooseLabel="Sélectionner fichier(s)"
-                      class="mb-2"
-                    />
-                    <small class="block text-color-secondary">
-                      Formats acceptés: PDF, JPG, PNG, GIF (max 10MB par fichier)
-                    </small>
-                  </div>
-
-                  <!-- Uploaded Files -->
-                  <div v-if="getUploadedFiles(document).length > 0" class="mb-4">
-                    <h6 class="mb-2">Fichiers uploadés ({{ getUploadedFiles(document).length }})</h6>
-                    <div class="space-y-2">
-                      <div 
-                        v-for="file in getUploadedFiles(document)" 
-                        :key="file.id"
-                        class="flex justify-content-between align-items-center p-2 surface-50 border-round"
-                      >
-                        <div class="flex align-items-center">
-                          <i :class="getFileIcon(file.formatFichier)" class="text-primary mr-2"></i>
-                          <div>
-                            <div class="font-medium">{{ file.nomFichier }}</div>
-                            <div class="text-sm text-color-secondary">
-                              {{ formatFileSize(file.tailleFichier) }} • 
-                              {{ formatDate(file.dateUpload) }}
-                            </div>
-                          </div>
-                        </div>
-                        <div class="flex gap-2">
-                          <Button 
-                            icon="pi pi-download" 
-                            @click="downloadFile(file)"
-                            class="p-button-outlined p-button-sm"
-                            v-tooltip.top="'Télécharger'"
-                          />
-                          <Button 
-                            v-if="canModifyDossier"
-                            icon="pi pi-trash" 
-                            @click="confirmDeleteFile(file)"
-                            class="p-button-danger p-button-outlined p-button-sm"
-                            v-tooltip.top="'Supprimer'"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Form Section -->
-                  <div v-if="document.formStructure && Object.keys(document.formStructure).length > 0">
-                    <h6 class="mb-2">
-                      <i class="pi pi-list mr-1"></i> Formulaire
-                    </h6>
-                    <div class="surface-50 p-3 border-round">
-                      <DynamicForm
-                        :formStructure="document.formStructure"
-                        :formData="document.formData || {}"
-                        @form-save="(data) => saveFormData(data, document.id)"
-                        :readonly="!canModifyDossier"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div v-if="canModifyDossier" class="text-center p-4">
+            <Button 
+              label="Remplir les Documents" 
+              icon="pi pi-file-edit" 
+              @click="goToDocumentFilling"
+              class="p-button-success p-button-lg" 
+              size="large" 
+            />
+            <p class="mt-3 text-sm text-color-secondary">
+              Complétez tous les documents requis pour ce type de projet
+            </p>
+          </div>
+          <div v-else class="text-center p-4 surface-50 border-round">
+            <i class="pi pi-lock text-4xl text-color-secondary mb-3"></i>
+            <p class="text-color-secondary">Documents en lecture seule à cette étape</p>
+            <Button 
+              label="Voir les documents" 
+              icon="pi pi-eye" 
+              @click="goToDocumentFilling" 
+              class="p-button-outlined"
+              size="small" 
+            />
           </div>
         </template>
       </Card>
@@ -476,20 +360,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 import ApiService from '@/services/ApiService';
-import DynamicForm from '@/components/agent_antenne/document_filling/DynamicForm.vue';
 
 import Button from 'primevue/button';
 import Card from 'primevue/card';
 import Tag from 'primevue/tag';
 import ProgressSpinner from 'primevue/progressspinner';
-import ProgressBar from 'primevue/progressbar';
 import Message from 'primevue/message';
-import FileUpload from 'primevue/fileupload';
 import Dialog from 'primevue/dialog';
 import Textarea from 'primevue/textarea';
 import ConfirmDialog from 'primevue/confirmdialog';
@@ -506,17 +387,24 @@ const confirm = useConfirm();
 const loading = ref(true);
 const error = ref('');
 const dossierDetail = ref(null);
-const documentsData = ref(null);
-const documentsLoading = ref(false);
-const documentsCollapsed = ref(false);
 const actionLoading = ref({});
 const isEditing = ref(false);
-const editForm = ref({});
+const editForm = ref({
+  agriculteur: {
+    nom: '',
+    prenom: '',
+    cin: '',
+    telephone: '',
+    communeRurale: '',
+    douar: ''
+  },
+  reference: '',
+  saba: '',
+  montantSubvention: 0
+});
 
 // Computed
 const dossierId = computed(() => parseInt(route.params.dossierId));
-const showDocuments = computed(() => canModifyDossier.value || 
-  (documentsData.value && documentsData.value.documentsRequis.length > 0));
 const canModifyDossier = computed(() => {
   if (!dossierDetail.value) return false;
   return dossierDetail.value.statut === 'DRAFT' || 
@@ -544,11 +432,20 @@ async function loadDossierDetail() {
     loading.value = true;
     error.value = '';
     
-    const response = await ApiService.get(`/agent-antenne/dossiers/detail/${dossierId.value}`);
-    dossierDetail.value = response;
+    const response = await ApiService.get(`/agent_antenne/dossiers/detail/${dossierId.value}`);
     
-    if (showDocuments.value) {
-      await loadDocuments();
+    // Ensure we have a proper data structure
+    if (response && typeof response === 'object') {
+      dossierDetail.value = {
+        ...response,
+        agriculteur: response.agriculteur || {},
+        projet: response.projet || {},
+        workflowHistory: Array.isArray(response.workflowHistory) ? response.workflowHistory : [],
+        documents: Array.isArray(response.documents) ? response.documents : [],
+        availableActions: Array.isArray(response.availableActions) ? response.availableActions : []
+      };
+    } else {
+      throw new Error('Invalid response format');
     }
     
   } catch (err) {
@@ -566,26 +463,12 @@ async function loadDossierDetail() {
   }
 }
 
-async function loadDocuments() {
-  try {
-    documentsLoading.value = true;
-    const response = await ApiService.get(`/agent-antenne/dossiers/${dossierId.value}/documents`);
-    documentsData.value = response;
-  } catch (err) {
-    console.error('Erreur lors du chargement des documents:', err);
-    toast.add({
-      severity: 'warn',
-      summary: 'Attention',
-      detail: 'Impossible de charger les documents',
-      life: 3000
-    });
-  } finally {
-    documentsLoading.value = false;
-  }
-}
-
 function goBack() {
   router.push('/agent_antenne/dossiers');
+}
+
+function goToDocumentFilling() {
+  router.push(`/agent_antenne/dossiers/documents/${dossierId.value}`);
 }
 
 // Action handling
@@ -612,14 +495,16 @@ async function executeAction(action) {
 function enableEditMode() {
   isEditing.value = true;
   // Initialize edit form with current data
-  if (dossierDetail.value) {    editForm.value = {
+  if (dossierDetail.value && typeof dossierDetail.value === 'object') {
+    const agriculteur = dossierDetail.value.agriculteur || {};
+    editForm.value = {
       agriculteur: {
-        nom: dossierDetail.value.agriculteur?.nom || '',
-        prenom: dossierDetail.value.agriculteur?.prenom || '',
-        cin: dossierDetail.value.agriculteur?.cin || '',
-        telephone: dossierDetail.value.agriculteur?.telephone || '',
-        communeRurale: dossierDetail.value.agriculteur?.communeRurale || '',
-        douar: dossierDetail.value.agriculteur?.douar || ''
+        nom: agriculteur.nom || '',
+        prenom: agriculteur.prenom || '',
+        cin: agriculteur.cin || '',
+        telephone: agriculteur.telephone || '',
+        communeRurale: agriculteur.communeRurale || '',
+        douar: agriculteur.douar || ''
       },
       reference: dossierDetail.value.reference || '',
       saba: dossierDetail.value.saba || '',
@@ -630,18 +515,35 @@ function enableEditMode() {
 
 function cancelEdit() {
   isEditing.value = false;
-  editForm.value = {};
+  editForm.value = {
+    agriculteur: {
+      nom: '',
+      prenom: '',
+      cin: '',
+      telephone: '',
+      communeRurale: '',
+      douar: ''
+    },
+    reference: '',
+    saba: '',
+    montantSubvention: 0
+  };
 }
 
-async function saveEdit() {  try {
-    loading.value = true;    // Validate that we have the required data
+async function saveEdit() {
+  try {
+    loading.value = true;
+    
+    // Validate that we have the required data
     if (!editForm.value.agriculteur?.nom || !editForm.value.agriculteur?.prenom || !editForm.value.agriculteur?.cin) {
       throw new Error('Le nom, prénom et CIN de l\'agriculteur sont requis');
     }
     
     if (!editForm.value.reference || !editForm.value.saba) {
       throw new Error('La référence et le SABA sont requis');
-    }// Create minimal update request with only fields that have valid values
+    }
+
+    // Create minimal update request with only fields that have valid values
     const updateData = {
       agriculteur: {
         nom: editForm.value.agriculteur.nom,
@@ -651,10 +553,10 @@ async function saveEdit() {  try {
       },
       reference: editForm.value.reference,
       saba: editForm.value.saba,
-      montantSubvention: editForm.value.montantSubvention};
+      montantSubvention: editForm.value.montantSubvention
+    };
 
-    console.log('Sending minimal update data (no null IDs):', updateData);
-    await ApiService.put(`/agent-antenne/dossiers/update/${dossierId.value}`, updateData);
+    await ApiService.put(`/agent_antenne/dossiers/update/${dossierId.value}`, updateData);
     
     toast.add({
       severity: 'success',
@@ -747,7 +649,7 @@ async function performAction(action) {
       });
       
       if (action.action === 'delete') {
-        router.push('/dossiers');
+        router.push('/agent_antenne/dossiers');
       } else {
         await loadDossierDetail();
       }
@@ -768,6 +670,7 @@ async function performAction(action) {
 
 async function performActionWithPayload(action, payload) {
   let response;
+  
   if (action.method === 'POST') {
     response = await ApiService.post(action.endpoint, payload);
   } else if (action.method === 'PUT') {
@@ -787,178 +690,14 @@ async function performActionWithPayload(action, payload) {
     });
     
     if (action.action === 'delete') {
-      router.push('/dossiers');
+      router.push('/agent_antenne/dossiers');
     } else {
       await loadDossierDetail();
     }
   }
 }
 
-// Document handling
-function getUploadedFiles(document) {
-  return document.fichierGroups?.flatMap(group => group.files || []) || [];
-}
-
-async function onFileSelect(event, documentId) {
-  const files = event.files;
-  
-  for (const file of files) {
-    if (!isValidFileType(file.type)) {
-      toast.add({
-        severity: 'error',
-        summary: 'Type de fichier invalide',
-        detail: `Le fichier "${file.name}" n'est pas autorisé.`,
-        life: 5000
-      });
-      continue;
-    }
-    
-    if (file.size > 10 * 1024 * 1024) {
-      toast.add({
-        severity: 'error',
-        summary: 'Fichier trop volumineux',
-        detail: `Le fichier "${file.name}" dépasse 10MB.`,
-        life: 5000
-      });
-      continue;
-    }
-    
-    await uploadFile(file, documentId);
-  }
-}
-
-async function uploadFile(file, documentId) {
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    await ApiService.post(
-      `/agent-antenne/dossiers/${dossierId.value}/documents/${documentId}/upload`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      }
-    );
-
-    toast.add({
-      severity: 'success',
-      summary: 'Succès',
-      detail: `Fichier "${file.name}" uploadé avec succès`,
-      life: 3000
-    });
-
-    await loadDocuments();
-    
-  } catch (err) {
-    console.error('Erreur upload:', err);
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur Upload',
-      detail: err.message || 'Erreur lors de l\'upload',
-      life: 5000
-    });
-  }
-}
-
-async function saveFormData(formData, documentId) {
-  try {
-    await ApiService.post(
-      `/agent-antenne/dossiers/${dossierId.value}/documents/${documentId}/form-data`,
-      { formData }
-    );
-    
-    toast.add({
-      severity: 'success',
-      summary: 'Succès',
-      detail: 'Données du formulaire sauvegardées',
-      life: 3000
-    });
-    
-    await loadDocuments();
-    
-  } catch (err) {
-    console.error('Erreur sauvegarde:', err);
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: err.message || 'Erreur lors de la sauvegarde',
-      life: 5000
-    });
-  }
-}
-
-function confirmDeleteFile(file) {
-  confirm.require({
-    message: `Supprimer le fichier "${file.nomFichier}" ?`,
-    header: 'Confirmer la suppression',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => deleteFile(file.id)
-  });
-}
-
-async function deleteFile(fileId) {
-  try {
-    await ApiService.delete(`/agent-antenne/dossiers/${dossierId.value}/documents/piece-jointe/${fileId}`);
-    
-    toast.add({
-      severity: 'success',
-      summary: 'Succès',
-      detail: 'Fichier supprimé avec succès',
-      life: 3000
-    });
-    
-    await loadDocuments();
-    
-  } catch (err) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: err.message || 'Erreur lors de la suppression',
-      life: 5000
-    });
-  }
-}
-
-async function downloadFile(file) {
-  try {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    const response = await fetch(`/agent-antenne/dossiers/${dossierId.value}/documents/piece-jointe/${file.id}/download`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    
-    if (!response.ok) throw new Error('Erreur de téléchargement');
-    
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = file.nomFichier;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-    
-  } catch (err) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: 'Impossible de télécharger le fichier',
-      life: 3000
-    });
-  }
-}
-
 // Utility functions
-function isValidFileType(mimeType) {
-  const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-  return validTypes.includes(mimeType);
-}
-
 function getActionIcon(action) {
   const icons = {
     update: 'pi pi-pencil',
@@ -979,42 +718,37 @@ function getActionClass(action) {
   return classes[action] || '';
 }
 
-function getFileIcon(extension) {
-  const icons = {
-    pdf: 'pi pi-file-pdf',
-    jpg: 'pi pi-image',
-    jpeg: 'pi pi-image',
-    png: 'pi pi-image',
-    gif: 'pi pi-image'
-  };
-  return icons[extension?.toLowerCase()] || 'pi pi-file';
-}
-
-function formatFileSize(bytes) {
-  if (!bytes) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
 function formatDate(dateString) {
   if (!dateString) return '';
-  return new Intl.DateTimeFormat('fr-FR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(new Date(dateString));
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    
+    // Use a more compatible approach
+    return date.toLocaleDateString('fr-FR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    console.warn('Error formatting date:', error);
+    return dateString;
+  }
 }
 
 function formatCurrency(amount) {
   if (!amount) return '0 DH';
-  return new Intl.NumberFormat('fr-MA', {
-    style: 'currency',
-    currency: 'MAD'
-  }).format(amount);
+  try {
+    return new Intl.NumberFormat('fr-MA', {
+      style: 'currency',
+      currency: 'MAD'
+    }).format(amount);
+  } catch (error) {
+    console.warn('Error formatting currency:', error);
+    return `${amount} DH`;
+  }
 }
 
 function getStatusLabel(status) {
@@ -1040,24 +774,6 @@ function getStatusSeverity(status) {
   };
   return severities[status] || 'secondary';
 }
-
-function getDocumentStatusLabel(status) {
-  const labels = {
-    'COMPLETE': 'Complet',
-    'MISSING': 'Manquant',
-    'PENDING': 'En attente'
-  };
-  return labels[status] || status;
-}
-
-function getDocumentStatusSeverity(status) {
-  const severities = {
-    'COMPLETE': 'success',
-    'MISSING': 'danger',
-    'PENDING': 'warning'
-  };
-  return severities[status] || 'secondary';
-}
 </script>
 
 <style scoped>
@@ -1067,6 +783,10 @@ function getDocumentStatusSeverity(status) {
 
 .space-y-4 > * + * {
   margin-top: 1rem;
+}
+
+.space-y-3 > * + * {
+  margin-top: 0.75rem;
 }
 
 .space-y-2 > * + * {
@@ -1144,151 +864,8 @@ function getDocumentStatusSeverity(status) {
   }
 }
 
-/* Additional Styling for Detail View */
-.agent-antenne-dossier-detail {
-  padding: 1.5rem;
-  background: #f8f9fa;
-  min-height: 100vh;
-}
-
-:deep(.p-card) {
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  border: 1px solid #e5e7eb;
-}
-
-:deep(.p-card .p-card-header) {
-  background: #f8fafc;
-  border-bottom: 1px solid #e5e7eb;
-  border-radius: 12px 12px 0 0;
-}
-
-:deep(.p-card .p-card-title) {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.document-section {
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  overflow: hidden;
-}
-
-.document-header {
-  padding: 1rem 1.25rem;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
-  display: flex;
-  justify-content: between;
-  align-items: center;
-}
-
-.document-content {
-  padding: 1.25rem;
-}
-
-.file-item {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 0.75rem;
-  transition: all 0.2s ease;
-}
-
-.file-item:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
-}
-
-.progress-section {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.status-badge.draft {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.status-badge.submitted {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.status-badge.approved {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.status-badge.rejected {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.info-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.info-label {
-  font-weight: 500;
-  color: #6b7280;
-  font-size: 0.875rem;
-  margin-bottom: 0.25rem;
-}
-
-.info-value {
-  color: #1f2937;
-  font-weight: 600;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-/* Responsive improvements */
-@media (max-width: 768px) {
-  .agent-antenne-dossier-detail {
-    padding: 1rem;
-  }
-  
-  .info-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .action-buttons {
-    flex-direction: column;
-  }
-  
-  .document-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
+.p-button-lg {
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
 }
 </style>

@@ -79,31 +79,31 @@ const ApiService = {
       throw error;
     }
   },
-
   /**
    * Make a POST request
    * @param {string} endpoint - API endpoint
    * @param {object} data - Request payload
+   * @param {object} config - Axios config (headers, etc.)
    * @returns {Promise} - Promise with response data
    */
-  async post(endpoint, data = {}) {
+  async post(endpoint, data = {}, config = {}) {
     try {
-      return await api.post(endpoint, data);
+      return await api.post(endpoint, data, config);
     } catch (error) {
       console.error(`POST ${endpoint} error:`, error);
       throw error;
     }
   },
-
   /**
    * Make a PUT request
    * @param {string} endpoint - API endpoint
    * @param {object} data - Request payload
+   * @param {object} config - Axios config (headers, etc.)
    * @returns {Promise} - Promise with response data
    */
-  async put(endpoint, data = {}) {
+  async put(endpoint, data = {}, config = {}) {
     try {
-      return await api.put(endpoint, data);
+      return await api.put(endpoint, data, config);
     } catch (error) {
       console.error(`PUT ${endpoint} error:`, error);
       throw error;

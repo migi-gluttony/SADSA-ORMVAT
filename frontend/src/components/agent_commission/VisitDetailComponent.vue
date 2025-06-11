@@ -695,22 +695,37 @@ async function onFilesSelected(event) {
       uploadProgress.value = Math.min(uploadProgress.value + 10, 90);
     }, 200);
 
-    const response = await ApiService.post(`/agent_commission/terrain-visits/${props.visit.id}/photos`, formData);
+    // Use fetch for multipart request
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const response = await fetch(`/api/agent_commission/terrain-visits/${props.visit.id}/photos`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+        // Don't set Content-Type - let browser set it with boundary
+      },
+      body: formData
+    });
 
     clearInterval(progressInterval);
     uploadProgress.value = 100;
 
-    if (response.success) {
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.success) {
       toast.add({
         severity: 'success',
         summary: 'Succès',
-        detail: response.message || `${files.length} photo(s) ajoutée(s)`,
+        detail: result.message || `${files.length} photo(s) ajoutée(s)`,
         life: 3000
       });
 
       emit('visit-updated');
     } else {
-      throw new Error(response.message || 'Erreur lors de l\'upload');
+      throw new Error(result.message || 'Erreur lors de l\'upload');
     }
 
   } catch (error) {

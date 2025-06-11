@@ -13,7 +13,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/agent_antenne/dossiers")
+@RequestMapping("/api/agent_antenne/dossier-creation")
 @RequiredArgsConstructor
 @Slf4j
 public class DossierCreationController {
@@ -74,13 +74,11 @@ public class DossierCreationController {
             log.error("Erreur lors de la recherche de types de projet", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
-    }
-
-    /**
-     * Create a new dossier
+    }    /**
+     * Create a new dossier with detailed workflow
      */
     @PostMapping("/create")
-    public ResponseEntity<?> createDossier(
+    public ResponseEntity<?> createNewDossier(
             @Valid @RequestBody CreateDossierRequest request,
             Authentication authentication) {
         try {

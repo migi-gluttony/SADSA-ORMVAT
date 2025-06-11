@@ -14,6 +14,8 @@ import AgentAntenneDossierListView from '@/components/agent_antenne/dossier_list
 import AgentGUCDossierListView from '@/components/agent_guc/dossier_list/AgentGUCDossierListView.vue'
 import AgentCommissionDossierListView from '@/components/agent_commission/dossier_list/AgentCommissionDossierListView.vue'
 import AgentAntenneDossierDetailView from '@/components/agent_antenne/dossier_details/AgentAntenneDossierDetailView.vue'
+import DocumentFillingView from '@/components/agent_antenne/document_filling/DocumentFillingView.vue'
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -65,6 +67,13 @@ const router = createRouter({
       name: 'agent-antenne-dossier-detail',
       component: AgentAntenneDossierDetailView,
       meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE', title: 'Détails du Dossier' },
+      props: true
+    },
+    {
+      path: '/agent_antenne/dossiers/documents/:dossierId',
+      name: 'agent-antenne-document-filling',
+      component: DocumentFillingView,
+      meta: { requiresAuth: true, requiresRole: 'AGENT_ANTENNE', title: 'Remplissage des Documents' },
       props: true
     },
     {

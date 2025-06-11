@@ -34,31 +34,29 @@
       
       <!-- Dossier Header -->
       <Card>
-        <template #header>
-          <div class="flex justify-content-between align-items-center p-3">
+        <template #header>          <div class="flex justify-content-between align-items-center p-3">
             <div>
-              <h2 class="m-0">{{ dossierData.dossier.numeroDossier }}</h2>
-              <p class="m-0 text-color-secondary">{{ dossierData.dossier.saba }}</p>
+              <h2 class="m-0">{{ dossierData.dossier?.numeroDossier || 'Numéro non disponible' }}</h2>
+              <p class="m-0 text-color-secondary">{{ dossierData.dossier?.saba || '' }}</p>
             </div>
             <Tag 
-              :value="getStatusLabel(dossierData.dossier.status)" 
-              :severity="getStatusSeverity(dossierData.dossier.status)"
+              :value="getStatusLabel(dossierData.dossier?.status || 'UNKNOWN')" 
+              :severity="getStatusSeverity(dossierData.dossier?.status || 'UNKNOWN')"
             />
           </div>
         </template>
         <template #content>
-          <!-- Agriculteur Info -->
-          <div class="grid">
+          <!-- Agriculteur Info -->          <div class="grid">
             <div class="col-12 md:col-6">
               <h4 class="mt-0">Agriculteur</h4>
-              <p><strong>Nom:</strong> {{ dossierData.dossier.agriculteurPrenom }} {{ dossierData.dossier.agriculteurNom }}</p>
-              <p><strong>CIN:</strong> {{ dossierData.dossier.agriculteurCin }}</p>
-              <p><strong>Téléphone:</strong> {{ dossierData.dossier.agriculteurTelephone }}</p>
+              <p><strong>Nom:</strong> {{ dossierData.dossier?.agriculteurPrenom || '' }} {{ dossierData.dossier?.agriculteurNom || '' }}</p>
+              <p><strong>CIN:</strong> {{ dossierData.dossier?.agriculteurCin || '' }}</p>
+              <p><strong>Téléphone:</strong> {{ dossierData.dossier?.agriculteurTelephone || '' }}</p>
             </div>
             <div class="col-12 md:col-6">
               <h4 class="mt-0">Projet</h4>
-              <p><strong>Type:</strong> {{ dossierData.dossier.sousRubriqueDesignation }}</p>
-              <p><strong>Antenne:</strong> {{ dossierData.dossier.antenneDesignation }}</p>
+              <p><strong>Type:</strong> {{ dossierData.dossier?.sousRubriqueDesignation || '' }}</p>
+              <p><strong>Antenne:</strong> {{ dossierData.dossier?.antenneDesignation || '' }}</p>
             </div>
           </div>
 
@@ -67,13 +65,13 @@
             <div class="flex justify-content-between align-items-center mb-2">
               <h4 class="m-0">Progression des Documents</h4>
               <span class="text-xl font-bold text-primary">
-                {{ Math.round(dossierData.statistics.pourcentageCompletion) }}%
+                {{ Math.round(dossierData.statistics.pourcentageCompletion || 0) }}%
               </span>
             </div>
-            <ProgressBar :value="dossierData.statistics.pourcentageCompletion" />
+            <ProgressBar :value="dossierData.statistics.pourcentageCompletion || 0" />
             <div class="flex justify-content-between text-sm text-color-secondary mt-2">
-              <span>{{ dossierData.statistics.documentsCompletes }} complétés</span>
-              <span>{{ dossierData.statistics.totalDocuments }} total</span>
+              <span>{{ dossierData.statistics.documentsCompletes || 0 }} complétés</span>
+              <span>{{ dossierData.statistics.totalDocuments || 0 }} total</span>
             </div>
           </div>
         </template>
@@ -84,18 +82,17 @@
         <template #title>
           <i class="pi pi-file-edit"></i> Documents Requis
         </template>
-        <template #content>
-          <div class="space-y-4">
+        <template #content>          <div class="space-y-4">
             <div 
-              v-for="document in dossierData.documentsRequis" 
-              :key="document.id"
+              v-for="document in (dossierData.documentsRequis || [])" 
+              :key="document.documentRequisId || document.id"
               class="border-1 surface-border border-round p-3"
             >
               <!-- Document Header -->
               <div class="flex justify-content-between align-items-start mb-3">
                 <div class="flex-1">
                   <h4 class="m-0 mb-2">
-                    {{ document.nomDocument }}
+                    {{ document.nomDocument || 'Document sans nom' }}
                     <Tag 
                       v-if="document.obligatoire" 
                       value="Obligatoire" 
@@ -124,17 +121,21 @@
                 <h5 class="mb-2">
                   <i class="pi pi-upload"></i> Fichiers
                 </h5>
-                
-                <FileUpload
+                  <FileUpload
+                  v-if="document.documentRequisId"
                   mode="basic"
                   accept=".pdf,.jpg,.jpeg,.png,.gif"
                   :maxFileSize="10000000"
                   :multiple="true"
-                  @select="(event) => onFileSelect(event, document.id)"
+                  @select="(event) => onFileSelect(event, document.documentRequisId)"
                   :auto="false"
                   chooseLabel="Sélectionner fichier(s)"
                   class="mb-3"
                 />
+                <div v-else class="p-3 surface-100 border-round text-center">
+                  <i class="pi pi-exclamation-triangle text-orange-500"></i>
+                  <p class="mt-2 mb-0">Upload non disponible - ID document manquant</p>
+                </div>
                 <small class="block text-color-secondary">
                   Formats acceptés: PDF, JPG, PNG, GIF (max 10MB par fichier)
                 </small>
@@ -149,11 +150,10 @@
                       class="flex justify-content-between align-items-center p-2 surface-50 border-round"
                     >
                       <div class="flex align-items-center">
-                        <i :class="getFileIcon(file.formatFichier)" class="text-primary mr-2"></i>
+                        <i :class="getFileIcon(file.nomFichier)" class="text-primary mr-2"></i>
                         <div>
                           <div class="font-medium">{{ file.nomFichier }}</div>
                           <div class="text-sm text-color-secondary">
-                            {{ formatFileSize(file.tailleFichier) }} • 
                             {{ formatDate(file.dateUpload) }}
                           </div>
                         </div>
@@ -175,19 +175,22 @@
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <!-- Form Section -->
+              </div>              <!-- Form Section -->
               <div v-if="document.formStructure && Object.keys(document.formStructure).length > 0">
                 <h5 class="mb-2">
                   <i class="pi pi-list"></i> Formulaire
                 </h5>
                 <div class="surface-50 p-3 border-round">
                   <DynamicForm
+                    v-if="document.formStructure && document.documentRequisId"
                     :formStructure="document.formStructure"
-                    :formData="document.formData || {}"
-                    @form-save="(data) => saveFormData(data, document.id)"
+                    :formData="getFormDataForDocument(document)"
+                    @form-save="(data) => saveFormData(data, document.documentRequisId)"
                   />
+                  <div v-else class="text-center p-4 text-color-secondary">
+                    <i class="pi pi-info-circle"></i>
+                    <p class="mt-2">Aucun formulaire disponible pour ce document</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -227,7 +230,11 @@ const confirm = useConfirm();
 
 const loading = ref(true);
 const error = ref('');
-const dossierData = ref(null);
+const dossierData = ref({
+  dossier: {},
+  documentsRequis: [],
+  statistics: {}
+});
 
 const dossierId = computed(() => parseInt(route.params.dossierId));
 
@@ -240,8 +247,28 @@ async function loadDossierData() {
     loading.value = true;
     error.value = '';
     
-    const response = await ApiService.get(`/agent_antenne/dossiers/${dossierId.value}/documents`);
-    dossierData.value = response;
+    const response = await ApiService.get(`/agent_antenne/documents/dossier/${dossierId.value}`);
+    
+    // Ensure we have proper data structure
+    if (response) {
+      const data = response.data || response;
+      dossierData.value = {
+        dossier: data.dossier || {},
+        documentsRequis: Array.isArray(data.documentsRequis) ? data.documentsRequis : [],
+        statistics: data.statistics || {}
+      };
+      
+      // Ensure each document has proper structure
+      if (dossierData.value.documentsRequis) {
+        dossierData.value.documentsRequis = dossierData.value.documentsRequis.map(doc => ({
+          ...doc,
+          pieces: Array.isArray(doc.pieces) ? doc.pieces : [],
+          formStructure: doc.formStructure || {}
+        }));
+      }
+    } else {
+      throw new Error('Invalid response format');
+    }
     
   } catch (err) {
     console.error('Erreur lors du chargement:', err);
@@ -259,13 +286,50 @@ async function loadDossierData() {
 }
 
 function getUploadedFiles(document) {
-  return document.fichierGroups?.flatMap(group => group.files || []) || [];
+  if (!document || !document.pieces || !Array.isArray(document.pieces)) {
+    return [];
+  }
+  return document.pieces.filter(piece => piece && piece.hasFile) || [];
+}
+
+function getFormDataForDocument(document) {
+  if (!document || !document.pieces || !Array.isArray(document.pieces)) {
+    return {};
+  }
+  
+  const formDataPiece = document.pieces.find(piece => piece && piece.hasFormData);
+  return formDataPiece && formDataPiece.formData ? formDataPiece.formData : {};
 }
 
 async function onFileSelect(event, documentId) {
+  if (!event || !event.files || !Array.isArray(event.files)) {
+    console.warn('Invalid file selection event');
+    return;
+  }
+  
+  if (!documentId) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: 'ID du document manquant',
+      life: 5000
+    });
+    return;
+  }
+  
   const files = event.files;
   
   for (const file of files) {
+    if (!file || !file.type || !file.name) {
+      toast.add({
+        severity: 'error',
+        summary: 'Fichier invalide',
+        detail: 'Fichier corrompu ou incomplet',
+        life: 5000
+      });
+      continue;
+    }
+    
     if (!isValidFileType(file.type)) {
       toast.add({
         severity: 'error',
@@ -294,11 +358,25 @@ async function uploadFile(file, documentId) {
   try {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('title', `Document scanné - ${file.name}`);
+    formData.append('description', 'Document uploadé par l\'agent antenne');
     
-    await ApiService.uploadFiles(
-      `/agent_antenne/dossiers/${dossierId.value}/documents/${documentId}/upload`,
-      formData
-    );
+    // Create a custom axios instance for this multipart request
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const response = await fetch(`/api/agent_antenne/documents/upload-scanned/${dossierId.value}/${documentId}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+        // Don't set Content-Type - let browser set it with boundary
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
 
     toast.add({
       severity: 'success',
@@ -322,10 +400,15 @@ async function uploadFile(file, documentId) {
 
 async function saveFormData(formData, documentId) {
   try {
-    await ApiService.post(
-      `/agent_antenne/dossiers/${dossierId.value}/documents/${documentId}/form-data`,
-      { formData }
-    );
+    const requestData = {
+      dossierId: dossierId.value,
+      documentRequisId: documentId,
+      formData: formData,
+      title: 'Données formulaire',
+      description: 'Données saisies par l\'agent antenne'
+    };
+    
+    await ApiService.post('/agent_antenne/documents/save-form-data', requestData);
     
     toast.add({
       severity: 'success',
@@ -359,7 +442,7 @@ function confirmDeleteFile(file) {
 
 async function deleteFile(fileId) {
   try {
-    await ApiService.delete(`/agent_antenne/dossiers/${dossierId.value}/documents/piece-jointe/${fileId}`);
+    await ApiService.delete(`/agent_antenne/documents/piece/${fileId}`);
     
     toast.add({
       severity: 'success',
@@ -382,7 +465,7 @@ async function deleteFile(fileId) {
 
 async function downloadFile(file) {
   try {
-    const response = await fetch(`/api/agent_antenne/dossiers/${dossierId.value}/documents/piece-jointe/${file.id}/download`, {
+    const response = await fetch(`/api/agent_antenne/documents/download/${file.id}`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`
       }
@@ -420,7 +503,10 @@ function isValidFileType(mimeType) {
   return validTypes.includes(mimeType);
 }
 
-function getFileIcon(extension) {
+function getFileIcon(fileName) {
+  if (!fileName) return 'pi pi-file';
+  
+  const extension = fileName.split('.').pop()?.toLowerCase();
   const icons = {
     pdf: 'pi pi-file-pdf',
     jpg: 'pi pi-image',
@@ -428,51 +514,57 @@ function getFileIcon(extension) {
     png: 'pi pi-image',
     gif: 'pi pi-image'
   };
-  return icons[extension?.toLowerCase()] || 'pi pi-file';
-}
-
-function formatFileSize(bytes) {
-  if (!bytes) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  return icons[extension] || 'pi pi-file';
 }
 
 function formatDate(dateString) {
   if (!dateString) return '';
-  return new Intl.DateTimeFormat('fr-FR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(new Date(dateString));
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    
+    // Use a more compatible approach
+    return date.toLocaleDateString('fr-FR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    console.warn('Error formatting date:', error);
+    return dateString;
+  }
 }
 
 function getStatusLabel(status) {
+  if (!status) return 'Statut inconnu';
   const labels = {
     'DRAFT': 'Brouillon',
     'SUBMITTED': 'Soumis',
     'IN_REVIEW': 'En cours',
     'APPROVED': 'Approuvé',
-    'REJECTED': 'Rejeté'
+    'REJECTED': 'Rejeté',
+    'UNKNOWN': 'Statut inconnu'
   };
   return labels[status] || status;
 }
 
 function getStatusSeverity(status) {
+  if (!status) return 'secondary';
   const severities = {
     'DRAFT': 'secondary',
     'SUBMITTED': 'info',
     'IN_REVIEW': 'warning',
     'APPROVED': 'success',
-    'REJECTED': 'danger'
+    'REJECTED': 'danger',
+    'UNKNOWN': 'secondary'
   };
   return severities[status] || 'secondary';
 }
 
 function getDocumentStatusLabel(status) {
+  if (!status) return 'Statut inconnu';
   const labels = {
     'COMPLETE': 'Complet',
     'MISSING': 'Manquant',
@@ -482,6 +574,7 @@ function getDocumentStatusLabel(status) {
 }
 
 function getDocumentStatusSeverity(status) {
+  if (!status) return 'secondary';
   const severities = {
     'COMPLETE': 'success',
     'MISSING': 'danger',
@@ -500,4 +593,3 @@ function getDocumentStatusSeverity(status) {
   margin-top: 0.5rem;
 }
 </style>
-

@@ -471,11 +471,10 @@ onMounted(() => {
 });
 
 async function loadDossiers() {
-  try {
-    loading.value = true;
+  try {    loading.value = true;
     error.value = null;
     
-    const response = await ApiService.get('/agent-antenne/dossiers');
+    const response = await ApiService.get('/agent_antenne/dossiers');
     dossiers.value = response.dossiers || [];
     
   } catch (err) {
@@ -537,7 +536,7 @@ async function submitDossier() {
   try {
     submitDialog.value.loading = true;
     
-    const response = await ApiService.post(`/agent-antenne/dossiers/submit/${submitDialog.value.dossier.id}`);
+    const response = await ApiService.post(`/agent_antenne/dossiers/submit/${submitDialog.value.dossier.id}`);
     
     if (response.success) {
       toast.add({

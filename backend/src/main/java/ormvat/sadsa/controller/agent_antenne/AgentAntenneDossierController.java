@@ -11,7 +11,7 @@ import ormvat.sadsa.dto.role_based.RoleBasedDossierDTOs.*;
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/agent-antenne/dossiers")
+@RequestMapping("/api/agent_antenne/dossiers")
 @RequiredArgsConstructor
 @Slf4j
 public class AgentAntenneDossierController {
@@ -37,24 +37,7 @@ public class AgentAntenneDossierController {
         } catch (Exception e) {
             log.error("Erreur récupération détail dossier {}: {}", id, e.getMessage());
             return ResponseEntity.badRequest().build();
-        }
-    }
-
-    @PostMapping("/create")
-    public ResponseEntity<ActionResponse> createDossier(@Valid @RequestBody CreateDossierRequest request, 
-                                                       Authentication authentication) {
-        try {
-            ActionResponse response = dossierService.createDossier(request, authentication.getName());
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Erreur création dossier: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                    .body(ActionResponse.builder()
-                            .success(false)
-                            .message(e.getMessage())
-                            .build());
-        }
-    }
+        }    }
 
     @PutMapping("/update/{id}")
     public ResponseEntity<ActionResponse> updateDossier(@PathVariable Long id,
