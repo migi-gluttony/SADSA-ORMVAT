@@ -21,19 +21,25 @@ public class AgentCommissionDossierService {
 
     private final DossierRepository dossierRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final VisiteTerrainRepository visiteTerrainRepository;
     private final WorkflowService workflowService;
     private final AuditService auditService;
 
     public DossierListResponse getDossiersForInspection(String userEmail) {
         Utilisateur user = getUserByEmail(userEmail);
         
-        List<Dossier> dossiers = dossierRepository.findByStatus(Dossier.DossierStatus.IN_REVIEW)
-                .stream()
-                .filter(this::isInCommissionPhase)
+        // Get dossiers in commission phase (phase 3) or dossiers that have been processed by this commission agent
+        List<Dossier> dossiers = dossierRepository.findByStatusIn(List.of(
+                Dossier.DossierStatus.IN_REVIEW,
+                Dossier.DossierStatus.APPROVED,
+                Dossier.DossierStatus.REJECTED,
+                Dossier.DossierStatus.COMPLETED
+        )).stream()
+                .filter(dossier -> isAccessibleByCommission(dossier, user))
                 .collect(Collectors.toList());
         
         List<DossierSummaryDTO> summaries = dossiers.stream()
-                .map(this::mapToSummaryDTO)
+                .map(dossier -> mapToSummaryDTO(dossier, user))
                 .collect(Collectors.toList());
 
         return DossierListResponse.builder()
@@ -44,9 +50,19 @@ public class AgentCommissionDossierService {
     public DossierListResponse getMyAssignedDossiers(String userEmail) {
         Utilisateur user = getUserByEmail(userEmail);
         
-        // For now, return all dossiers in commission phase
-        // TODO: Implement actual assignment logic
-        return getDossiersForInspection(userEmail);
+        // Get dossiers currently in commission phase (phase 3) that are assigned to this agent's team
+        List<Dossier> dossiers = dossierRepository.findByStatus(Dossier.DossierStatus.IN_REVIEW)
+                .stream()
+                .filter(dossier -> isInCommissionPhase(dossier) && isAssignedToTeam(dossier, user))
+                .collect(Collectors.toList());
+        
+        List<DossierSummaryDTO> summaries = dossiers.stream()
+                .map(dossier -> mapToSummaryDTO(dossier, user))
+                .collect(Collectors.toList());
+
+        return DossierListResponse.builder()
+                .dossiers(summaries)
+                .build();
     }
 
     public DossierDetailResponse getDossierById(Long id, String userEmail) {
@@ -54,17 +70,30 @@ public class AgentCommissionDossierService {
         Dossier dossier = dossierRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
-        if (!isInCommissionPhase(dossier)) {
+        if (!isAccessibleByCommission(dossier, user)) {
             throw new RuntimeException("Dossier non accessible par la Commission");
         }
 
-        return mapToDetailDTO(dossier);
+        return mapToDetailDTO(dossier, user);
     }
 
     @Transactional
     public ActionResponse approveTerrainInspection(Long id, TerrainApprovalRequest request, String userEmail) {
         Utilisateur user = getUserByEmail(userEmail);
-        Dossier dossier = getDossierForCommissionAction(id);
+        Dossier dossier = getDossierForCommissionAction(id, user);
+
+        // Find the active terrain visit for this dossier and agent
+        VisiteTerrain visite = findActiveVisiteForDossier(dossier, user);
+        if (visite == null) {
+            throw new RuntimeException("Aucune visite terrain active trouvée pour ce dossier");
+        }
+
+        // Complete the visit with approval
+        visite.setDateConstat(java.time.LocalDate.now());
+        visite.setApprouve(true);
+        visite.setObservations(request.getObservations());
+        visite.setStatutVisite(VisiteTerrain.StatutVisite.TERMINEE);
+        visiteTerrainRepository.save(visite);
 
         // Move to Phase 4 (Final GUC approval)
         workflowService.moveToStep(dossier.getId(), 4L, user.getId(), 
@@ -84,8 +113,22 @@ public class AgentCommissionDossierService {
     @Transactional
     public ActionResponse rejectTerrainInspection(Long id, TerrainRejectionRequest request, String userEmail) {
         Utilisateur user = getUserByEmail(userEmail);
-        Dossier dossier = getDossierForCommissionAction(id);
+        Dossier dossier = getDossierForCommissionAction(id, user);
 
+        // Find the active terrain visit for this dossier and agent
+        VisiteTerrain visite = findActiveVisiteForDossier(dossier, user);
+        if (visite == null) {
+            throw new RuntimeException("Aucune visite terrain active trouvée pour ce dossier");
+        }
+
+        // Complete the visit with rejection
+        visite.setDateConstat(java.time.LocalDate.now());
+        visite.setApprouve(false);
+        visite.setObservations(request.getObservations());
+        visite.setStatutVisite(VisiteTerrain.StatutVisite.TERMINEE);
+        visiteTerrainRepository.save(visite);
+
+        // Reject the dossier
         dossier.setStatus(Dossier.DossierStatus.REJECTED);
         dossierRepository.save(dossier);
 
@@ -103,7 +146,16 @@ public class AgentCommissionDossierService {
     @Transactional
     public ActionResponse scheduleVisit(Long id, ScheduleVisitRequest request, String userEmail) {
         Utilisateur user = getUserByEmail(userEmail);
-        Dossier dossier = getDossierForCommissionAction(id);
+        Dossier dossier = getDossierForCommissionAction(id, user);
+
+        // Create new terrain visit
+        VisiteTerrain visite = new VisiteTerrain();
+        visite.setDossier(dossier);
+        visite.setUtilisateurCommission(user);
+        visite.setDateVisite(request.getDateVisite().toLocalDate());
+        visite.setObservations(request.getCommentaire());
+        visite.setStatutVisite(VisiteTerrain.StatutVisite.PROGRAMMEE);
+        visiteTerrainRepository.save(visite);
 
         auditService.logAction(user.getId(), "SCHEDULE_VISIT", "Dossier", dossier.getId(),
                               null, request.getDateVisite().toString(), 
@@ -117,14 +169,15 @@ public class AgentCommissionDossierService {
     }
 
     public List<ActionDTO> getAvailableActions(Long dossierId, String userEmail) {
+        Utilisateur user = getUserByEmail(userEmail);
         Dossier dossier = dossierRepository.findById(dossierId)
                 .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
-        if (!isInCommissionPhase(dossier)) {
+        if (!isAccessibleByCommission(dossier, user)) {
             return List.of();
         }
 
-        return getActionsForCommissionPhase(dossierId);
+        return getActionsForCommissionPhase(dossierId, user);
     }
 
     // Helper methods
@@ -133,15 +186,28 @@ public class AgentCommissionDossierService {
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
     }
 
-    private Dossier getDossierForCommissionAction(Long id) {
+    private Dossier getDossierForCommissionAction(Long id, Utilisateur user) {
         Dossier dossier = dossierRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
-        if (!isInCommissionPhase(dossier)) {
+        if (!isAccessibleByCommission(dossier, user)) {
             throw new RuntimeException("Action Commission non autorisée sur ce dossier");
         }
 
         return dossier;
+    }
+
+    private boolean isAccessibleByCommission(Dossier dossier, Utilisateur user) {
+        // Check if dossier is in or has passed commission phase
+        if (dossier.getStatus() != Dossier.DossierStatus.IN_REVIEW && 
+            dossier.getStatus() != Dossier.DossierStatus.APPROVED &&
+            dossier.getStatus() != Dossier.DossierStatus.REJECTED &&
+            dossier.getStatus() != Dossier.DossierStatus.COMPLETED) {
+            return false;
+        }
+
+        // Check team assignment if user has a specific team
+        return isAssignedToTeam(dossier, user);
     }
 
     private boolean isInCommissionPhase(Dossier dossier) {
@@ -154,7 +220,25 @@ public class AgentCommissionDossierService {
         return currentStep.getIdEtape() == 3L;
     }
 
-    private DossierSummaryDTO mapToSummaryDTO(Dossier dossier) {
+    private boolean isAssignedToTeam(Dossier dossier, Utilisateur user) {
+        // If user has no specific team, can access all dossiers
+        if (user.getEquipeCommission() == null) return true;
+
+        // Check if dossier's project type matches user's team
+        Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
+        Utilisateur.EquipeCommission requiredTeam = Utilisateur.EquipeCommission.getTeamForRubrique(rubriqueId);
+        
+        return requiredTeam.equals(user.getEquipeCommission());
+    }
+
+    private VisiteTerrain findActiveVisiteForDossier(Dossier dossier, Utilisateur user) {
+        return visiteTerrainRepository.findByDossierId(dossier.getId())
+                .stream()
+                .filter(v -> v.getUtilisateurCommission().getId().equals(user.getId()))
+                .filter(v -> v.getDateConstat() == null)
+                .findFirst()
+                .orElse(null);
+    }    private DossierSummaryDTO mapToSummaryDTO(Dossier dossier, Utilisateur user) {
         TimingDTO timing = workflowService.getTimingInfo(dossier.getId());
 
         return DossierSummaryDTO.builder()
@@ -171,11 +255,11 @@ public class AgentCommissionDossierService {
                 .enRetard(timing.getEnRetard())
                 .joursRetard(timing.getJoursRetard())
                 .joursRestants(timing.getJoursRestants())
-                .availableActions(getActionsForCommissionPhase(dossier.getId()))
+                .availableActions(getActionsForCommissionPhase(dossier.getId(), user))
                 .build();
     }
 
-    private DossierDetailResponse mapToDetailDTO(Dossier dossier) {
+    private DossierDetailResponse mapToDetailDTO(Dossier dossier, Utilisateur user) {
         TimingDTO timing = workflowService.getTimingInfo(dossier.getId());
 
         return DossierDetailResponse.builder()
@@ -195,7 +279,7 @@ public class AgentCommissionDossierService {
                 .timing(timing)
                 .workflowHistory(mapToWorkflowHistoryDTOs(dossier.getId()))
                 .documents(List.of()) // TODO: Implement documents
-                .availableActions(getActionsForCommissionPhase(dossier.getId()))
+                .availableActions(getActionsForCommissionPhase(dossier.getId(), user))
                 .build();
     }
 
@@ -254,26 +338,46 @@ public class AgentCommissionDossierService {
                 .collect(Collectors.toList());
     }
 
-    private List<ActionDTO> getActionsForCommissionPhase(Long dossierId) {
-        return List.of(
-                ActionDTO.builder()
-                        .action("schedule-visit")
-                        .label("Programmer Visite")
-                        .endpoint("/api/agent-commission/dossiers/schedule-visit/" + dossierId)
-                        .method("POST")
-                        .build(),
-                ActionDTO.builder()
-                        .action("approve-terrain")
-                        .label("Approuver Terrain")
-                        .endpoint("/api/agent-commission/dossiers/approve-terrain/" + dossierId)
-                        .method("POST")
-                        .build(),
-                ActionDTO.builder()
-                        .action("reject-terrain")
-                        .label("Rejeter Terrain")
-                        .endpoint("/api/agent-commission/dossiers/reject-terrain/" + dossierId)
-                        .method("POST")
-                        .build()
-        );
+    private List<ActionDTO> getActionsForCommissionPhase(Long dossierId, Utilisateur user) {
+        Dossier dossier = dossierRepository.findById(dossierId).orElse(null);
+        if (dossier == null) return List.of();
+
+        // Only show actions if user can access this dossier
+        if (!isAccessibleByCommission(dossier, user)) return List.of();
+
+        // Check if dossier is in commission phase and user's team matches
+        if (isInCommissionPhase(dossier) && isAssignedToTeam(dossier, user)) {
+            VisiteTerrain activeVisit = findActiveVisiteForDossier(dossier, user);
+            
+            if (activeVisit == null) {
+                // No visit scheduled yet
+                return List.of(
+                        ActionDTO.builder()
+                                .action("schedule-visit")
+                                .label("Programmer Visite")
+                                .endpoint("/api/agent-commission/dossiers/schedule-visit/" + dossierId)
+                                .method("POST")
+                                .build()
+                );
+            } else if (activeVisit.getDateConstat() == null) {
+                // Visit scheduled but not completed
+                return List.of(
+                        ActionDTO.builder()
+                                .action("approve-terrain")
+                                .label("Approuver Terrain")
+                                .endpoint("/api/agent-commission/dossiers/approve-terrain/" + dossierId)
+                                .method("POST")
+                                .build(),
+                        ActionDTO.builder()
+                                .action("reject-terrain")
+                                .label("Rejeter Terrain")
+                                .endpoint("/api/agent-commission/dossiers/reject-terrain/" + dossierId)
+                                .method("POST")
+                                .build()
+                );
+            }
+        }
+
+        return List.of();
     }
 }

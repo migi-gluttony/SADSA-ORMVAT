@@ -9,7 +9,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import ormvat.sadsa.dto.agent_commission.TerrainVisitDTOs.*;
-import ormvat.sadsa.dto.agent_antenne.DocumentFillingDTOs.*;
 import ormvat.sadsa.service.agent_commission.TerrainVisitService;
 import ormvat.sadsa.service.agent_antenne.DocumentFillingService;
 
@@ -258,7 +257,9 @@ public class TerrainVisitController {
                     .build()
             );
         }
-    }    /**
+    }
+
+    /**
      * Upload single photo for terrain visit using new simplified structure
      */
     @PostMapping("/{visiteId}/photos/single")
@@ -292,10 +293,13 @@ public class TerrainVisitController {
             return ResponseEntity.badRequest().body(
                 ApiResponse.error("Erreur: " + e.getMessage()));
         }
-    }/**
+    }
+
+    /**
      * Get all photos for a terrain visit using new simplified structure
      */
-    @GetMapping("/{visiteId}/photos")    public ResponseEntity<ApiResponse<List<PhotoVisiteDTO>>> getTerrainPhotos(
+    @GetMapping("/{visiteId}/photos")
+    public ResponseEntity<ApiResponse<List<PhotoVisiteDTO>>> getTerrainPhotos(
             @PathVariable Long visiteId,
             Authentication authentication) {
         
@@ -386,5 +390,31 @@ public class TerrainVisitController {
             log.error("Erreur lors de la récupération des dossiers disponibles", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+// Helper class for API responses  
+    public static class ApiResponse<T> {
+        private boolean success;
+        private String message;
+        private T data;
+
+        public ApiResponse(boolean success, String message, T data) {
+            this.success = success;
+            this.message = message;
+            this.data = data;
+        }
+
+        public static <T> ApiResponse<T> success(T data, String message) {
+            return new ApiResponse<>(true, message, data);
+        }
+
+        public static <T> ApiResponse<T> error(String message) {
+            return new ApiResponse<>(false, message, null);
+        }
+
+        // Getters
+        public boolean isSuccess() { return success; }
+        public String getMessage() { return message; }
+        public T getData() { return data; }
     }
 }

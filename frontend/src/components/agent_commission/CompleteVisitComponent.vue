@@ -1,42 +1,41 @@
 <template>
-  <div class="complete-visit-container">
+  <Dialog 
+    :visible="visible" 
+    modal 
+    header="Finaliser la Visite Terrain"
+    :style="{ width: '90vw', maxWidth: '800px' }"
+    :closable="true"
+    @update:visible="$emit('update:visible', $event)"
+    @hide="$emit('close')"
+    class="complete-visit-dialog"
+  >
     <!-- Visit Summary -->
-    <div class="visit-summary">
-      <div class="summary-header">
-        <h3>
-          <i class="pi pi-info-circle"></i>
-          Résumé de la Visite
-        </h3>
-      </div>
-      
-      <div class="summary-content">
-        <div class="summary-item">
-          <span class="label">Dossier:</span>
-          <span class="value">{{ visit.dossierReference }}</span>
+    <div class="visit-summary mb-4">
+      <h4 class="mb-3">
+        <i class="pi pi-info-circle mr-2"></i>
+        Résumé de la Visite
+      </h4>      
+      <div class="grid">
+        <div class="col-12 md:col-6">
+          <strong>Dossier:</strong> {{ visit.dossierReference }}
         </div>
-        <div class="summary-item">
-          <span class="label">Agriculteur:</span>
-          <span class="value">{{ visit.agriculteurPrenom }} {{ visit.agriculteurNom }}</span>
+        <div class="col-12 md:col-6">
+          <strong>Agriculteur:</strong> {{ visit.agriculteurPrenom }} {{ visit.agriculteurNom }}
         </div>
-        <div class="summary-item">
-          <span class="label">Type de projet:</span>
-          <span class="value">{{ visit.sousRubriqueDesignation }}</span>
+        <div class="col-12 md:col-6">
+          <strong>Type de projet:</strong> {{ visit.sousRubriqueDesignation }}
         </div>
-        <div class="summary-item">
-          <span class="label">Date de visite:</span>
-          <span class="value">{{ formatDate(visit.dateVisite) }}</span>
+        <div class="col-12 md:col-6">
+          <strong>Date de visite:</strong> {{ formatDate(visit.dateVisite) }}
         </div>
-        <div class="summary-item">
-          <span class="label">Localisation:</span>
-          <span class="value">{{ getLocationText() }}</span>
+        <div class="col-12">
+          <strong>Localisation:</strong> {{ getLocationText() }}
         </div>
       </div>
-    </div>
-
-    <!-- Completion Form -->
+    </div>    <!-- Completion Form -->
     <div class="completion-form">
-      <div class="form-section">
-        <h4>Finalisation de la Visite</h4>
+      <div class="form-section mb-4">
+        <h5 class="mb-3">Finalisation de la Visite</h5>
         
         <div class="form-group">
           <label for="dateConstat">Date de constat *</label>
@@ -98,68 +97,65 @@
           </div>
           <small class="help-text">Coordonnées GPS exactes du terrain visité</small>
         </div>
-      </div>
-
-      <!-- Decision Section -->
-      <div class="decision-section">
-        <h4>
-          <i class="pi pi-check-circle"></i>
+      </div>      <!-- Decision Section -->
+      <div class="decision-section mb-4">
+        <h5 class="mb-3">
+          <i class="pi pi-check-circle mr-2"></i>
           Décision sur le Terrain
-        </h4>
-        
-        <div class="decision-cards">
-          <div 
-            class="decision-card approve-card"
-            :class="{ 'selected': formData.approuve === true }"
-            @click="selectDecision(true)"
-          >
-            <div class="card-icon approve">
-              <i class="pi pi-check-circle"></i>
-            </div>
-            <div class="card-content">
-              <h5>Approuver le Terrain</h5>
-              <p>Le terrain est conforme aux exigences du projet</p>
-            </div>
-            <div class="card-radio">
-              <RadioButton 
-                v-model="formData.approuve" 
-                :value="true" 
-                inputId="approve"
-              />
+        </h5>
+          <div class="grid">
+          <div class="col-12 md:col-6">
+            <div 
+              class="decision-card p-3 border-round cursor-pointer"
+              :class="{ 'bg-green-50 border-green-500': formData.approuve === true, 'border-300': formData.approuve !== true }"
+              @click="selectDecision(true)"
+            >
+              <div class="flex align-items-center">
+                <i class="pi pi-check-circle text-green-500 text-2xl mr-3"></i>
+                <div>
+                  <h6 class="m-0 mb-1">Approuver le Terrain</h6>
+                  <p class="m-0 text-sm text-600">Le terrain est conforme aux exigences</p>
+                </div>
+                <RadioButton 
+                  v-model="formData.approuve" 
+                  :value="true" 
+                  inputId="approve"
+                  class="ml-auto"
+                />
+              </div>
             </div>
           </div>
-
-          <div 
-            class="decision-card reject-card"
-            :class="{ 'selected': formData.approuve === false }"
-            @click="selectDecision(false)"
-          >
-            <div class="card-icon reject">
-              <i class="pi pi-times-circle"></i>
-            </div>
-            <div class="card-content">
-              <h5>Rejeter le Terrain</h5>
-              <p>Le terrain ne répond pas aux critères requis</p>
-            </div>
-            <div class="card-radio">
-              <RadioButton 
-                v-model="formData.approuve" 
-                :value="false" 
-                inputId="reject"
-              />
+          
+          <div class="col-12 md:col-6">
+            <div 
+              class="decision-card p-3 border-round cursor-pointer"
+              :class="{ 'bg-red-50 border-red-500': formData.approuve === false, 'border-300': formData.approuve !== false }"
+              @click="selectDecision(false)"
+            >
+              <div class="flex align-items-center">
+                <i class="pi pi-times-circle text-red-500 text-2xl mr-3"></i>
+                <div>
+                  <h6 class="m-0 mb-1">Rejeter le Terrain</h6>
+                  <p class="m-0 text-sm text-600">Le terrain ne répond pas aux critères</p>
+                </div>
+                <RadioButton 
+                  v-model="formData.approuve" 
+                  :value="false" 
+                  inputId="reject"
+                  class="ml-auto"
+                />
+              </div>
             </div>
           </div>
         </div>
 
         <small v-if="errors.approuve" class="p-error">{{ errors.approuve }}</small>
-      </div>
-
-      <!-- Rejection Details (shown only if rejected) -->
-      <div v-if="formData.approuve === false" class="rejection-details">
-        <h4>
-          <i class="pi pi-exclamation-triangle"></i>
+      </div>      <!-- Rejection Details (shown only if rejected) -->
+      <div v-if="formData.approuve === false" class="rejection-details mb-4">
+        <h5 class="mb-3 text-red-500">
+          <i class="pi pi-exclamation-triangle mr-2"></i>
           Détails du Rejet
-        </h4>
+        </h5>
         
         <div class="form-group">
           <label for="motifRejet">Motif principal de rejet *</label>
@@ -234,14 +230,12 @@
             Ces remarques seront transmises à l'agriculteur et à l'antenne
           </small>
         </div>
-      </div>
-
-      <!-- Approval Details (shown only if approved) -->
-      <div v-if="formData.approuve === true" class="approval-details">
-        <h4>
-          <i class="pi pi-check"></i>
+      </div>      <!-- Approval Details (shown only if approved) -->
+      <div v-if="formData.approuve === true" class="approval-details mb-4">
+        <h5 class="mb-3 text-green-500">
+          <i class="pi pi-check mr-2"></i>
           Confirmation d'Approbation
-        </h4>
+        </h5>
         
         <div class="approval-checklist">
           <div class="checklist-item">
@@ -295,11 +289,10 @@
             class="w-full"
           />
         </div>
-      </div>
-    </div>
+      </div>    </div>
 
     <!-- Form Actions -->
-    <div class="form-actions">
+    <template #footer>
       <Button 
         label="Annuler" 
         icon="pi pi-times" 
@@ -314,11 +307,11 @@
         :loading="loading"
         :disabled="!isFormValid"
       />
-    </div>
+    </template>
 
     <!-- Toast Messages -->
     <Toast />
-  </div>
+  </Dialog>
 </template>
 
 <script setup>
@@ -328,6 +321,7 @@ import ApiService from '@/services/ApiService';
 
 // PrimeVue Components
 import Button from 'primevue/button';
+import Dialog from 'primevue/dialog';
 import Calendar from 'primevue/calendar';
 import Textarea from 'primevue/textarea';
 import InputText from 'primevue/inputtext';
@@ -341,10 +335,14 @@ const props = defineProps({
   visit: {
     type: Object,
     required: true
+  },
+  visible: {
+    type: Boolean,
+    default: false
   }
 });
 
-const emit = defineEmits(['visit-completed', 'close']);
+const emit = defineEmits(['visit-completed', 'close', 'update:visible']);
 
 const toast = useToast();
 
@@ -591,4 +589,104 @@ function getLocationText() {
   return parts.join(' - ') || 'Non spécifié';
 }
 </script>
+
+<style scoped>
+.visit-summary {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.decision-card {
+  border: 2px solid #dee2e6;
+  transition: all 0.2s;
+}
+
+.decision-card:hover {
+  border-color: #adb5bd;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.coordinates-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.non-conform-points {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.point-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+.custom-point {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.custom-points-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.approval-checklist {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+.char-count {
+  text-align: right;
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin-top: 0.25rem;
+}
+
+.help-text {
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 768px) {
+  .non-conform-points {
+    grid-template-columns: 1fr;
+  }
+  
+  .coordinates-input {
+    flex-direction: column;
+  }
+}
+</style>
 

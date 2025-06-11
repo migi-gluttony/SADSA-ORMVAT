@@ -31,7 +31,7 @@ public class SecurityConfiguration {
 
                         // Role-specific endpoints
                         .requestMatchers("/api/agent_antenne/**").hasAnyRole("AGENT_ANTENNE")
-                        .requestMatchers("/api/agent_guc/**").hasRole("AGENT_GUC")
+                        .requestMatchers("/api/agent_guc/**").hasAnyRole("AGENT_GUC", "AGENT_COMMISSION_TERRAIN") // Allow agent commission to access GUC endpoints for read-only access
                         .requestMatchers("/api/agent_commission/**").hasRole("AGENT_COMMISSION_TERRAIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // Any other request requires authentication

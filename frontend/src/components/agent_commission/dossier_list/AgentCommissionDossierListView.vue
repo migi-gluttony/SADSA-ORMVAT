@@ -306,9 +306,7 @@
                 </div>
               </div>
             </template>
-          </Column>
-
-          <Column field="actions" header="Actions">
+          </Column>          <Column field="actions" header="Actions">
             <template #body="slotProps">
               <div class="flex gap-1">
                 <!-- View Details -->
@@ -327,30 +325,31 @@
                   v-tooltip.top="'Ajouter note'" 
                 />
 
-                <!-- Available Actions from Backend -->
-                <template v-for="action in slotProps.data.availableActions" :key="action.action">
-                  <Button 
-                    v-if="action.action === 'schedule-visit'"
-                    icon="pi pi-calendar-plus" 
-                    @click="confirmScheduleVisit(slotProps.data)"
-                    class="p-button-info p-button-sm" 
-                    v-tooltip.top="action.label" 
-                  />
-                  <Button 
-                    v-if="action.action === 'approve-terrain'"
-                    icon="pi pi-check" 
-                    @click="confirmApproveTerrainInspection(slotProps.data)"
-                    class="p-button-success p-button-sm" 
-                    v-tooltip.top="action.label" 
-                  />
-                  <Button 
-                    v-if="action.action === 'reject-terrain'"
-                    icon="pi pi-times" 
-                    @click="confirmRejectTerrainInspection(slotProps.data)"
-                    class="p-button-danger p-button-outlined p-button-sm" 
-                    v-tooltip.top="action.label" 
-                  />
-                </template>
+                <!-- Schedule Visit Button - only if no visit is scheduled or needs to be programmed -->
+                <Button 
+                  v-if="canScheduleVisit(slotProps.data)"
+                  icon="pi pi-calendar-plus" 
+                  @click="confirmScheduleVisit(slotProps.data)"
+                  class="p-button-info p-button-sm" 
+                  v-tooltip.top="'Programmer visite terrain'" 
+                />
+
+                <!-- Complete/Finalize Visit Button - when visit is scheduled but not completed -->
+                <Button 
+                  v-if="canFinalizeVisit(slotProps.data)"
+                  icon="pi pi-check-circle" 
+                  @click="showFinalizeVisitDialog(slotProps.data)"
+                  class="p-button-success p-button-sm" 
+                  v-tooltip.top="'Finaliser visite terrain'" 
+                />
+
+                <!-- Visit Status Indicator -->
+                <div v-if="slotProps.data.visiteTerrainStatus === 'APPROUVEE'" class="ml-2">
+                  <i class="pi pi-check-circle text-green-500" v-tooltip.top="'Terrain approuvé'"></i>
+                </div>
+                <div v-else-if="slotProps.data.visiteTerrainStatus === 'REJETEE'" class="ml-2">
+                  <i class="pi pi-times-circle text-red-500" v-tooltip.top="'Terrain rejeté'"></i>
+                </div>
               </div>
             </template>
           </Column>
@@ -423,145 +422,14 @@
           :disabled="!scheduleVisitDialog.dateVisite || !scheduleVisitDialog.comment?.trim()"
         />
       </template>
-    </Dialog>
-
-    <!-- Approve Terrain Dialog -->
-    <Dialog 
-      v-model:visible="approveTerrainDialog.visible" 
-      modal 
-      header="Approuver le Terrain"
-      :style="{ width: '500px' }"
-    >
-      <div class="flex align-items-center mb-3">
-        <i class="pi pi-check text-2xl text-green-500 mr-3"></i>
-        <div>
-          <p>Approuver la conformité du terrain pour ce dossier ?</p>
-          <div class="mt-2 p-2 bg-green-50 border-round">
-            <strong>{{ approveTerrainDialog.dossier?.reference }}</strong><br>
-            {{ approveTerrainDialog.dossier?.agriculteurNom }}
-          </div>
-        </div>
-      </div>
-      
-      <div class="field">
-        <label for="approveComment">Commentaire *</label>
-        <Textarea 
-          id="approveComment"
-          v-model="approveTerrainDialog.comment" 
-          rows="3" 
-          placeholder="Observations sur la conformité du terrain..."
-          class="w-full"
-          :class="{ 'p-invalid': !approveTerrainDialog.comment?.trim() }"
-        />
-      </div>
-      
-      <div class="field">
-        <label for="approveObservations">Observations techniques (optionnel)</label>
-        <Textarea 
-          id="approveObservations"
-          v-model="approveTerrainDialog.observations" 
-          rows="2" 
-          placeholder="Observations techniques détaillées..."
-          class="w-full"
-        />
-      </div>
-
-      <p class="text-600 text-sm">
-        Le dossier sera envoyé au GUC pour approbation finale.
-      </p>
-      
-      <template #footer>
-        <Button 
-          label="Annuler" 
-          icon="pi pi-times" 
-          @click="approveTerrainDialog.visible = false"
-          class="p-button-outlined"
-        />
-        <Button 
-          label="Approuver le Terrain" 
-          icon="pi pi-check" 
-          @click="approveTerrainInspection"
-          class="p-button-success"
-          :loading="approveTerrainDialog.loading"
-          :disabled="!approveTerrainDialog.comment?.trim()"
-        />
-      </template>
-    </Dialog>
-
-    <!-- Reject Terrain Dialog -->
-    <Dialog 
-      v-model:visible="rejectTerrainDialog.visible" 
-      modal 
-      header="Rejeter le Terrain"
-      :style="{ width: '500px' }"
-    >
-      <div class="flex align-items-center mb-3">
-        <i class="pi pi-times-circle text-2xl text-red-500 mr-3"></i>
-        <div>
-          <p>Rejeter ce dossier pour non-conformité du terrain ?</p>
-          <div class="mt-2 p-2 bg-red-50 border-round">
-            <strong>{{ rejectTerrainDialog.dossier?.reference }}</strong><br>
-            {{ rejectTerrainDialog.dossier?.agriculteurNom }}
-          </div>
-        </div>
-      </div>
-      
-      <div class="field">
-        <label for="rejectMotif">Motif du rejet *</label>
-        <Textarea 
-          id="rejectMotif"
-          v-model="rejectTerrainDialog.motif" 
-          rows="3" 
-          placeholder="Motif de non-conformité du terrain..."
-          class="w-full"
-          :class="{ 'p-invalid': !rejectTerrainDialog.motif?.trim() }"
-        />
-      </div>
-      
-      <div class="field">
-        <label for="rejectComment">Commentaire détaillé *</label>
-        <Textarea 
-          id="rejectComment"
-          v-model="rejectTerrainDialog.comment" 
-          rows="3" 
-          placeholder="Détails techniques sur les problèmes constatés..."
-          class="w-full"
-          :class="{ 'p-invalid': !rejectTerrainDialog.comment?.trim() }"
-        />
-      </div>
-      
-      <div class="field">
-        <label for="rejectObservations">Observations techniques (optionnel)</label>
-        <Textarea 
-          id="rejectObservations"
-          v-model="rejectTerrainDialog.observations" 
-          rows="2" 
-          placeholder="Observations techniques détaillées..."
-          class="w-full"
-        />
-      </div>
-
-      <p class="text-red-600 text-sm font-semibold">
-        Le dossier sera définitivement rejeté.
-      </p>
-      
-      <template #footer>
-        <Button 
-          label="Annuler" 
-          icon="pi pi-times" 
-          @click="rejectTerrainDialog.visible = false"
-          class="p-button-outlined"
-        />
-        <Button 
-          label="Rejeter le Terrain" 
-          icon="pi pi-times-circle" 
-          @click="rejectTerrainInspection"
-          class="p-button-danger"
-          :loading="rejectTerrainDialog.loading"
-          :disabled="!rejectTerrainDialog.motif?.trim() || !rejectTerrainDialog.comment?.trim()"
-        />
-      </template>
-    </Dialog>
+    </Dialog>    <!-- Complete Visit Dialog -->
+    <CompleteVisitComponent 
+      v-if="finalizeVisitDialog.visit"
+      v-model:visible="finalizeVisitDialog.visible"
+      :visit="finalizeVisitDialog.visit"
+      @visit-completed="handleVisitCompleted"
+      @close="finalizeVisitDialog.visible = false"
+    />
 
     <!-- Add Note Dialog -->
     <Dialog 
@@ -610,6 +478,9 @@ import { useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import ApiService from '@/services/ApiService';
 import AuthService from '@/services/AuthService';
+
+// Components
+import CompleteVisitComponent from '@/components/agent_commission/CompleteVisitComponent.vue';
 
 // PrimeVue components
 import Button from 'primevue/button';
@@ -683,21 +554,9 @@ const scheduleVisitDialog = ref({
   comment: ''
 });
 
-const approveTerrainDialog = ref({
+const finalizeVisitDialog = ref({
   visible: false,
-  dossier: null,
-  loading: false,
-  comment: '',
-  observations: ''
-});
-
-const rejectTerrainDialog = ref({
-  visible: false,
-  dossier: null,
-  loading: false,
-  motif: '',
-  comment: '',
-  observations: ''
+  visit: null
 });
 
 const addNoteDialog = ref({
@@ -749,8 +608,7 @@ async function loadDossiers() {
 
 function calculateStatistics() {
   const total = dossiers.value.length;
-  const enCommission = dossiers.value.filter(d => d.statut === 'IN_REVIEW').length;
-  const approuves = dossiers.value.filter(d => d.statut === 'APPROVED' || d.statut === 'COMPLETED').length;
+  const enCommission = dossiers.value.filter(d => d.statut === 'IN_REVIEW').length;  const approuves = dossiers.value.filter(d => d.statut === 'APPROVED' || d.statut === 'COMPLETED').length;
   const enRetard = dossiers.value.filter(d => d.enRetard).length;
 
   statistics.value = {
@@ -809,6 +667,23 @@ function viewDossierDetail(dossierId) {
   router.push(`/agent_commission/dossiers/${dossierId}`);
 }
 
+// Visit scheduling logic
+function hasScheduledVisit(dossier) {
+  return dossier.visiteTerrainStatus && dossier.visiteTerrainStatus !== 'A_PROGRAMMER';
+}
+
+function canScheduleVisit(dossier) {
+  return dossier.statut === 'IN_REVIEW' && 
+         (!dossier.visiteTerrainStatus || dossier.visiteTerrainStatus === 'A_PROGRAMMER');
+}
+
+function canFinalizeVisit(dossier) {
+  return dossier.visiteTerrainStatus && 
+         (dossier.visiteTerrainStatus === 'PROGRAMMEE' || 
+          dossier.visiteTerrainStatus === 'EN_COURS' ||
+          dossier.visiteTerrainStatus === 'COMPLETEE');
+}
+
 // Dialog functions
 function confirmScheduleVisit(dossier) {
   scheduleVisitDialog.value = {
@@ -816,29 +691,7 @@ function confirmScheduleVisit(dossier) {
     dossier: dossier,
     loading: false,
     dateVisite: null,
-    comment: ''
-  };
-}
-
-function confirmApproveTerrainInspection(dossier) {
-  approveTerrainDialog.value = {
-    visible: true,
-    dossier: dossier,
-    loading: false,
-    comment: '',
-    observations: ''
-  };
-}
-
-function confirmRejectTerrainInspection(dossier) {
-  rejectTerrainDialog.value = {
-    visible: true,
-    dossier: dossier,
-    loading: false,
-    motif: '',
-    comment: '',
-    observations: ''
-  };
+    comment: ''  };
 }
 
 function showAddNoteDialog(dossier) {
@@ -856,10 +709,11 @@ async function scheduleVisit() {
     scheduleVisitDialog.value.loading = true;
     
     const dossier = scheduleVisitDialog.value.dossier;
-    const endpoint = `/agent-commission/dossiers/schedule-visit/${dossier.id}`;
+    const endpoint = `/agent_commission/terrain-visits/schedule`;
     const payload = { 
-      dateVisite: scheduleVisitDialog.value.dateVisite.toISOString(),
-      commentaire: scheduleVisitDialog.value.comment 
+      dossierId: dossier.id,
+      dateVisite: scheduleVisitDialog.value.dateVisite.toISOString().split('T')[0],
+      observations: scheduleVisitDialog.value.comment 
     };
 
     const response = await ApiService.post(endpoint, payload);
@@ -888,78 +742,44 @@ async function scheduleVisit() {
   }
 }
 
-async function approveTerrainInspection() {
-  try {
-    approveTerrainDialog.value.loading = true;
-    
-    const dossier = approveTerrainDialog.value.dossier;
-    const endpoint = `/agent-commission/dossiers/approve-terrain/${dossier.id}`;
-    const payload = { 
-      commentaire: approveTerrainDialog.value.comment,
-      observations: approveTerrainDialog.value.observations
-    };
-
-    const response = await ApiService.post(endpoint, payload);
-
-    if (response.success) {
-      toast.add({
-        severity: 'success',
-        summary: 'Succès',
-        detail: response.message || 'Terrain approuvé avec succès',
-        life: 3000
-      });
-      
-      approveTerrainDialog.value.visible = false;
-      setTimeout(() => loadDossiers(), 500);
-    }
-
-  } catch (err) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: err.message || 'Une erreur est survenue',
-      life: 3000
-    });
-  } finally {
-    approveTerrainDialog.value.loading = false;
-  }
+function handleVisitCompleted() {
+  finalizeVisitDialog.value.visible = false;
+  loadDossiers();
+  
+  toast.add({
+    severity: 'success',
+    summary: 'Succès',
+    detail: 'Visite terrain finalisée avec succès',
+    life: 4000
+  });
 }
 
-async function rejectTerrainInspection() {
+async function showFinalizeVisitDialog(dossier) {
   try {
-    rejectTerrainDialog.value.loading = true;
+    // Load the visit data for this dossier
+    const response = await ApiService.get(`/agent_commission/terrain-visits/by-dossier/${dossier.id}`);
     
-    const dossier = rejectTerrainDialog.value.dossier;
-    const endpoint = `/agent-commission/dossiers/reject-terrain/${dossier.id}`;
-    const payload = { 
-      motif: rejectTerrainDialog.value.motif,
-      commentaire: rejectTerrainDialog.value.comment,
-      observations: rejectTerrainDialog.value.observations
-    };
-
-    const response = await ApiService.post(endpoint, payload);
-
-    if (response.success) {
+    if (response && response.id) {
+      finalizeVisitDialog.value = {
+        visible: true,
+        visit: response
+      };
+    } else {
       toast.add({
-        severity: 'success',
-        summary: 'Succès',
-        detail: response.message || 'Terrain rejeté',
-        life: 3000
+        severity: 'error',
+        summary: 'Erreur',
+        detail: 'Impossible de charger les données de la visite terrain',
+        life: 4000
       });
-      
-      rejectTerrainDialog.value.visible = false;
-      setTimeout(() => loadDossiers(), 500);
     }
-
   } catch (err) {
+    console.error('Erreur lors du chargement de la visite:', err);
     toast.add({
       severity: 'error',
       summary: 'Erreur',
-      detail: err.message || 'Une erreur est survenue',
-      life: 3000
+      detail: 'Impossible de charger les données de la visite terrain',
+      life: 4000
     });
-  } finally {
-    rejectTerrainDialog.value.loading = false;
   }
 }
 
@@ -997,6 +817,7 @@ function getInspectionStatusLabel(status) {
   const statusMap = {
     'A_PROGRAMMER': 'À programmer',
     'PROGRAMMEE': 'Programmée',
+    'EN_COURS': 'En cours',
     'COMPLETEE': 'Complétée',
     'APPROUVEE': 'Approuvée',
     'REJETEE': 'Rejetée'
@@ -1008,6 +829,7 @@ function getInspectionSeverity(status) {
   const severityMap = {
     'A_PROGRAMMER': 'warning',
     'PROGRAMMEE': 'info',
+    'EN_COURS': 'info',
     'COMPLETEE': 'warning',
     'APPROUVEE': 'success',
     'REJETEE': 'danger'
@@ -1085,7 +907,6 @@ async function exportToExcel() {
       detail: 'Export Excel généré avec succès',
       life: 3000
     });
-
   } catch (err) {
     toast.add({
       severity: 'error',
@@ -1127,5 +948,25 @@ async function exportToExcel() {
 
 .inspection-date i {
   color: var(--primary-color);
+}
+
+.decision-section h4 {
+  margin-bottom: 1rem;
+}
+
+.decision-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.finalize-visit-form .form-group {
+  margin-bottom: 1rem;
+}
+
+.finalize-visit-form .form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
 }
 </style>

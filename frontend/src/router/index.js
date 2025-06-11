@@ -126,13 +126,20 @@ const router = createRouter({
       path: '/agent_commission/dossiers',
       name: 'agent-commission-dossiers-list',
       component: AgentCommissionDossierListView,
-      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION_TERRAIN', title: 'Dossiers - Commission AHA-AF' }
+      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION_TERRAIN', title: 'Dossiers - Commission Visite Terrain' }
+    },
+    {
+      path: '/agent_commission/dossiers/:dossierId',
+      name: 'agent-commission-dossier-detail',
+      component: AgentGucDossierDetailView, // Reuse the GUC detail view
+      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION_TERRAIN', title: 'Détails du Dossier - Commission' },
+      props: true
     },
     {
       path: '/agent_commission/terrain-visits',
       name: 'agent-commission-terrain-visits',
       component: TerrainVisitsView,
-      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION_TERRAIN', title: 'Visites Terrain - Commission AHA-AF' }
+      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION_TERRAIN', title: 'Visites Terrain - Commission' }
     },
     // Catch-all route for 404
     {

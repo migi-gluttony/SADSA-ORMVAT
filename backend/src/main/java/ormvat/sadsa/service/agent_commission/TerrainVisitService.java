@@ -337,36 +337,43 @@ public class TerrainVisitService {
             visite.setRecommandations(request.getRecommandations());
             visite.setApprouve(request.getApprouve());
             visite.setCoordonneesGPS(request.getCoordonneesGPS());
+            
+            // Set visit status
+            if (request.getApprouve()) {
+                visite.setStatutVisite(VisiteTerrain.StatutVisite.TERMINEE);
+            } else {
+                visite.setStatutVisite(VisiteTerrain.StatutVisite.TERMINEE);
+            }
 
             visite = visiteTerrainRepository.save(visite);
 
-            // Update dossier status based on approval
+            // Update dossier status and advance workflow
             Dossier dossier = visite.getDossier();
-            if (request.getApprouve()) {
-                dossier.setStatus(Dossier.DossierStatus.APPROVED);
-                log.info("Terrain approuvé pour le dossier {}", dossier.getId());
-            } else {
-                dossier.setStatus(Dossier.DossierStatus.REJECTED);
-                log.info("Terrain rejeté pour le dossier {}", dossier.getId());
-            }
-            dossierRepository.save(dossier);
-
-            // ✅ NEW: Automatically advance workflow to next phase (only if approved)
             String workflowMessage = "Visite terrain terminée";
-            if (request.getApprouve() && workflowService != null) {
-                try {
-                    String comment = (request.getApprouve() ? "Terrain approuvé" : "Terrain rejeté") + 
-                            " par " + (utilisateur.getEquipeCommission() != null ? utilisateur.getEquipeCommission().getDisplayName() : "Commission");
-                    
-                    // Move to next workflow step (assuming step 4 is next after terrain visit)
-                    workflowService.moveToStep(dossier.getId(), 4L, utilisateur.getId(), comment);
-                    workflowMessage = "Visite terrain terminée avec succès. Le dossier a été automatiquement transféré à la phase suivante.";
-                    log.info("Workflow automatiquement avancé pour le dossier {}", dossier.getId());
-                } catch (Exception workflowError) {
-                    log.warn("Erreur lors de l'avancement automatique du workflow pour le dossier {}: {}", 
-                             dossier.getId(), workflowError.getMessage());
-                    // Continue with the visit completion even if workflow advancement fails
+            
+            if (request.getApprouve()) {
+                // Terrain approved - move to next GUC phase for final approval
+                if (workflowService != null) {
+                    try {
+                        String comment = "Terrain approuvé par " + 
+                                (utilisateur.getEquipeCommission() != null ? utilisateur.getEquipeCommission().getDisplayName() : "Commission");
+                        
+                        // Move to phase 4 (Final GUC approval)
+                        workflowService.moveToStep(dossier.getId(), 4L, utilisateur.getId(), comment);
+                        workflowMessage = "Terrain approuvé. Le dossier a été envoyé au GUC pour approbation finale.";
+                        log.info("Workflow avancé vers la phase 4 pour le dossier {}", dossier.getId());
+                    } catch (Exception workflowError) {
+                        log.warn("Erreur lors de l'avancement du workflow pour le dossier {}: {}", 
+                                 dossier.getId(), workflowError.getMessage());
+                        workflowMessage = "Terrain approuvé. Veuillez contacter l'administrateur pour le suivi du workflow.";
+                    }
                 }
+            } else {
+                // Terrain rejected - reject the entire dossier
+                dossier.setStatus(Dossier.DossierStatus.REJECTED);
+                dossierRepository.save(dossier);
+                workflowMessage = "Terrain rejeté. Le dossier a été refusé.";
+                log.info("Terrain rejeté pour le dossier {}", dossier.getId());
             }
 
             // Create audit trail with team information
