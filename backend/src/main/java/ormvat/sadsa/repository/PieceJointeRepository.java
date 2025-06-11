@@ -60,4 +60,11 @@ public interface PieceJointeRepository extends JpaRepository<PieceJointe, Long> 
     
     @Query("SELECT pj FROM PieceJointe pj WHERE pj.dossier.id = :dossierId AND pj.documentType = 'TERRAIN_PHOTO'")
     List<PieceJointe> findAllTerrainPhotosByDossier(@Param("dossierId") Long dossierId);
+    
+
+    /**
+     * Find all piece jointes for a specific dossier, ordered by upload date descending
+     */
+    @Query("SELECT pj FROM PieceJointe pj WHERE pj.dossier.id = :dossierId ORDER BY pj.dateUpload DESC")
+    List<PieceJointe> findByDossierIdOrderByDateUploadDesc(@Param("dossierId") Long dossierId);
 }

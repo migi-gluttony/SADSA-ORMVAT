@@ -21,6 +21,7 @@ public class AgentGUCDossierService {
 
     private final DossierRepository dossierRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final PieceJointeRepository pieceJointeRepository;
     private final WorkflowService workflowService;
     private final AuditService auditService;
 
@@ -212,6 +213,9 @@ public class AgentGUCDossierService {
     private DossierDetailResponse mapToDetailDTO(Dossier dossier) {
         TimingDTO timing = workflowService.getTimingInfo(dossier.getId());
 
+        // Fetch piece jointes for this dossier
+        List<PieceJointe> pieceJointes = pieceJointeRepository.findByDossierIdOrderByDateUploadDesc(dossier.getId());
+
         return DossierDetailResponse.builder()
                 .id(dossier.getId())
                 .numeroDossier(dossier.getNumeroDossier())
@@ -228,7 +232,7 @@ public class AgentGUCDossierService {
                 .utilisateurCreateur(mapToUtilisateurCreateurDTO(dossier.getUtilisateurCreateur()))
                 .timing(timing)
                 .workflowHistory(mapToWorkflowHistoryDTOs(dossier.getId()))
-                .documents(List.of()) // TODO: Implement documents
+                .documents(mapToPieceJointeDTOs(pieceJointes)) // Fixed: Now properly maps piece jointes
                 .availableActions(getActionsForCurrentState(dossier, dossier.getId()))
                 .build();
     }
@@ -284,6 +288,18 @@ public class AgentGUCDossierService {
                         .commentaire(wi.getCommentaire())
                         .dureeJours(wi.getDateSortie() != null ? 
                                    (int) java.time.Duration.between(wi.getDateEntree(), wi.getDateSortie()).toDays() : null)
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    // NEW: Map PieceJointe to DocumentDTO
+    private List<DocumentDTO> mapToPieceJointeDTOs(List<PieceJointe> pieceJointes) {
+        return pieceJointes.stream()
+                .map(pj -> DocumentDTO.builder()
+                        .id(pj.getId())
+                        .nomDocument(pj.getNomFichier())
+                        .statut(pj.getStatus() != null ? pj.getStatus().name() : "PENDING")
+                        .dateUpload(pj.getDateUpload())
                         .build())
                 .collect(Collectors.toList());
     }

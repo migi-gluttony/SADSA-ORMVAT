@@ -6,7 +6,6 @@ import AuthService from '../services/AuthService'
 import RegisterView from '@/views/auth/RegisterView.vue'
 import LandingPage from '@/views/LandingPage.vue'
 import CreateDossierView from '@/views/agent_antenne/CreateDossierView.vue'
-import DossierDetailView from '@/views/common/DossierDetailView.vue'
 import AdminDocumentRequisView from '@/views/admin/AdminDocumentRequisView.vue'
 import ProfileView from '@/views/common/ProfileView.vue'
 import TerrainVisitsView from '@/views/agent_commission/TerrainVisitsView.vue'
@@ -15,6 +14,7 @@ import AgentGUCDossierListView from '@/components/agent_guc/dossier_list/AgentGU
 import AgentCommissionDossierListView from '@/components/agent_commission/dossier_list/AgentCommissionDossierListView.vue'
 import AgentAntenneDossierDetailView from '@/components/agent_antenne/dossier_details/AgentAntenneDossierDetailView.vue'
 import DocumentFillingView from '@/components/agent_antenne/document_filling/DocumentFillingView.vue'
+import AgentGucDossierDetailView from '@/components/agent_guc/dossier_detail/AgentGucDossierDetailView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -102,7 +102,7 @@ const router = createRouter({
     {
       path: '/agent_guc/dossiers/:dossierId',
       name: 'agent-guc-dossier-detail',
-      component: DossierDetailView,
+      component: AgentGucDossierDetailView,
       meta: { requiresAuth: true, requiresRole: 'AGENT_GUC', title: 'Détails du Dossier' },
       props: true
     },
@@ -127,13 +127,6 @@ const router = createRouter({
       name: 'agent-commission-dossiers-list',
       component: AgentCommissionDossierListView,
       meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION_TERRAIN', title: 'Dossiers - Commission AHA-AF' }
-    },
-    {
-      path: '/agent_commission/dossiers/:dossierId',
-      name: 'agent-commission-dossier-detail',
-      component: DossierDetailView,
-      meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION_TERRAIN', title: 'Détails du Dossier' },
-      props: true
     },
     {
       path: '/agent_commission/terrain-visits',
