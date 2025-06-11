@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import ormvat.sadsa.service.agent_guc.AgentGUCDossierService;
+// import ormvat.sadsa.service.agent_guc.AgentGUCDocumentService; // Temporarily commented out
 import ormvat.sadsa.dto.role_based.RoleBasedDossierDTOs.*;
 
 import jakarta.validation.Valid;
@@ -17,6 +18,8 @@ import jakarta.validation.Valid;
 public class AgentGUCDossierController {
 
     private final AgentGUCDossierService dossierService;
+    // Temporarily commented out to fix compilation issue
+    // private final AgentGUCDocumentService documentService;
 
     @GetMapping
     public ResponseEntity<DossierListResponse> getAllDossiers(Authentication authentication) {
@@ -115,7 +118,8 @@ public class AgentGUCDossierController {
                     .body(ActionResponse.builder()
                             .success(false)
                             .message(e.getMessage())
-                            .build());
-        }
+                            .build());        }
     }
+
+    // TODO: Add document preview and download endpoints once AgentGUCDocumentService compilation issue is resolved
 }

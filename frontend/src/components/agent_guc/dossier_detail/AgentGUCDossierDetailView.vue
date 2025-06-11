@@ -151,27 +151,88 @@
       <!-- Documents Section -->
       <Card>
         <template #title>
-          <i class="pi pi-file-edit mr-2"></i>Documents
+          <i class="pi pi-file-edit mr-2"></i>Documents et Formulaires
         </template>
         <template #subtitle>
           Documents soumis par l'antenne - lecture seule
         </template>
         <template #content>
+          <!-- Debug information (remove in production) -->
+          <div v-if="getDocuments().length > 0" class="mb-3 p-2 surface-100 border-round text-xs">
+            <strong>Debug:</strong> {{ getDocuments().length }} document(s) trouvé(s)
+            <div v-for="(doc, index) in getDocuments().slice(0, 2)" :key="doc.id" class="mt-1">
+              Doc {{ index + 1 }}: 
+              File={{ !!hasFile(doc) }}, 
+              Form={{ !!hasFormData(doc) }}, 
+              Preview={{ !!canPreviewDocument(doc) }},
+              Path={{ doc.cheminFichier || 'null' }}
+            </div>
+          </div>
+
           <div v-if="getDocuments().length > 0" class="grid">
             <div 
               v-for="doc in getDocuments()" 
               :key="doc.id"
               class="col-12 md:col-6 lg:col-4"
             >
-              <div class="border-1 surface-border border-round p-3">
-                <div class="flex align-items-center mb-2">
-                  <i class="pi pi-file text-primary mr-2"></i>
-                  <span class="font-medium">{{ doc.nomDocument || doc.nomFichier || doc.title || 'Document' }}</span>
+              <div class="document-card border-1 surface-border border-round p-3">
+                <div class="document-header flex align-items-center justify-content-between mb-2">
+                  <div class="flex align-items-center">
+                    <i :class="getDocumentIcon(doc)" class="text-primary mr-2"></i>
+                    <span class="font-medium">{{ getDocumentName(doc) }}</span>
+                  </div>
+                  <Tag 
+                    :value="getDocumentStatusLabel(doc)" 
+                    :severity="getDocumentStatusSeverity(doc)"
+                    class="text-xs"
+                  />
                 </div>
-                <div class="text-sm text-color-secondary">
-                  <div>Statut: {{ doc.statut || doc.status || 'Non défini' }}</div>
+                
+                <div class="document-meta text-sm text-color-secondary mb-3">
                   <div>{{ formatDate(doc.dateUpload || doc.dateCreation) }}</div>
-                  <div v-if="doc.typeDocument || doc.documentType">Type: {{ doc.typeDocument || doc.documentType }}</div>
+                  <div v-if="getDocumentType(doc)">{{ getDocumentType(doc) }}</div>
+                  <div v-if="doc.description" class="mt-1">{{ doc.description }}</div>
+                </div>
+
+                <div class="document-actions flex gap-2">
+                  <!-- Preview button for images/PDFs -->
+                  <Button 
+                    v-if="canPreviewDocument(doc)"
+                    icon="pi pi-eye" 
+                    size="small"
+                    @click="openDocumentPreview(doc)"
+                    class="p-button-outlined p-button-sm"
+                    v-tooltip.top="'Aperçu'"
+                  />
+                  
+                  <!-- Download button -->
+                  <Button 
+                    v-if="hasFile(doc)"
+                    icon="pi pi-download" 
+                    size="small"
+                    @click="downloadDocument(doc)"
+                    class="p-button-outlined p-button-sm"
+                    v-tooltip.top="'Télécharger'"
+                  />
+                  
+                  <!-- View form data button -->
+                  <Button 
+                    v-if="hasFormData(doc)"
+                    icon="pi pi-list" 
+                    size="small"
+                    @click="openFormDataViewer(doc)"
+                    class="p-button-outlined p-button-sm"
+                    v-tooltip.top="'Voir formulaire'"
+                  />
+                  
+                  <!-- View details button -->
+                  <Button 
+                    icon="pi pi-info-circle" 
+                    size="small"
+                    @click="openDocumentDetails(doc)"
+                    class="p-button-outlined p-button-sm"
+                    v-tooltip.top="'Détails'"
+                  />
                 </div>
               </div>
             </div>
@@ -369,18 +430,171 @@
       </template>
     </Dialog>
 
+    <!-- Document Preview Dialog -->
+    <Dialog
+      v-model:visible="documentPreviewDialog.visible"
+      :modal="true"
+      :style="{ width: '90vw', height: '90vh' }"
+      :header="documentPreviewDialog.document ? getDocumentName(documentPreviewDialog.document) : 'Aperçu du document'"
+      :maximizable="true"
+      @show="loadDocumentPreview"
+    >
+      <div class="preview-dialog-content">
+        <div v-if="documentPreviewDialog.loading" class="preview-loading">
+          <ProgressSpinner />
+          <p>Chargement du document...</p>
+        </div>
+        
+        <div v-else-if="documentPreviewDialog.error" class="preview-error">
+          <i class="pi pi-exclamation-triangle text-4xl text-red-500 mb-3"></i>
+          <h3>Erreur de prévisualisation</h3>
+          <p>{{ documentPreviewDialog.error }}</p>
+          <Button
+            label="Télécharger plutôt"
+            icon="pi pi-download"
+            @click="downloadDocument(documentPreviewDialog.document)"
+            class="mt-3"
+          />
+        </div>
+        
+        <div
+          v-else-if="documentPreviewDialog.contentType && documentPreviewDialog.contentType.startsWith('image/')"
+          class="image-preview"
+        >
+          <img
+            :src="documentPreviewDialog.dataUrl"
+            :alt="getDocumentName(documentPreviewDialog.document)"
+            class="max-w-full max-h-full object-contain"
+          />
+        </div>
+        
+        <div
+          v-else-if="documentPreviewDialog.contentType === 'application/pdf'"
+          class="pdf-preview"
+        >
+          <object
+            :data="documentPreviewDialog.dataUrl"
+            type="application/pdf"
+            width="100%"
+            height="100%"
+          >
+            <p>
+              Ce PDF ne peut pas être affiché dans votre navigateur.
+              <Button
+                label="Télécharger le PDF"
+                icon="pi pi-download"
+                @click="downloadDocument(documentPreviewDialog.document)"
+                class="mt-3"
+              />
+            </p>
+          </object>
+        </div>
+        
+        <div v-else class="preview-not-available">
+          <i class="pi pi-file-export text-4xl text-400 mb-3"></i>
+          <h3>Aperçu non disponible</h3>
+          <p>
+            Ce type de document ({{ getDocumentType(documentPreviewDialog.document) }}) 
+            ne peut pas être prévisualisé directement.
+          </p>
+          <Button
+            label="Télécharger le document"
+            icon="pi pi-download"
+            @click="downloadDocument(documentPreviewDialog.document)"
+            class="mt-3"
+          />
+        </div>
+      </div>
+    </Dialog>
+
+    <!-- Document Details Dialog -->
+    <Dialog
+      v-model:visible="documentDetailsDialog.visible"
+      :modal="true"
+      :style="{ width: '600px' }"
+      header="Détails du Document"
+    >
+      <div v-if="documentDetailsDialog.document" class="document-details">
+        <div class="detail-row">
+          <strong>Nom:</strong> {{ getDocumentName(documentDetailsDialog.document) }}
+        </div>
+        <div class="detail-row">
+          <strong>Type:</strong> {{ getDocumentType(documentDetailsDialog.document) }}
+        </div>
+        <div class="detail-row">
+          <strong>Statut:</strong> 
+          <Tag 
+            :value="getDocumentStatusLabel(documentDetailsDialog.document)" 
+            :severity="getDocumentStatusSeverity(documentDetailsDialog.document)"
+          />
+        </div>
+        <div class="detail-row">
+          <strong>Date de création:</strong> {{ formatDate(documentDetailsDialog.document.dateUpload || documentDetailsDialog.document.dateCreation) }}
+        </div>
+        <div v-if="documentDetailsDialog.document.description" class="detail-row">
+          <strong>Description:</strong> {{ documentDetailsDialog.document.description }}
+        </div>
+        <div v-if="documentDetailsDialog.document.validationNotes" class="detail-row">
+          <strong>Notes de validation:</strong> {{ documentDetailsDialog.document.validationNotes }}
+        </div>
+        <div class="detail-row">
+          <strong>A un fichier:</strong> 
+          <i :class="hasFile(documentDetailsDialog.document) ? 'pi pi-check text-green-500' : 'pi pi-times text-red-500'"></i>
+        </div>
+        <div class="detail-row">
+          <strong>A des données de formulaire:</strong> 
+          <i :class="hasFormData(documentDetailsDialog.document) ? 'pi pi-check text-green-500' : 'pi pi-times text-red-500'"></i>
+        </div>
+      </div>
+      
+      <template #footer>
+        <div class="flex gap-2">
+          <Button 
+            v-if="hasFile(documentDetailsDialog.document)"
+            label="Télécharger" 
+            icon="pi pi-download"
+            @click="downloadDocument(documentDetailsDialog.document)"
+            class="p-button-outlined"
+          />
+          <Button 
+            v-if="hasFormData(documentDetailsDialog.document)"
+            label="Voir Formulaire" 
+            icon="pi pi-list"
+            @click="openFormDataViewer(documentDetailsDialog.document)"
+            class="p-button-outlined"
+          />
+          <Button 
+            label="Fermer" 
+            @click="documentDetailsDialog.visible = false"
+            class="p-button-outlined"
+          />
+        </div>
+      </template>
+    </Dialog>
+
+    <!-- Form Data Viewer Dialog -->
+    <FormDataViewerDialog
+      v-model:visible="formDataDialog.visible"
+      :form="formDataDialog.form"
+      :dossier="dossierDetail"
+      @add-note="handleAddNoteFromForm"
+    />
+
     <ConfirmDialog />
     <Toast />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 import ApiService from '@/services/ApiService';
 import AuthService from '@/services/AuthService';
+
+// Components
+import FormDataViewerDialog from '@/components/dossiers/FormDataViewerDialog.vue';
 
 import Button from 'primevue/button';
 import SplitButton from 'primevue/splitbutton';
@@ -405,6 +619,29 @@ const loading = ref(true);
 const error = ref('');
 const dossierDetail = ref(null);
 const currentPhase = ref(null);
+
+// Dialog states for documents
+const documentPreviewDialog = ref({
+  visible: false,
+  loading: false,
+  error: null,
+  document: null,
+  dataUrl: '',
+  contentType: ''
+});
+
+const documentDetailsDialog = ref({
+  visible: false,
+  document: null
+});
+
+const formDataDialog = ref({
+  visible: false,
+  form: null
+});
+
+// Blob URLs to clean up
+const blobUrls = ref([]);
 
 // Computed
 const dossierId = computed(() => parseInt(route.params.dossierId));
@@ -433,6 +670,13 @@ const returnReasons = ref([
 
 onMounted(() => {
   loadDossierDetail();
+});
+
+// Clean up blob URLs when component is destroyed
+onBeforeUnmount(() => {
+  blobUrls.value.forEach((url) => {
+    URL.revokeObjectURL(url);
+  });
 });
 
 async function loadDossierDetail() {
@@ -501,6 +745,304 @@ function getDocuments() {
     return documents;
   }
   return pieceJointes;
+}
+
+// Document handling methods
+function getDocumentName(doc) {
+  return doc.title || doc.nomDocument || doc.nomFichier || 'Document sans nom';
+}
+
+function getDocumentIcon(doc) {
+  const type = getDocumentType(doc);
+  if (type.includes('PDF')) return 'pi pi-file-pdf';
+  if (type.includes('Word')) return 'pi pi-file-word';
+  if (type.includes('Image')) return 'pi pi-image';
+  if (hasFormData(doc)) return 'pi pi-list';
+  return 'pi pi-file';
+}
+
+function getDocumentType(doc) {
+  // Debug logging
+  console.log('Document analysis:', {
+    id: doc.id,
+    nomDocument: doc.nomDocument,
+    cheminFichier: doc.cheminFichier,
+    documentType: doc.documentType,
+    hasFormData: hasFormData(doc),
+    hasFile: hasFile(doc),
+    formData: doc.formData
+  });
+
+  // Check if it has form data first
+  if (hasFormData(doc)) {
+    return 'Formulaire électronique';
+  }
+  
+  // Check document type field from backend
+  if (doc.documentType) {
+    const typeLabels = {
+      'SCANNED_DOCUMENT': 'Document scanné',
+      'FORM_DATA': 'Formulaire électronique', 
+      'TERRAIN_PHOTO': 'Photo terrain',
+      'SUPPORTING_DOC': 'Document support',
+      'GENERATED_REPORT': 'Rapport généré',
+      'MIXED': 'Document mixte'
+    };
+    return typeLabels[doc.documentType] || doc.documentType;
+  }
+  
+  // Check file type from file name or path
+  const filePath = doc.cheminFichier || doc.nomDocument || '';
+  if (!filePath) return 'Document';
+
+  const extension = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
+  switch (extension) {
+    case '.pdf': return 'Document PDF';
+    case '.doc': return 'Document Word';
+    case '.docx': return 'Document Word';
+    case '.jpg':
+    case '.jpeg': return 'Image JPEG';
+    case '.png': return 'Image PNG';
+    case '.gif': return 'Image GIF';
+    case '.svg': return 'Image SVG';
+    default: return filePath ? `Document ${extension}` : 'Document';
+  }
+}
+
+function getDocumentStatusLabel(doc) {
+  const status = doc.statut || doc.status;
+  const labels = {
+    'PENDING': 'En attente',
+    'COMPLETE': 'Complet',
+    'REJECTED': 'Rejeté',
+    'MISSING': 'Manquant',
+    'DRAFT': 'Brouillon'
+  };
+  return labels[status] || status || 'Non défini';
+}
+
+function getDocumentStatusSeverity(doc) {
+  const status = doc.statut || doc.status;
+  const severities = {
+    'PENDING': 'warning',
+    'COMPLETE': 'success',
+    'REJECTED': 'danger',
+    'MISSING': 'danger',
+    'DRAFT': 'secondary'
+  };
+  return severities[status] || 'secondary';
+}
+
+function hasFile(doc) {
+  return (doc.cheminFichier && doc.cheminFichier.trim() !== '') || 
+         (doc.nomDocument && doc.nomDocument.trim() !== '' && !hasFormData(doc));
+}
+
+function hasFormData(doc) {
+  return doc.formData && 
+         doc.formData.trim() !== '' && 
+         doc.formData !== '{}' && 
+         doc.formData !== 'null';
+}
+
+function canPreviewDocument(doc) {
+  if (!hasFile(doc)) return false;
+  
+  const filePath = doc.cheminFichier || doc.nomDocument || doc.nomFichier || '';
+  if (!filePath) return false;
+  
+  const extension = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
+  return ['.pdf', '.jpg', '.jpeg', '.png', '.gif'].includes(extension);
+}
+
+function openDocumentPreview(doc) {
+  documentPreviewDialog.value.document = doc;
+  documentPreviewDialog.value.loading = true;
+  documentPreviewDialog.value.error = null;
+  documentPreviewDialog.value.dataUrl = '';
+  documentPreviewDialog.value.contentType = '';
+  documentPreviewDialog.value.visible = true;
+}
+
+function loadDocumentPreview() {
+  if (!documentPreviewDialog.value.document) return;
+
+  const doc = documentPreviewDialog.value.document;
+  documentPreviewDialog.value.loading = true;
+  documentPreviewDialog.value.error = null;
+
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const baseUrl = import.meta.env.VITE_API_URL || '/api';
+  const previewUrl = `${baseUrl}/agent-guc/dossiers/documents/preview/${doc.id}`;
+
+  fetch(previewUrl, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`Erreur de prévisualisation: ${response.status} ${response.statusText}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      documentPreviewDialog.value.contentType = contentType;
+
+      return response.blob();
+    })
+    .then((blob) => {
+      const url = URL.createObjectURL(blob);
+      blobUrls.value.push(url);
+      documentPreviewDialog.value.dataUrl = url;
+      documentPreviewDialog.value.loading = false;
+    })
+    .catch((error) => {
+      console.error('Preview error:', error);
+      documentPreviewDialog.value.error = error.message || 'Impossible de prévisualiser le fichier';
+      documentPreviewDialog.value.loading = false;
+    });
+}
+
+function downloadDocument(doc) {
+  if (!doc || !hasFile(doc)) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Attention',
+      detail: 'Ce document ne contient pas de fichier à télécharger',
+      life: 3000
+    });
+    return;
+  }
+
+  toast.add({
+    severity: 'info',
+    summary: 'Téléchargement',
+    detail: 'Préparation du téléchargement...',
+    life: 2000
+  });
+
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const baseUrl = import.meta.env.VITE_API_URL || '/api';
+
+  fetch(`${baseUrl}/agent-guc/dossiers/documents/download/${doc.id}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`Erreur de téléchargement: ${response.status} ${response.statusText}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      let filename = getDocumentName(doc);
+
+      // Try to get filename from Content-Disposition header
+      const disposition = response.headers.get('content-disposition');
+      if (disposition && disposition.includes('filename=')) {
+        const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+        const matches = filenameRegex.exec(disposition);
+        if (matches && matches[1]) {
+          filename = matches[1].replace(/['"]/g, '');
+        }
+      }
+
+      // Add extension based on content type if missing
+      if (!filename.includes('.') && contentType) {
+        if (contentType.includes('pdf')) filename += '.pdf';
+        else if (contentType.includes('msword')) filename += '.doc';
+        else if (contentType.includes('wordprocessingml')) filename += '.docx';
+        else if (contentType.includes('jpeg')) filename += '.jpg';
+        else if (contentType.includes('png')) filename += '.png';
+      }
+
+      filename = filename.replace(/[/\\?%*:|"<>]/g, '-');
+
+      return response.blob().then((blob) => ({ blob, filename }));
+    })
+    .then(({ blob, filename }) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+
+      toast.add({
+        severity: 'success',
+        summary: 'Téléchargement réussi',
+        detail: `Fichier "${filename}" téléchargé avec succès`,
+        life: 3000
+      });
+    })
+    .catch((error) => {
+      console.error('Download error:', error);
+      toast.add({
+        severity: 'error',
+        summary: 'Erreur de téléchargement',
+        detail: error.message || 'Impossible de télécharger le fichier',
+        life: 3000
+      });
+    });
+}
+
+function openDocumentDetails(doc) {
+  documentDetailsDialog.value.document = doc;
+  documentDetailsDialog.value.visible = true;
+}
+
+function openFormDataViewer(doc) {
+  if (!hasFormData(doc)) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Attention',
+      detail: 'Ce document ne contient pas de données de formulaire',
+      life: 3000
+    });
+    return;
+  }
+
+  try {
+    const formData = JSON.parse(doc.formData);
+    const form = {
+      id: doc.id,
+      title: getDocumentName(doc),
+      description: doc.description || 'Données du formulaire électronique',
+      isCompleted: true,
+      formData: formData,
+      formConfig: doc.formConfig ? JSON.parse(doc.formConfig) : null,
+      lastModified: doc.dateUpload || doc.dateCreation,
+      requiredDocuments: []
+    };
+
+    formDataDialog.value.form = form;
+    formDataDialog.value.visible = true;
+  } catch (error) {
+    console.error('Error parsing form data:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: 'Impossible de charger les données du formulaire',
+      life: 3000
+    });
+  }
+}
+
+function handleAddNoteFromForm(noteData) {
+  // TODO: Implement note addition functionality
+  toast.add({
+    severity: 'info',
+    summary: 'Fonctionnalité à venir',
+    detail: 'L\'ajout de notes sera disponible prochainement',
+    life: 3000
+  });
 }
 
 // Phase detection
@@ -930,5 +1472,117 @@ function formatDate(date) {
   100% {
     box-shadow: 0 0 0 0 rgba(255, 152, 0, 0);
   }
+}
+
+/* Document card styles */
+.document-card {
+  transition: box-shadow 0.2s ease;
+}
+
+.document-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.document-header {
+  min-height: 2rem;
+}
+
+.document-meta {
+  min-height: 3rem;
+}
+
+.document-actions {
+  flex-wrap: wrap;
+}
+
+/* Dialog styles */
+.preview-dialog-content {
+  height: 80vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.preview-loading {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.preview-error,
+.preview-not-available {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
+  padding: 2rem;
+}
+
+.preview-error h3,
+.preview-not-available h3 {
+  margin: 1rem 0 0.5rem;
+}
+
+.preview-error p,
+.preview-not-available p {
+  margin: 0 0 1rem;
+  color: var(--text-color-secondary);
+  max-width: 500px;
+}
+
+.image-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+  background-color: var(--surface-ground);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.image-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.pdf-preview {
+  height: 100%;
+  width: 100%;
+}
+
+.pdf-preview object {
+  border: none;
+  background-color: white;
+}
+
+.document-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.detail-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--surface-300);
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row strong {
+  min-width: 150px;
+  font-weight: 600;
 }
 </style>

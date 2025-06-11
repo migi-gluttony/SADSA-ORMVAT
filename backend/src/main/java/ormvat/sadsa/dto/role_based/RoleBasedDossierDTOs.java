@@ -146,8 +146,16 @@ public class RoleBasedDossierDTOs {
     public static class DocumentDTO {
         private Long id;
         private String nomDocument;
+        private String cheminFichier;
         private String statut;
         private LocalDateTime dateUpload;
+        private String documentType;
+        private String title;
+        private String description;
+        private String formData;
+        private String formConfig;
+        private Boolean isValidated;
+        private String validationNotes;
     }
 
     @Data

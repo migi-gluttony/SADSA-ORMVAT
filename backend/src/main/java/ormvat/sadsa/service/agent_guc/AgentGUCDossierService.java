@@ -232,7 +232,7 @@ public class AgentGUCDossierService {
                 .utilisateurCreateur(mapToUtilisateurCreateurDTO(dossier.getUtilisateurCreateur()))
                 .timing(timing)
                 .workflowHistory(mapToWorkflowHistoryDTOs(dossier.getId()))
-                .documents(mapToPieceJointeDTOs(pieceJointes)) // Fixed: Now properly maps piece jointes
+                .documents(mapToPieceJointeDTOs(pieceJointes))
                 .availableActions(getActionsForCurrentState(dossier, dossier.getId()))
                 .build();
     }
@@ -292,14 +292,22 @@ public class AgentGUCDossierService {
                 .collect(Collectors.toList());
     }
 
-    // NEW: Map PieceJointe to DocumentDTO
+    // Enhanced mapping method that includes all necessary fields for frontend
     private List<DocumentDTO> mapToPieceJointeDTOs(List<PieceJointe> pieceJointes) {
         return pieceJointes.stream()
                 .map(pj -> DocumentDTO.builder()
                         .id(pj.getId())
                         .nomDocument(pj.getNomFichier())
+                        .cheminFichier(pj.getCheminFichier())
                         .statut(pj.getStatus() != null ? pj.getStatus().name() : "PENDING")
                         .dateUpload(pj.getDateUpload())
+                        .documentType(pj.getDocumentType() != null ? pj.getDocumentType().name() : null)
+                        .title(pj.getTitle())
+                        .description(pj.getDescription())
+                        .formData(pj.getFormData())
+                        .formConfig(null) // FormConfig is not stored in PieceJointe currently
+                        .isValidated(pj.getIsValidated())
+                        .validationNotes(pj.getValidationNotes())
                         .build())
                 .collect(Collectors.toList());
     }
