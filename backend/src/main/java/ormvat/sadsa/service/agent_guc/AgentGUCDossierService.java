@@ -81,7 +81,7 @@ public class AgentGUCDossierService {
         dossier.setStatus(Dossier.DossierStatus.IN_REVIEW);
         dossierRepository.save(dossier);
 
-        // Move to Phase 3 (Commission Terrain)
+        // Move to Phase 3 (Commission)
         workflowService.moveToStep(dossier.getId(), 3L, user.getId(), 
                                   "Assignation à la Commission - " + request.getCommentaire());
 
@@ -96,39 +96,46 @@ public class AgentGUCDossierService {
     }
 
     @Transactional
-    public ActionResponse assignToServiceTechnique(Long id, AssignServiceTechniqueRequest request, String userEmail) {
+    public ActionResponse sendToServiceTechnique(Long id, AssignCommissionRequest request, String userEmail) {
         Utilisateur user = getUserByEmail(userEmail);
         Dossier dossier = getDossierForGUCAction(id);
 
-        // Verify this is an infrastructure project that requires Service Technique
-        if (!isInfrastructureProject(dossier)) {
-            throw new RuntimeException("Ce type de projet ne nécessite pas l'intervention du Service Technique");
-        }
-
-        dossier.setStatus(Dossier.DossierStatus.IN_REVIEW);
+        // All projects go through Service Technique according to universal workflow
+        dossier.setStatus(Dossier.DossierStatus.REALIZATION_IN_PROGRESS);
         dossierRepository.save(dossier);
 
         // Move to Phase 7 (Service Technique)
-        String commentaireComplet = "Assignation au Service Technique - " + request.getCommentaire();
-        if (request.getTypeRealisationPrevue() != null && !request.getTypeRealisationPrevue().trim().isEmpty()) {
-            commentaireComplet += " | Type: " + request.getTypeRealisationPrevue();
-        }
-        if (request.getObservationsSpecifiques() != null && !request.getObservationsSpecifiques().trim().isEmpty()) {
-            commentaireComplet += " | Observations: " + request.getObservationsSpecifiques();
-        }
-        
-        workflowService.moveToStep(dossier.getId(), 7L, user.getId(), commentaireComplet);
+        workflowService.moveToStep(dossier.getId(), 7L, user.getId(), 
+                                  "Envoi au Service Technique - " + request.getCommentaire());
 
-        auditService.logAction(user.getId(), "ASSIGN_SERVICE_TECHNIQUE", "Dossier", dossier.getId(),
-                              dossier.getStatus().name(), "IN_REVIEW", 
-                              "Assignation au Service Technique pour réalisation projet d'infrastructure - " + 
-                              (request.getTypeRealisationPrevue() != null ? request.getTypeRealisationPrevue() : "Type non spécifié"));
+        auditService.logAction(user.getId(), "SEND_TO_SERVICE_TECHNIQUE", "Dossier", dossier.getId(),
+                              dossier.getStatus().name(), "REALIZATION_IN_PROGRESS", 
+                              "Envoi au Service Technique pour supervision de la réalisation");
 
         return ActionResponse.builder()
                 .success(true)
-                .message("Dossier assigné au Service Technique pour réalisation")
+                .message("Dossier envoyé au Service Technique pour supervision de la réalisation")
                 .timestamp(LocalDateTime.now())
-                .nextPhase("Phase Service Technique - Réalisation du projet d'infrastructure")
+                .build();
+    }
+
+    @Transactional
+    public ActionResponse validateRealization(Long id, ApproveRequest request, String userEmail) {
+        Utilisateur user = getUserByEmail(userEmail);
+        Dossier dossier = getDossierForGUCAction(id);
+
+        // Update dossier status to completed
+        dossier.setStatus(Dossier.DossierStatus.COMPLETED);
+        dossierRepository.save(dossier);
+
+        auditService.logAction(user.getId(), "VALIDATE_REALIZATION", "Dossier", dossier.getId(),
+                              "REALIZATION_IN_PROGRESS", "COMPLETED", 
+                              "Validation finale de la réalisation - " + request.getCommentaire());
+
+        return ActionResponse.builder()
+                .success(true)
+                .message("Réalisation validée avec succès - Dossier terminé")
+                .timestamp(LocalDateTime.now())
                 .build();
     }
 
@@ -299,7 +306,9 @@ public class AgentGUCDossierService {
 
     private boolean canGUCActOn(Dossier dossier) {
         return dossier.getStatus() == Dossier.DossierStatus.SUBMITTED ||
-               dossier.getStatus() == Dossier.DossierStatus.IN_REVIEW;
+               dossier.getStatus() == Dossier.DossierStatus.IN_REVIEW ||
+               dossier.getStatus() == Dossier.DossierStatus.AWAITING_FARMER ||
+               dossier.getStatus() == Dossier.DossierStatus.REALIZATION_IN_PROGRESS;
     }
 
     private boolean isPendingGUCAction(Dossier dossier) {
@@ -313,11 +322,10 @@ public class AgentGUCDossierService {
         return etapeId == 2L || etapeId == 4L || etapeId == 6L || etapeId == 8L;
     }
 
-    private boolean isInfrastructureProject(Dossier dossier) {
-        // Check if the project is an infrastructure project (AMENAGEMENT HYDRO-AGRICOLE)
-        return dossier.getSousRubrique() != null && 
-               dossier.getSousRubrique().getRubrique() != null &&
-               dossier.getSousRubrique().getRubrique().getId() == 3L; // AMENAGEMENT HYDRO-AGRICOLE ET AMELIORATION FONCIERE
+    private boolean requiresServiceTechnique(Dossier dossier) {
+        // All projects go through the same workflow according to the user
+        // Service Technique is part of the universal workflow for all project types
+        return true;
     }
 
     private DossierSummaryDTO mapToSummaryDTO(Dossier dossier) {
@@ -500,47 +508,28 @@ public class AgentGUCDossierService {
         if (currentStep == null) return List.of();
 
         Long etapeId = currentStep.getIdEtape();
-        boolean isInfraProject = isInfrastructureProject(dossier);
         
         return switch (etapeId.intValue()) {
-            case 2 -> { // Phase 2: Initial GUC review
-                List<ActionDTO> actions = new java.util.ArrayList<>();
-                
-                // Standard actions for all projects
-                actions.add(ActionDTO.builder()
-                        .action("assign-commission")
-                        .label("Assigner à la Commission Terrain")
-                        .endpoint("/api/agent-guc/dossiers/assign-commission/" + dossierId)
-                        .method("POST")
-                        .build());
-                
-                // Service Technique action only for infrastructure projects
-                if (isInfraProject) {
-                    actions.add(ActionDTO.builder()
-                            .action("assign-service-technique")
-                            .label("Assigner au Service Technique")
-                            .endpoint("/api/agent-guc/dossiers/assign-service-technique/" + dossierId)
+            case 2 -> List.of( // Phase 2: Initial GUC review
+                    ActionDTO.builder()
+                            .action("assign-commission")
+                            .label("Assigner à la Commission")
+                            .endpoint("/api/agent-guc/dossiers/assign-commission/" + dossierId)
                             .method("POST")
-                            .build());
-                }
-                
-                // Common actions
-                actions.add(ActionDTO.builder()
-                        .action("return")
-                        .label("Retourner à l'antenne")
-                        .endpoint("/api/agent-guc/dossiers/return/" + dossierId)
-                        .method("POST")
-                        .build());
-                
-                actions.add(ActionDTO.builder()
-                        .action("reject")
-                        .label("Rejeter")
-                        .endpoint("/api/agent-guc/dossiers/reject/" + dossierId)
-                        .method("POST")
-                        .build());
-                
-                yield actions;
-            }
+                            .build(),
+                    ActionDTO.builder()
+                            .action("return")
+                            .label("Retourner à l'antenne")
+                            .endpoint("/api/agent-guc/dossiers/return/" + dossierId)
+                            .method("POST")
+                            .build(),
+                    ActionDTO.builder()
+                            .action("reject")
+                            .label("Rejeter")
+                            .endpoint("/api/agent-guc/dossiers/reject/" + dossierId)
+                            .method("POST")
+                            .build()
+            );
             case 4 -> List.of( // Phase 4: Final approval - ONLY final approval action
                     ActionDTO.builder()
                             .action("final-approval")
@@ -549,7 +538,15 @@ public class AgentGUCDossierService {
                             .method("GET") // Navigate to final approval page
                             .build()
             );
-            case 6, 8 -> List.of( // Phase 6, 8: Realization phases
+            case 6 -> List.of( // Phase 6: Realization GUC phase - Send to Service Technique
+                    ActionDTO.builder()
+                            .action("send-to-service-technique")
+                            .label("Envoyer au Service Technique")
+                            .endpoint("/api/agent-guc/dossiers/send-to-service-technique/" + dossierId)
+                            .method("POST")
+                            .build()
+            );
+            case 8 -> List.of( // Phase 8: Final realization validation
                     ActionDTO.builder()
                             .action("validate-realization")
                             .label("Valider Réalisation")

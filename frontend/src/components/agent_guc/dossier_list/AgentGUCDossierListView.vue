@@ -321,17 +321,6 @@
           <Column field="actions" header="Actions">
             <template #body="slotProps">
               <div class="flex gap-1">
-                <!-- Debug info -->
-                <div style="display: none;">
-                  {{ console.log('Dossier', slotProps.data.id, ':', {
-                    statut: slotProps.data.statut,
-                    dateApprobation: slotProps.data.dateApprobation,
-                    hasApprovedFiche: hasApprovedFiche(slotProps.data),
-                    availableActions: slotProps.data.availableActions,
-                    actionCount: slotProps.data.availableActions ? slotProps.data.availableActions.length : 0
-                  }) }}
-                </div>
-                
                 <!-- View Details -->
                 <Button 
                   icon="pi pi-eye" 
@@ -350,22 +339,22 @@
 
                 <!-- Available Actions from Backend -->
                 <template v-for="action in slotProps.data.availableActions" :key="action.action">
-                  <!-- Assign to Commission Terrain -->
+                  <!-- Assign to Commission -->
                   <Button 
                     v-if="action.action === 'assign-commission'"
                     icon="pi pi-forward" 
                     @click="confirmAssignCommission(slotProps.data)"
                     class="p-button-info p-button-sm" 
-                    v-tooltip.top="action.label || 'Commission'" 
+                    v-tooltip.top="action.label" 
                   />
                   
-                  <!-- Assign to Service Technique -->
+                  <!-- Send to Service Technique -->
                   <Button 
-                    v-if="action.action === 'assign-service-technique'"
+                    v-if="action.action === 'send-to-service-technique'"
                     icon="pi pi-cog" 
-                    @click="confirmAssignServiceTechnique(slotProps.data)"
-                    class="p-button-secondary p-button-sm" 
-                    v-tooltip.top="action.label || 'Service Technique'" 
+                    @click="confirmSendToServiceTechnique(slotProps.data)"
+                    class="p-button-success p-button-sm" 
+                    v-tooltip.top="action.label" 
                   />
                   
                   <!-- Final Approval Button for Phase 4 -->
@@ -377,13 +366,22 @@
                     v-tooltip.top="'Finaliser l\'Approbation'" 
                   />
                   
+                  <!-- Validate Realization -->
+                  <Button 
+                    v-if="action.action === 'validate-realization'"
+                    icon="pi pi-check-circle" 
+                    @click="confirmValidateRealization(slotProps.data)"
+                    class="p-button-success p-button-sm" 
+                    v-tooltip.top="action.label" 
+                  />
+                  
                   <!-- Return to Antenne -->
                   <Button 
                     v-if="action.action === 'return'"
                     icon="pi pi-undo" 
                     @click="confirmReturnToAntenne(slotProps.data)"
                     class="p-button-warning p-button-outlined p-button-sm" 
-                    v-tooltip.top="action.label || 'Retourner'" 
+                    v-tooltip.top="action.label" 
                   />
                   
                   <!-- Reject (only for phase 2) -->
@@ -392,11 +390,11 @@
                     icon="pi pi-times" 
                     @click="confirmRejectDossier(slotProps.data)"
                     class="p-button-danger p-button-outlined p-button-sm" 
-                    v-tooltip.top="action.label || 'Rejeter'" 
+                    v-tooltip.top="action.label" 
                   />
                 </template>
 
-                <!-- View Fiche Button (approved dossiers) - only if has approval date -->
+                <!-- View Fiche Button (approved dossiers) -->
                 <Button 
                   v-if="hasApprovedFiche(slotProps.data)"
                   icon="pi pi-file-text" 
@@ -415,7 +413,7 @@
     <Dialog 
       v-model:visible="assignCommissionDialog.visible" 
       modal 
-      header="Envoyer à la Commission Visite Terrain"
+      header="Envoyer à la Commission AHA-AF"
       :style="{ width: '500px' }"
     >
       <div class="flex align-items-center mb-3">
@@ -477,21 +475,21 @@
       </template>
     </Dialog>
 
-    <!-- Assign to Service Technique Dialog -->
+    <!-- Send to Service Technique Dialog -->
     <Dialog 
-      v-model:visible="assignServiceTechniqueDialog.visible" 
+      v-model:visible="sendToServiceTechniqueDialog.visible" 
       modal 
       header="Envoyer au Service Technique"
-      :style="{ width: '600px' }"
+      :style="{ width: '500px' }"
     >
       <div class="flex align-items-center mb-3">
         <i class="pi pi-cog text-2xl mr-3"></i>
         <div>
-          <p>Envoyer ce dossier au Service Technique pour réalisation ?</p>
-          <div class="mt-2 p-2 bg-secondary-50 border-round">
-            <strong>{{ assignServiceTechniqueDialog.dossier?.reference }}</strong><br>
-            {{ assignServiceTechniqueDialog.dossier?.agriculteurNom }}<br>
-            <small>Type: {{ assignServiceTechniqueDialog.dossier?.sousRubriqueDesignation }}</small>
+          <p>Envoyer ce dossier au Service Technique pour supervision de la réalisation ?</p>
+          <div class="mt-2 p-2 bg-green-50 border-round">
+            <strong>{{ sendToServiceTechniqueDialog.dossier?.reference }}</strong><br>
+            {{ sendToServiceTechniqueDialog.dossier?.agriculteurNom }}<br>
+            <small>Type: {{ sendToServiceTechniqueDialog.dossier?.sousRubriqueDesignation }}</small>
           </div>
         </div>
       </div>
@@ -500,11 +498,11 @@
         <label for="serviceTechniqueComment">Commentaire pour le Service Technique *</label>
         <Textarea 
           id="serviceTechniqueComment"
-          v-model="assignServiceTechniqueDialog.comment" 
+          v-model="sendToServiceTechniqueDialog.comment" 
           rows="3" 
           placeholder="Instructions spécifiques pour le service technique..."
           class="w-full"
-          :class="{ 'p-invalid': !assignServiceTechniqueDialog.comment?.trim() }"
+          :class="{ 'p-invalid': !sendToServiceTechniqueDialog.comment?.trim() }"
         />
       </div>
       
@@ -512,7 +510,7 @@
         <label for="serviceTechniquePriority">Priorité du dossier</label>
         <Dropdown 
           id="serviceTechniquePriority"
-          v-model="assignServiceTechniqueDialog.priority" 
+          v-model="sendToServiceTechniqueDialog.priority" 
           :options="prioriteOptions"
           optionLabel="label"
           optionValue="value"
@@ -521,45 +519,76 @@
         />
       </div>
 
-      <div class="field">
-        <label for="typeRealisationPrevue">Type de réalisation prévue</label>
-        <InputText 
-          id="typeRealisationPrevue"
-          v-model="assignServiceTechniqueDialog.typeRealisationPrevue" 
-          placeholder="Ex: Construction de bassin de stockage, aménagement parcellaire..."
-          class="w-full"
-        />
-      </div>
-
-      <div class="field">
-        <label for="observationsSpecifiques">Observations spécifiques</label>
-        <Textarea 
-          id="observationsSpecifiques"
-          v-model="assignServiceTechniqueDialog.observationsSpecifiques" 
-          rows="2" 
-          placeholder="Observations spécifiques pour la réalisation..."
-          class="w-full"
-        />
-      </div>
-
       <p class="text-600 text-sm">
-        <strong>Attention:</strong> Le Service Technique prendra en charge la supervision de la réalisation du projet d'infrastructure.
+        Le service technique supervisera la réalisation du projet et effectuera le contrôle de conformité.
       </p>
       
       <template #footer>
         <Button 
           label="Annuler" 
           icon="pi pi-times" 
-          @click="assignServiceTechniqueDialog.visible = false"
+          @click="sendToServiceTechniqueDialog.visible = false"
           class="p-button-outlined"
         />
         <Button 
           label="Envoyer au Service Technique" 
           icon="pi pi-cog" 
-          @click="assignToServiceTechnique"
-          class="p-button-secondary"
-          :loading="assignServiceTechniqueDialog.loading"
-          :disabled="!assignServiceTechniqueDialog.comment?.trim()"
+          @click="sendToServiceTechnique"
+          class="p-button-success"
+          :loading="sendToServiceTechniqueDialog.loading"
+          :disabled="!sendToServiceTechniqueDialog.comment?.trim()"
+        />
+      </template>
+    </Dialog>
+
+    <!-- Validate Realization Dialog -->
+    <Dialog 
+      v-model:visible="validateRealizationDialog.visible" 
+      modal 
+      header="Valider la Réalisation"
+      :style="{ width: '500px' }"
+    >
+      <div class="flex align-items-center mb-3">
+        <i class="pi pi-check-circle text-2xl text-green-500 mr-3"></i>
+        <div>
+          <p>Valider la réalisation de ce projet ?</p>
+          <div class="mt-2 p-2 bg-green-50 border-round">
+            <strong>{{ validateRealizationDialog.dossier?.reference }}</strong><br>
+            {{ validateRealizationDialog.dossier?.agriculteurNom }}
+          </div>
+        </div>
+      </div>
+      
+      <div class="field">
+        <label for="validateComment">Commentaire de validation *</label>
+        <Textarea 
+          id="validateComment"
+          v-model="validateRealizationDialog.comment" 
+          rows="4" 
+          placeholder="Commentaires sur la validation de la réalisation..."
+          class="w-full"
+          :class="{ 'p-invalid': !validateRealizationDialog.comment?.trim() }"
+        />
+      </div>
+
+      <p class="text-green-600 text-sm font-semibold">
+        Cette action marquera le dossier comme <strong>terminé</strong>.
+      </p>
+      
+      <template #footer>
+        <Button 
+          label="Annuler" 
+          icon="pi pi-times" 
+          @click="validateRealizationDialog.visible = false"
+          class="p-button-outlined"
+        />
+        <Button 
+          label="Valider la Réalisation" 
+          icon="pi pi-check-circle" 
+          @click="validateRealization"
+          class="p-button-success"
+          :loading="validateRealizationDialog.loading"
+          :disabled="!validateRealizationDialog.comment?.trim()"
         />
       </template>
     </Dialog>
@@ -753,7 +782,6 @@ const statusOptions = ref([
   { label: 'En révision', value: 'IN_REVIEW' },
   { label: 'Approuvé', value: 'APPROVED' },
   { label: 'En attente fermier', value: 'AWAITING_FARMER' },
-  { label: 'Réalisation en cours', value: 'REALIZATION_IN_PROGRESS' },
   { label: 'Rejeté', value: 'REJECTED' },
   { label: 'Terminé', value: 'COMPLETED' }
 ]);
@@ -790,14 +818,19 @@ const assignCommissionDialog = ref({
   priority: 'NORMALE'
 });
 
-const assignServiceTechniqueDialog = ref({
+const sendToServiceTechniqueDialog = ref({
   visible: false,
   dossier: null,
   loading: false,
   comment: '',
-  priority: 'NORMALE',
-  typeRealisationPrevue: '',
-  observationsSpecifiques: ''
+  priority: 'NORMALE'
+});
+
+const validateRealizationDialog = ref({
+  visible: false,
+  dossier: null,
+  loading: false,
+  comment: ''
 });
 
 const rejectDialog = ref({
@@ -884,12 +917,7 @@ async function loadDossiers() {
 function calculateStatistics() {
   const total = dossiers.value.length;
   const enAttente = dossiers.value.filter(d => d.statut === 'SUBMITTED' || d.statut === 'IN_REVIEW').length;
-  const approuves = dossiers.value.filter(d => 
-    d.statut === 'APPROVED' || 
-    d.statut === 'AWAITING_FARMER' || 
-    d.statut === 'REALIZATION_IN_PROGRESS' || 
-    d.statut === 'COMPLETED'
-  ).length;
+  const approuves = dossiers.value.filter(d => d.statut === 'APPROVED' || d.statut === 'AWAITING_FARMER' || d.statut === 'COMPLETED').length;
   const enRetard = dossiers.value.filter(d => d.enRetard).length;
 
   statistics.value = {
@@ -933,6 +961,10 @@ function goToFiche(dossier) {
   router.push(`/agent_guc/dossiers/${dossier.id}/fiche`);
 }
 
+function goToFinalApproval(dossier) {
+  router.push(`/agent_guc/dossiers/${dossier.id}/final-approval`);
+}
+
 // Dialog functions
 function confirmAssignCommission(dossier) {
   assignCommissionDialog.value = {
@@ -944,15 +976,22 @@ function confirmAssignCommission(dossier) {
   };
 }
 
-function confirmAssignServiceTechnique(dossier) {
-  assignServiceTechniqueDialog.value = {
+function confirmSendToServiceTechnique(dossier) {
+  sendToServiceTechniqueDialog.value = {
     visible: true,
     dossier: dossier,
     loading: false,
     comment: '',
-    priority: 'NORMALE',
-    typeRealisationPrevue: '',
-    observationsSpecifiques: ''
+    priority: 'NORMALE'
+  };
+}
+
+function confirmValidateRealization(dossier) {
+  validateRealizationDialog.value = {
+    visible: true,
+    dossier: dossier,
+    loading: false,
+    comment: ''
   };
 }
 
@@ -983,10 +1022,6 @@ function showAddNoteDialog(dossier) {
   };
 }
 
-function goToFinalApproval(dossier) {
-  router.push(`/agent_guc/dossiers/${dossier.id}/final-approval`);
-}
-
 // Action methods
 async function assignToCommission() {
   try {
@@ -1005,7 +1040,7 @@ async function assignToCommission() {
       toast.add({
         severity: 'success',
         summary: 'Succès',
-        detail: response.message || 'Dossier assigné à la Commission Terrain',
+        detail: response.message || 'Dossier assigné à la Commission',
         life: 3000
       });
       
@@ -1025,17 +1060,15 @@ async function assignToCommission() {
   }
 }
 
-async function assignToServiceTechnique() {
+async function sendToServiceTechnique() {
   try {
-    assignServiceTechniqueDialog.value.loading = true;
+    sendToServiceTechniqueDialog.value.loading = true;
     
-    const dossier = assignServiceTechniqueDialog.value.dossier;
-    const endpoint = `/agent-guc/dossiers/assign-service-technique/${dossier.id}`;
+    const dossier = sendToServiceTechniqueDialog.value.dossier;
+    const endpoint = `/agent-guc/dossiers/send-to-service-technique/${dossier.id}`;
     const payload = { 
-      commentaire: assignServiceTechniqueDialog.value.comment, 
-      priorite: assignServiceTechniqueDialog.value.priority,
-      typeRealisationPrevue: assignServiceTechniqueDialog.value.typeRealisationPrevue,
-      observationsSpecifiques: assignServiceTechniqueDialog.value.observationsSpecifiques
+      commentaire: sendToServiceTechniqueDialog.value.comment, 
+      priorite: sendToServiceTechniqueDialog.value.priority 
     };
 
     const response = await ApiService.post(endpoint, payload);
@@ -1044,11 +1077,11 @@ async function assignToServiceTechnique() {
       toast.add({
         severity: 'success',
         summary: 'Succès',
-        detail: response.message || 'Dossier assigné au Service Technique',
+        detail: response.message || 'Dossier envoyé au Service Technique',
         life: 3000
       });
       
-      assignServiceTechniqueDialog.value.visible = false;
+      sendToServiceTechniqueDialog.value.visible = false;
       setTimeout(() => loadDossiers(), 500);
     }
 
@@ -1060,7 +1093,43 @@ async function assignToServiceTechnique() {
       life: 3000
     });
   } finally {
-    assignServiceTechniqueDialog.value.loading = false;
+    sendToServiceTechniqueDialog.value.loading = false;
+  }
+}
+
+async function validateRealization() {
+  try {
+    validateRealizationDialog.value.loading = true;
+    
+    const dossier = validateRealizationDialog.value.dossier;
+    const endpoint = `/agent-guc/dossiers/validate-realization/${dossier.id}`;
+    const payload = { 
+      commentaire: validateRealizationDialog.value.comment
+    };
+
+    const response = await ApiService.post(endpoint, payload);
+
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Succès',
+        detail: response.message || 'Réalisation validée avec succès',
+        life: 3000
+      });
+      
+      validateRealizationDialog.value.visible = false;
+      setTimeout(() => loadDossiers(), 500);
+    }
+
+  } catch (err) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: err.message || 'Une erreur est survenue',
+      life: 3000
+    });
+  } finally {
+    validateRealizationDialog.value.loading = false;
   }
 }
 
@@ -1176,7 +1245,6 @@ function getPhaseSeverity(dossier) {
   const phase = dossier.currentStep;
   if (phase?.includes('GUC')) return 'warning';
   if (phase?.includes('Commission')) return 'info';
-  if (phase?.includes('Service Technique')) return 'secondary';
   return 'secondary';
 }
 
@@ -1187,7 +1255,6 @@ function getStatusLabel(status) {
     'IN_REVIEW': 'En révision',
     'APPROVED': 'Approuvé',
     'AWAITING_FARMER': 'En attente fermier',
-    'REALIZATION_IN_PROGRESS': 'Réalisation en cours',
     'REJECTED': 'Rejeté',
     'COMPLETED': 'Terminé',
     'RETURNED_FOR_COMPLETION': 'Retourné'
@@ -1202,7 +1269,6 @@ function getStatusSeverity(status) {
     'IN_REVIEW': 'warning',
     'APPROVED': 'success',
     'AWAITING_FARMER': 'success',
-    'REALIZATION_IN_PROGRESS': 'info',
     'REJECTED': 'danger',
     'COMPLETED': 'success',
     'RETURNED_FOR_COMPLETION': 'warning'
@@ -1211,12 +1277,10 @@ function getStatusSeverity(status) {
 }
 
 function hasApprovedFiche(dossier) {
-  // Only show fiche button if the dossier is actually fully approved and has a date
-  return (dossier.statut === 'APPROVED' || 
-          dossier.statut === 'AWAITING_FARMER' ||
-          dossier.statut === 'REALIZATION_IN_PROGRESS' ||
-          dossier.statut === 'COMPLETED') &&
-         !!dossier.dateApprobation; // Must have approval date
+  return dossier.statut === 'APPROVED' || 
+         dossier.statut === 'AWAITING_FARMER' ||
+         dossier.statut === 'COMPLETED' ||
+         !!dossier.dateApprobation;
 }
 
 function formatCurrency(amount) {
