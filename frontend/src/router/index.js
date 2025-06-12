@@ -141,6 +141,35 @@ const router = createRouter({
       component: TerrainVisitsView,
       meta: { requiresAuth: true, requiresRole: 'AGENT_COMMISSION_TERRAIN', title: 'Visites Terrain - Commission' }
     },
+
+    // Service Technique Routes
+    {
+      path: '/service_technique/dossiers',
+      name: 'service-technique-dossiers-list',
+      component: () => import('@/components/service_technique/ServiceTechniqueDossierListView.vue'),
+      meta: { requiresAuth: true, requiresRole: 'SERVICE_TECHNIQUE', title: 'Dossiers - Service Technique' }
+    },
+    {
+      path: '/service_technique/dossiers/:dossierId',
+      name: 'service-technique-dossier-detail',
+      component: AgentGucDossierDetailView, // Reuse the GUC detail view
+      meta: { requiresAuth: true, requiresRole: 'SERVICE_TECHNIQUE', title: 'Détails du Dossier - Service Technique' },
+      props: true
+    },
+    {
+      path: '/service_technique/implementation-visits',
+      name: 'service-technique-implementation-visits',
+      component: () => import('@/components/service_technique/ImplementationVisitsView.vue'),
+      meta: { requiresAuth: true, requiresRole: 'SERVICE_TECHNIQUE', title: 'Visites d\'Implémentation - Service Technique' }
+    },
+    {
+      path: '/service_technique/visits/:visitId',
+      name: 'service-technique-visit-detail',
+      component: () => import('@/components/service_technique/ImplementationVisitDetailComponent.vue'),
+      meta: { requiresAuth: true, requiresRole: 'SERVICE_TECHNIQUE', title: 'Détails de la Visite d\'Implémentation' },
+      props: true
+    },
+
     // Catch-all route for 404
     {
       path: '/:pathMatch(.*)*',

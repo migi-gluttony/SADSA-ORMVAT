@@ -263,6 +263,21 @@ const menuItems = computed(() => {
             }
        
         );
+    } else if (role === "SERVICE_TECHNIQUE") {
+        items.push(
+            {
+                label: "Mes Dossiers",
+                icon: "pi pi-folder-open",
+                command: () => router.push("/service_technique/dossiers"),
+                route: "/service_technique/dossiers",
+            },
+            {
+                label: "Visites d'Implémentation",
+                icon: "pi pi-cog",
+                command: () => router.push("/service_technique/implementation-visits"),
+                route: "/service_technique/implementation-visits",
+            }
+        );
     } else if (role === "ADMIN") {
         items.push(
             {
