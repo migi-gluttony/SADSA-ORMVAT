@@ -321,6 +321,17 @@
           <Column field="actions" header="Actions">
             <template #body="slotProps">
               <div class="flex gap-1">
+                <!-- Debug info -->
+                <div style="display: none;">
+                  {{ console.log('Dossier', slotProps.data.id, ':', {
+                    statut: slotProps.data.statut,
+                    dateApprobation: slotProps.data.dateApprobation,
+                    hasApprovedFiche: hasApprovedFiche(slotProps.data),
+                    availableActions: slotProps.data.availableActions,
+                    actionCount: slotProps.data.availableActions ? slotProps.data.availableActions.length : 0
+                  }) }}
+                </div>
+                
                 <!-- View Details -->
                 <Button 
                   icon="pi pi-eye" 
@@ -339,13 +350,22 @@
 
                 <!-- Available Actions from Backend -->
                 <template v-for="action in slotProps.data.availableActions" :key="action.action">
-                  <!-- Assign to Commission -->
+                  <!-- Assign to Commission Terrain -->
                   <Button 
                     v-if="action.action === 'assign-commission'"
                     icon="pi pi-forward" 
                     @click="confirmAssignCommission(slotProps.data)"
                     class="p-button-info p-button-sm" 
-                    v-tooltip.top="action.label" 
+                    v-tooltip.top="action.label || 'Commission'" 
+                  />
+                  
+                  <!-- Assign to Service Technique -->
+                  <Button 
+                    v-if="action.action === 'assign-service-technique'"
+                    icon="pi pi-cog" 
+                    @click="confirmAssignServiceTechnique(slotProps.data)"
+                    class="p-button-secondary p-button-sm" 
+                    v-tooltip.top="action.label || 'Service Technique'" 
                   />
                   
                   <!-- Final Approval Button for Phase 4 -->
@@ -363,7 +383,7 @@
                     icon="pi pi-undo" 
                     @click="confirmReturnToAntenne(slotProps.data)"
                     class="p-button-warning p-button-outlined p-button-sm" 
-                    v-tooltip.top="action.label" 
+                    v-tooltip.top="action.label || 'Retourner'" 
                   />
                   
                   <!-- Reject (only for phase 2) -->
@@ -372,11 +392,11 @@
                     icon="pi pi-times" 
                     @click="confirmRejectDossier(slotProps.data)"
                     class="p-button-danger p-button-outlined p-button-sm" 
-                    v-tooltip.top="action.label" 
+                    v-tooltip.top="action.label || 'Rejeter'" 
                   />
                 </template>
 
-                <!-- View Fiche Button (approved dossiers) -->
+                <!-- View Fiche Button (approved dossiers) - only if has approval date -->
                 <Button 
                   v-if="hasApprovedFiche(slotProps.data)"
                   icon="pi pi-file-text" 
@@ -395,7 +415,7 @@
     <Dialog 
       v-model:visible="assignCommissionDialog.visible" 
       modal 
-      header="Envoyer à la Commission AHA-AF"
+      header="Envoyer à la Commission Visite Terrain"
       :style="{ width: '500px' }"
     >
       <div class="flex align-items-center mb-3">
@@ -453,6 +473,93 @@
           class="p-button-info"
           :loading="assignCommissionDialog.loading"
           :disabled="!assignCommissionDialog.comment?.trim()"
+        />
+      </template>
+    </Dialog>
+
+    <!-- Assign to Service Technique Dialog -->
+    <Dialog 
+      v-model:visible="assignServiceTechniqueDialog.visible" 
+      modal 
+      header="Envoyer au Service Technique"
+      :style="{ width: '600px' }"
+    >
+      <div class="flex align-items-center mb-3">
+        <i class="pi pi-cog text-2xl mr-3"></i>
+        <div>
+          <p>Envoyer ce dossier au Service Technique pour réalisation ?</p>
+          <div class="mt-2 p-2 bg-secondary-50 border-round">
+            <strong>{{ assignServiceTechniqueDialog.dossier?.reference }}</strong><br>
+            {{ assignServiceTechniqueDialog.dossier?.agriculteurNom }}<br>
+            <small>Type: {{ assignServiceTechniqueDialog.dossier?.sousRubriqueDesignation }}</small>
+          </div>
+        </div>
+      </div>
+      
+      <div class="field">
+        <label for="serviceTechniqueComment">Commentaire pour le Service Technique *</label>
+        <Textarea 
+          id="serviceTechniqueComment"
+          v-model="assignServiceTechniqueDialog.comment" 
+          rows="3" 
+          placeholder="Instructions spécifiques pour le service technique..."
+          class="w-full"
+          :class="{ 'p-invalid': !assignServiceTechniqueDialog.comment?.trim() }"
+        />
+      </div>
+      
+      <div class="field">
+        <label for="serviceTechniquePriority">Priorité du dossier</label>
+        <Dropdown 
+          id="serviceTechniquePriority"
+          v-model="assignServiceTechniqueDialog.priority" 
+          :options="prioriteOptions"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Sélectionner la priorité"
+          class="w-full"
+        />
+      </div>
+
+      <div class="field">
+        <label for="typeRealisationPrevue">Type de réalisation prévue</label>
+        <InputText 
+          id="typeRealisationPrevue"
+          v-model="assignServiceTechniqueDialog.typeRealisationPrevue" 
+          placeholder="Ex: Construction de bassin de stockage, aménagement parcellaire..."
+          class="w-full"
+        />
+      </div>
+
+      <div class="field">
+        <label for="observationsSpecifiques">Observations spécifiques</label>
+        <Textarea 
+          id="observationsSpecifiques"
+          v-model="assignServiceTechniqueDialog.observationsSpecifiques" 
+          rows="2" 
+          placeholder="Observations spécifiques pour la réalisation..."
+          class="w-full"
+        />
+      </div>
+
+      <p class="text-600 text-sm">
+        <strong>Attention:</strong> Le Service Technique prendra en charge la supervision de la réalisation du projet d'infrastructure.
+      </p>
+      
+      <template #footer>
+        <Button 
+          label="Annuler" 
+          icon="pi pi-times" 
+          @click="assignServiceTechniqueDialog.visible = false"
+          class="p-button-outlined"
+        />
+        <Button 
+          label="Envoyer au Service Technique" 
+          icon="pi pi-cog" 
+          @click="assignToServiceTechnique"
+          class="p-button-secondary"
+          :loading="assignServiceTechniqueDialog.loading"
+          :disabled="!assignServiceTechniqueDialog.comment?.trim()"
         />
       </template>
     </Dialog>
@@ -646,6 +753,7 @@ const statusOptions = ref([
   { label: 'En révision', value: 'IN_REVIEW' },
   { label: 'Approuvé', value: 'APPROVED' },
   { label: 'En attente fermier', value: 'AWAITING_FARMER' },
+  { label: 'Réalisation en cours', value: 'REALIZATION_IN_PROGRESS' },
   { label: 'Rejeté', value: 'REJECTED' },
   { label: 'Terminé', value: 'COMPLETED' }
 ]);
@@ -680,6 +788,16 @@ const assignCommissionDialog = ref({
   loading: false,
   comment: '',
   priority: 'NORMALE'
+});
+
+const assignServiceTechniqueDialog = ref({
+  visible: false,
+  dossier: null,
+  loading: false,
+  comment: '',
+  priority: 'NORMALE',
+  typeRealisationPrevue: '',
+  observationsSpecifiques: ''
 });
 
 const rejectDialog = ref({
@@ -766,7 +884,12 @@ async function loadDossiers() {
 function calculateStatistics() {
   const total = dossiers.value.length;
   const enAttente = dossiers.value.filter(d => d.statut === 'SUBMITTED' || d.statut === 'IN_REVIEW').length;
-  const approuves = dossiers.value.filter(d => d.statut === 'APPROVED' || d.statut === 'AWAITING_FARMER' || d.statut === 'COMPLETED').length;
+  const approuves = dossiers.value.filter(d => 
+    d.statut === 'APPROVED' || 
+    d.statut === 'AWAITING_FARMER' || 
+    d.statut === 'REALIZATION_IN_PROGRESS' || 
+    d.statut === 'COMPLETED'
+  ).length;
   const enRetard = dossiers.value.filter(d => d.enRetard).length;
 
   statistics.value = {
@@ -821,6 +944,18 @@ function confirmAssignCommission(dossier) {
   };
 }
 
+function confirmAssignServiceTechnique(dossier) {
+  assignServiceTechniqueDialog.value = {
+    visible: true,
+    dossier: dossier,
+    loading: false,
+    comment: '',
+    priority: 'NORMALE',
+    typeRealisationPrevue: '',
+    observationsSpecifiques: ''
+  };
+}
+
 function confirmRejectDossier(dossier) {
   rejectDialog.value = {
     visible: true,
@@ -870,7 +1005,7 @@ async function assignToCommission() {
       toast.add({
         severity: 'success',
         summary: 'Succès',
-        detail: response.message || 'Dossier assigné à la Commission',
+        detail: response.message || 'Dossier assigné à la Commission Terrain',
         life: 3000
       });
       
@@ -887,6 +1022,45 @@ async function assignToCommission() {
     });
   } finally {
     assignCommissionDialog.value.loading = false;
+  }
+}
+
+async function assignToServiceTechnique() {
+  try {
+    assignServiceTechniqueDialog.value.loading = true;
+    
+    const dossier = assignServiceTechniqueDialog.value.dossier;
+    const endpoint = `/agent-guc/dossiers/assign-service-technique/${dossier.id}`;
+    const payload = { 
+      commentaire: assignServiceTechniqueDialog.value.comment, 
+      priorite: assignServiceTechniqueDialog.value.priority,
+      typeRealisationPrevue: assignServiceTechniqueDialog.value.typeRealisationPrevue,
+      observationsSpecifiques: assignServiceTechniqueDialog.value.observationsSpecifiques
+    };
+
+    const response = await ApiService.post(endpoint, payload);
+
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Succès',
+        detail: response.message || 'Dossier assigné au Service Technique',
+        life: 3000
+      });
+      
+      assignServiceTechniqueDialog.value.visible = false;
+      setTimeout(() => loadDossiers(), 500);
+    }
+
+  } catch (err) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: err.message || 'Une erreur est survenue',
+      life: 3000
+    });
+  } finally {
+    assignServiceTechniqueDialog.value.loading = false;
   }
 }
 
@@ -1002,6 +1176,7 @@ function getPhaseSeverity(dossier) {
   const phase = dossier.currentStep;
   if (phase?.includes('GUC')) return 'warning';
   if (phase?.includes('Commission')) return 'info';
+  if (phase?.includes('Service Technique')) return 'secondary';
   return 'secondary';
 }
 
@@ -1012,6 +1187,7 @@ function getStatusLabel(status) {
     'IN_REVIEW': 'En révision',
     'APPROVED': 'Approuvé',
     'AWAITING_FARMER': 'En attente fermier',
+    'REALIZATION_IN_PROGRESS': 'Réalisation en cours',
     'REJECTED': 'Rejeté',
     'COMPLETED': 'Terminé',
     'RETURNED_FOR_COMPLETION': 'Retourné'
@@ -1026,6 +1202,7 @@ function getStatusSeverity(status) {
     'IN_REVIEW': 'warning',
     'APPROVED': 'success',
     'AWAITING_FARMER': 'success',
+    'REALIZATION_IN_PROGRESS': 'info',
     'REJECTED': 'danger',
     'COMPLETED': 'success',
     'RETURNED_FOR_COMPLETION': 'warning'
@@ -1034,10 +1211,12 @@ function getStatusSeverity(status) {
 }
 
 function hasApprovedFiche(dossier) {
-  return dossier.statut === 'APPROVED' || 
-         dossier.statut === 'AWAITING_FARMER' ||
-         dossier.statut === 'COMPLETED' ||
-         !!dossier.dateApprobation;
+  // Only show fiche button if the dossier is actually fully approved and has a date
+  return (dossier.statut === 'APPROVED' || 
+          dossier.statut === 'AWAITING_FARMER' ||
+          dossier.statut === 'REALIZATION_IN_PROGRESS' ||
+          dossier.statut === 'COMPLETED') &&
+         !!dossier.dateApprobation; // Must have approval date
 }
 
 function formatCurrency(amount) {

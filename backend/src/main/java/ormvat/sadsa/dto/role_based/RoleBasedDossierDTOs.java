@@ -263,6 +263,17 @@ public class RoleBasedDossierDTOs {
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor
+    public static class AssignServiceTechniqueRequest {
+        private String commentaire;
+        private String priorite;
+        private String typeRealisationPrevue; // Type of realization planned
+        private String observationsSpecifiques; // Specific observations for Service Technique
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
     public static class ApproveRequest {
         private String commentaire;
     }

@@ -70,6 +70,15 @@
                 severity="success"
               />
               
+              <!-- Service Technique Button (infrastructure projects only) -->
+              <Button 
+                v-if="canAssignToServiceTechnique()"
+                label="Service Technique" 
+                icon="pi pi-cog" 
+                @click="showServiceTechniqueDialog()"
+                severity="secondary"
+              />
+              
               <!-- Phase-based Actions -->
               <SplitButton 
                 v-if="hasPhaseActions()"
@@ -335,6 +344,78 @@
           @click="confirmAction('sendToCommission')"
           :loading="actionDialogs.sendToCommission.loading"
           class="p-button-success"
+        />
+      </template>
+    </Dialog>
+
+    <Dialog 
+      v-model:visible="actionDialogs.sendToServiceTechnique.visible"
+      header="Envoyer au Service Technique"
+      modal
+      :style="{ width: '600px' }"
+    >
+      <div class="space-y-4">
+        <div class="field">
+          <label for="serviceTechniqueComment" class="block mb-2">Commentaire *</label>
+          <Textarea 
+            id="serviceTechniqueComment"
+            v-model="actionDialogs.sendToServiceTechnique.comment"
+            rows="3"
+            class="w-full"
+            placeholder="Instructions pour le Service Technique..."
+            :class="{ 'p-invalid': !actionDialogs.sendToServiceTechnique.comment?.trim() }"
+          />
+        </div>
+        <div class="field">
+          <label for="serviceTechniquePriority" class="block mb-2">Priorité</label>
+          <Dropdown 
+            id="serviceTechniquePriority"
+            v-model="actionDialogs.sendToServiceTechnique.priority"
+            :options="priorityOptions"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Sélectionner la priorité"
+            class="w-full"
+          />
+        </div>
+        <div class="field">
+          <label for="typeRealisationPrevue" class="block mb-2">Type de réalisation prévue</label>
+          <InputText 
+            id="typeRealisationPrevue"
+            v-model="actionDialogs.sendToServiceTechnique.typeRealisationPrevue"
+            placeholder="Ex: Construction de bassin, aménagement parcellaire..."
+            class="w-full"
+          />
+        </div>
+        <div class="field">
+          <label for="observationsSpecifiques" class="block mb-2">Observations spécifiques</label>
+          <Textarea 
+            id="observationsSpecifiques"
+            v-model="actionDialogs.sendToServiceTechnique.observationsSpecifiques"
+            rows="2"
+            placeholder="Observations techniques particulières..."
+            class="w-full"
+          />
+        </div>
+        <div class="p-3 surface-100 border-round">
+          <p class="text-sm text-600 m-0">
+            <i class="pi pi-info-circle mr-2"></i>
+            Le Service Technique prendra en charge la supervision de la réalisation du projet d'infrastructure.
+          </p>
+        </div>
+      </div>
+      <template #footer>
+        <Button 
+          label="Annuler" 
+          @click="actionDialogs.sendToServiceTechnique.visible = false"
+          class="p-button-outlined"
+        />
+        <Button 
+          label="Envoyer" 
+          @click="confirmAction('sendToServiceTechnique')"
+          :loading="actionDialogs.sendToServiceTechnique.loading"
+          :disabled="!actionDialogs.sendToServiceTechnique.comment?.trim()"
+          class="p-button-secondary"
         />
       </template>
     </Dialog>
@@ -606,6 +687,7 @@ import Dialog from 'primevue/dialog';
 import Textarea from 'primevue/textarea';
 import Dropdown from 'primevue/dropdown';
 import Checkbox from 'primevue/checkbox';
+import InputText from 'primevue/inputtext';
 import ConfirmDialog from 'primevue/confirmdialog';
 import Toast from 'primevue/toast';
 
@@ -650,6 +732,14 @@ const currentUser = computed(() => AuthService.getCurrentUser());
 // Dialog states
 const actionDialogs = ref({
   sendToCommission: { visible: false, loading: false, comment: '', priority: 'NORMALE' },
+  sendToServiceTechnique: { 
+    visible: false, 
+    loading: false, 
+    comment: '', 
+    priority: 'NORMALE',
+    typeRealisationPrevue: '',
+    observationsSpecifiques: ''
+  },
   returnToAntenne: { visible: false, loading: false, comment: '', reasons: [] },
   reject: { visible: false, loading: false, comment: '', definitive: false }
 });
@@ -1114,16 +1204,59 @@ function needsFinalApproval() {
 
 function hasApprovedFiche() {
   const statut = dossierDetail.value?.statut;
-  return statut === 'APPROVED' || 
-         statut === 'APPROVED_AWAITING_FARMER' ||
-         statut === 'COMPLETED' ||
-         dossierDetail.value?.dateApprobation;
+  const hasDate = !!dossierDetail.value?.dateApprobation;
+  
+  console.log('hasApprovedFiche check:', {
+    statut,
+    hasDate,
+    dateApprobation: dossierDetail.value?.dateApprobation
+  });
+  
+  return (statut === 'APPROVED' || 
+          statut === 'AWAITING_FARMER' ||
+          statut === 'REALIZATION_IN_PROGRESS' ||
+          statut === 'COMPLETED') &&
+         hasDate; // Must have approval date
 }
 
 function hasPhaseActions() {
   return dossierDetail.value?.availableActions && 
          Array.isArray(dossierDetail.value.availableActions) && 
          dossierDetail.value.availableActions.length > 0;
+}
+
+function canAssignToServiceTechnique() {
+  // Check if this is an infrastructure project and in the right phase
+  if (!dossierDetail.value) return false;
+  
+  // Check if it's an infrastructure project (AMENAGEMENT HYDRO-AGRICOLE)
+  const isInfraProject = dossierDetail.value.projet?.rubrique === 'AMENAGEMENT HYDRO-AGRICOLE ET AMELIORATION FONCIERE';
+  
+  // Check if there's a Service Technique action available
+  const hasServiceTechniqueAction = dossierDetail.value.availableActions?.some(action => 
+    action.action === 'assign-service-technique'
+  );
+  
+  // Debug logging
+  console.log('canAssignToServiceTechnique:', {
+    isInfraProject,
+    hasServiceTechniqueAction,
+    availableActions: dossierDetail.value.availableActions,
+    rubrique: dossierDetail.value.projet?.rubrique
+  });
+  
+  return isInfraProject && hasServiceTechniqueAction;
+}
+
+function showServiceTechniqueDialog() {
+  actionDialogs.value.sendToServiceTechnique = {
+    visible: true,
+    loading: false,
+    comment: '',
+    priority: 'NORMALE',
+    typeRealisationPrevue: '',
+    observationsSpecifiques: ''
+  };
 }
 
 function getPhaseActionMenuItems() {
@@ -1135,6 +1268,11 @@ function getPhaseActionMenuItems() {
         label: 'Envoyer à la Commission',
         icon: 'pi pi-forward',
         command: () => showActionDialog('sendToCommission')
+      },
+      'assign-service-technique': {
+        label: 'Envoyer au Service Technique',
+        icon: 'pi pi-cog',
+        command: () => showActionDialog('sendToServiceTechnique')
       },
       'return': {
         label: 'Retourner à l\'Antenne',
@@ -1173,6 +1311,7 @@ function getPrimaryPhaseActionLabel() {
   const primaryAction = actions[0];
   const labelMap = {
     'assign-commission': 'Commission',
+    'assign-service-technique': 'Service Technique',
     'approve': 'Approuver',
     'validate-realization': 'Valider',
     'return': 'Retourner',
@@ -1190,6 +1329,9 @@ function handlePrimaryPhaseAction() {
   switch (primaryAction.action) {
     case 'assign-commission':
       showActionDialog('sendToCommission');
+      break;
+    case 'assign-service-technique':
+      showActionDialog('sendToServiceTechnique');
       break;
     case 'approve':
       goToFinalApproval();
@@ -1241,6 +1383,10 @@ function showActionDialog(action) {
     actionDialogs.value[action].priority = 'NORMALE';
     actionDialogs.value[action].reasons = [];
     actionDialogs.value[action].definitive = false;
+    if (action === 'sendToServiceTechnique') {
+      actionDialogs.value[action].typeRealisationPrevue = '';
+      actionDialogs.value[action].observationsSpecifiques = '';
+    }
   }
 }
 
@@ -1260,6 +1406,15 @@ async function confirmAction(action) {
           priorite: dialog.priority
         };
         break;
+      case 'sendToServiceTechnique':
+        endpoint = `/agent-guc/dossiers/assign-service-technique/${dossierId.value}`;
+        payload = { 
+          commentaire: dialog.comment,
+          priorite: dialog.priority,
+          typeRealisationPrevue: dialog.typeRealisationPrevue,
+          observationsSpecifiques: dialog.observationsSpecifiques
+        };
+        break;
       case 'returnToAntenne':
         endpoint = `/agent-guc/dossiers/return/${dossierId.value}`;
         payload = { 
@@ -1276,7 +1431,20 @@ async function confirmAction(action) {
         break;
     }
     
+    // Debug logging
+    console.log('Making API call:', {
+      action,
+      endpoint,
+      fullUrl: `/api${endpoint}`,
+      payload,
+      dossierId: dossierId.value,
+      currentUser: currentUser.value,
+      token: AuthService.getToken() ? 'Token exists' : 'No token'
+    });
+    
     const response = await ApiService.post(endpoint, payload);
+    
+    console.log('API response:', response);
     
     if (response && response.success !== false) {
       toast.add({
@@ -1291,10 +1459,30 @@ async function confirmAction(action) {
     }
     
   } catch (error) {
+    console.error('API call error:', {
+      error,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
+    });
+    
+    let errorMessage = 'Une erreur est survenue';
+    
+    if (error.response?.status === 403) {
+      errorMessage = 'Accès refusé - Vous n\'avez pas les permissions nécessaires pour cette action';
+    } else if (error.response?.status === 401) {
+      errorMessage = 'Session expirée - Veuillez vous reconnecter';
+    } else if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
     toast.add({
       severity: 'error',
       summary: 'Erreur',
-      detail: error.message || 'Une erreur est survenue',
+      detail: errorMessage,
       life: 4000
     });
   } finally {
@@ -1338,7 +1526,8 @@ function getStatusLabel(status) {
     'APPROVED': 'Approuvé',
     'REJECTED': 'Rejeté',
     'RETURNED_FOR_COMPLETION': 'Retourné',
-    'APPROVED_AWAITING_FARMER': 'Approuvé - En attente agriculteur'
+    'AWAITING_FARMER': 'En attente agriculteur',
+    'REALIZATION_IN_PROGRESS': 'Réalisation en cours'
   };
   return labels[status] || status;
 }
@@ -1351,7 +1540,8 @@ function getStatusSeverity(status) {
     'APPROVED': 'success',
     'REJECTED': 'danger',
     'RETURNED_FOR_COMPLETION': 'warning',
-    'APPROVED_AWAITING_FARMER': 'success'
+    'AWAITING_FARMER': 'success',
+    'REALIZATION_IN_PROGRESS': 'info'
   };
   return severities[status] || 'secondary';
 }
