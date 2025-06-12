@@ -6,8 +6,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.math.BigDecimal;
 import java.util.List;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 
 public class RoleBasedDossierDTOs {
 
@@ -49,6 +52,14 @@ public class RoleBasedDossierDTOs {
         private String commissionComments;
         private LocalDateTime commissionDecisionDate;
         private String commissionAgentName;
+        
+        // Service Technique feedback fields
+        private Boolean serviceTechniqueDecisionMade;
+        private Boolean serviceTechniqueApproved;
+        private String serviceTechniqueComments;
+        private LocalDateTime serviceTechniqueDecisionDate;
+        private String serviceTechniqueAgentName;
+        private Integer pourcentageAvancement;
     }
 
     @Data
@@ -76,6 +87,9 @@ public class RoleBasedDossierDTOs {
         
         // Commission feedback details
         private CommissionFeedbackDTO commissionFeedback;
+        
+        // Service Technique feedback details
+        private ServiceTechniqueFeedbackDTO serviceTechniqueFeedback;
     }
 
     @Data
@@ -95,6 +109,29 @@ public class RoleBasedDossierDTOs {
         private String conditionsMeteo;
         private Integer dureeVisite;
         private List<String> photosUrls;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class ServiceTechniqueFeedbackDTO {
+        private Boolean decisionMade;
+        private Boolean approved;
+        private String observations;
+        private String recommandations;
+        private String conclusion;
+        private String problemesDetectes;
+        private String actionsCorrectives;
+        private LocalDate dateVisite;
+        private LocalDate dateConstat;
+        private LocalDateTime dateDecision;
+        private String agentServiceTechniqueName;
+        private String coordonneesGPS;
+        private Integer dureeVisite;
+        private Integer pourcentageAvancement;
+        private List<String> photosUrls;
+        private String statutVisite;
     }
 
     @Data
@@ -246,7 +283,7 @@ public class RoleBasedDossierDTOs {
     @NoArgsConstructor
     public static class StartRealizationRequest {
         private String commentaire;
-        private String typeReception; // Type of reception: "DEPOT_ATTESTATION", "NOTIFICATION_DIRECTE", etc.
+        private String typeReception;
         private String observations;
     }
 
@@ -266,8 +303,8 @@ public class RoleBasedDossierDTOs {
     public static class AssignServiceTechniqueRequest {
         private String commentaire;
         private String priorite;
-        private String typeRealisationPrevue; // Type of realization planned
-        private String observationsSpecifiques; // Specific observations for Service Technique
+        private String typeRealisationPrevue;
+        private String observationsSpecifiques;
     }
 
     @Data
@@ -387,7 +424,41 @@ public class RoleBasedDossierDTOs {
         private Boolean success;
         private String message;
         private LocalDateTime timestamp;
-        private String nextPhase; // Additional info about what happens next
-        private String newStatus; // New dossier status
+        private String nextPhase;
+        private String newStatus;
+    }
+
+    // New DTOs for final realization approval
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class FinalRealizationApprovalRequest {
+        @NotNull(message = "L'ID du dossier est requis")
+        private Long dossierId;
+        
+        @NotNull(message = "La décision d'approbation est requise")
+        private Boolean approved;
+        
+        @NotBlank(message = "Le commentaire d'approbation est requis")
+        private String commentaireApprobation;
+        
+        private String motifRejet;
+        private String observationsFinales;
+        private String notesArchivage;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class FinalRealizationApprovalResponse {
+        private Boolean success;
+        private String message;
+        private String newStatut;
+        private LocalDateTime dateAction;
+        private LocalDateTime dateArchivage;
+        private String numeroArchivage;
+        private String nextStep;
     }
 }

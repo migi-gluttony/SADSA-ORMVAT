@@ -283,6 +283,33 @@
             </template>
           </Column>
 
+          <Column header="Service Technique">
+            <template #body="slotProps">
+              <div class="text-sm">
+                <div v-if="slotProps.data.serviceTechniqueDecisionMade" class="flex flex-column gap-1">
+                  <Tag 
+                    :value="slotProps.data.serviceTechniqueApproved ? 'RÉALISATION APPROUVÉE' : 'RÉALISATION REJETÉE'" 
+                    :severity="slotProps.data.serviceTechniqueApproved ? 'success' : 'danger'"
+                    class="text-xs"
+                  />
+                  <div class="text-xs text-600" v-if="slotProps.data.pourcentageAvancement">
+                    Avancement: {{ slotProps.data.pourcentageAvancement }}%
+                  </div>
+                  <div class="text-xs text-600" v-if="slotProps.data.serviceTechniqueComments">
+                    {{ truncateText(slotProps.data.serviceTechniqueComments, 40) }}
+                  </div>
+                  <div class="text-xs text-500" v-if="slotProps.data.serviceTechniqueDecisionDate">
+                    {{ formatDate(slotProps.data.serviceTechniqueDecisionDate) }}
+                  </div>
+                </div>
+                <div v-else class="flex align-items-center gap-1">
+                  <Tag value="EN ATTENTE" severity="warning" class="text-xs" />
+                  <i class="pi pi-clock text-xs text-600"></i>
+                </div>
+              </div>
+            </template>
+          </Column>
+
           <Column field="statut" header="Statut" :sortable="true">
             <template #body="slotProps">
               <Tag 
@@ -366,13 +393,22 @@
                     v-tooltip.top="'Finaliser l\'Approbation'" 
                   />
                   
-                  <!-- Validate Realization -->
+                  <!-- Validate Realization (Legacy - Phase 8) -->
                   <Button 
                     v-if="action.action === 'validate-realization'"
                     icon="pi pi-check-circle" 
                     @click="confirmValidateRealization(slotProps.data)"
                     class="p-button-success p-button-sm" 
                     v-tooltip.top="action.label" 
+                  />
+                  
+                  <!-- Final Realization Approval Button for Phase 8 -->
+                  <Button 
+                    v-if="action.action === 'final-realization-approval'"
+                    icon="pi pi-check-square" 
+                    @click="goToFinalRealizationApproval(slotProps.data)"
+                    class="p-button-success p-button-sm" 
+                    v-tooltip.top="'Approbation Finale Réalisation'" 
                   />
                   
                   <!-- Return to Antenne -->
@@ -409,6 +445,7 @@
       </template>
     </Card>
 
+    <!-- All existing dialogs remain the same... -->
     <!-- Assign to Commission Dialog -->
     <Dialog 
       v-model:visible="assignCommissionDialog.visible" 
@@ -782,6 +819,7 @@ const statusOptions = ref([
   { label: 'En révision', value: 'IN_REVIEW' },
   { label: 'Approuvé', value: 'APPROVED' },
   { label: 'En attente fermier', value: 'AWAITING_FARMER' },
+  { label: 'Réalisation en cours', value: 'REALIZATION_IN_PROGRESS' },
   { label: 'Rejeté', value: 'REJECTED' },
   { label: 'Terminé', value: 'COMPLETED' }
 ]);
@@ -916,7 +954,7 @@ async function loadDossiers() {
 
 function calculateStatistics() {
   const total = dossiers.value.length;
-  const enAttente = dossiers.value.filter(d => d.statut === 'SUBMITTED' || d.statut === 'IN_REVIEW').length;
+  const enAttente = dossiers.value.filter(d => d.statut === 'SUBMITTED' || d.statut === 'IN_REVIEW' || d.statut === 'REALIZATION_IN_PROGRESS').length;
   const approuves = dossiers.value.filter(d => d.statut === 'APPROVED' || d.statut === 'AWAITING_FARMER' || d.statut === 'COMPLETED').length;
   const enRetard = dossiers.value.filter(d => d.enRetard).length;
 
@@ -963,6 +1001,15 @@ function goToFiche(dossier) {
 
 function goToFinalApproval(dossier) {
   router.push(`/agent_guc/dossiers/${dossier.id}/final-approval`);
+}
+
+function goToFinalRealizationApproval(dossier) {
+  router.push(`/agent_guc/dossiers/${dossier.id}/final-realization-approval`);
+}
+
+function showServiceTechniqueFeedback(dossier) {
+  return dossier.serviceTechniqueDecisionMade && 
+         (dossier.currentStep?.includes('GUC') || dossier.currentStep?.includes('Phase 8'));
 }
 
 // Dialog functions
@@ -1245,6 +1292,7 @@ function getPhaseSeverity(dossier) {
   const phase = dossier.currentStep;
   if (phase?.includes('GUC')) return 'warning';
   if (phase?.includes('Commission')) return 'info';
+  if (phase?.includes('Service Technique')) return 'success';
   return 'secondary';
 }
 
@@ -1255,6 +1303,7 @@ function getStatusLabel(status) {
     'IN_REVIEW': 'En révision',
     'APPROVED': 'Approuvé',
     'AWAITING_FARMER': 'En attente fermier',
+    'REALIZATION_IN_PROGRESS': 'Réalisation en cours',
     'REJECTED': 'Rejeté',
     'COMPLETED': 'Terminé',
     'RETURNED_FOR_COMPLETION': 'Retourné'
@@ -1269,6 +1318,7 @@ function getStatusSeverity(status) {
     'IN_REVIEW': 'warning',
     'APPROVED': 'success',
     'AWAITING_FARMER': 'success',
+    'REALIZATION_IN_PROGRESS': 'warning',
     'REJECTED': 'danger',
     'COMPLETED': 'success',
     'RETURNED_FOR_COMPLETION': 'warning'

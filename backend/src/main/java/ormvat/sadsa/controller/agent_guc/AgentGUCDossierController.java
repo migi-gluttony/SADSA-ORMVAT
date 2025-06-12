@@ -120,6 +120,23 @@ public class AgentGUCDossierController {
         }
     }
 
+    @PostMapping("/final-realization-approval")
+    public ResponseEntity<FinalRealizationApprovalResponse> processFinalRealizationApproval(
+            @Valid @RequestBody FinalRealizationApprovalRequest request,
+            Authentication authentication) {
+        try {
+            FinalRealizationApprovalResponse response = dossierService.processFinalRealizationApproval(request, authentication.getName());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Erreur approbation finale réalisation dossier {}: {}", request.getDossierId(), e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(FinalRealizationApprovalResponse.builder()
+                            .success(false)
+                            .message(e.getMessage())
+                            .build());
+        }
+    }
+
     @PostMapping("/reject/{id}")
     public ResponseEntity<ActionResponse> rejectDossier(@PathVariable Long id,
                                                        @Valid @RequestBody RejectRequest request,

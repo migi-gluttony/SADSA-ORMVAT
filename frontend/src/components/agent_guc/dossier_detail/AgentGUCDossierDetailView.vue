@@ -61,6 +61,15 @@
                 severity="success"
               />
               
+              <!-- Final Realization Approval Button (Phase 8) -->
+              <Button 
+                v-if="needsFinalRealizationApproval()"
+                label="Approbation Finale Réalisation" 
+                icon="pi pi-check-square" 
+                @click="goToFinalRealizationApproval"
+                severity="success"
+              />
+              
               <!-- View Fiche Button -->
               <Button 
                 v-if="hasApprovedFiche()"
@@ -148,6 +157,228 @@
         </template>
       </Card>
 
+      <!-- Commission Feedback Section -->
+      <Card v-if="dossierDetail.commissionFeedback">
+        <template #title>
+          <i class="pi pi-map-marker mr-2"></i>Retour de la Commission Visite Terrain
+        </template>
+        <template #content>
+          <div v-if="dossierDetail.commissionFeedback.decisionMade">
+            <!-- Commission Decision -->
+            <div class="flex justify-content-between align-items-center mb-4">
+              <div class="flex align-items-center gap-3">
+                <Tag 
+                  :value="dossierDetail.commissionFeedback.approved ? 'TERRAIN APPROUVÉ' : 'TERRAIN REJETÉ'" 
+                  :severity="dossierDetail.commissionFeedback.approved ? 'success' : 'danger'"
+                  class="text-lg font-bold"
+                />
+                <div class="text-sm text-600">
+                  <i class="pi pi-calendar mr-1"></i>
+                  Visite effectuée le {{ formatDate(dossierDetail.commissionFeedback.dateVisite) }}
+                </div>
+              </div>
+              <div class="text-sm text-600" v-if="dossierDetail.commissionFeedback.agentCommissionName">
+                <i class="pi pi-user mr-1"></i>
+                Par: {{ dossierDetail.commissionFeedback.agentCommissionName }}
+              </div>
+            </div>
+
+            <!-- Commission Details -->
+            <div class="grid">
+              <div class="col-12 md:col-6" v-if="dossierDetail.commissionFeedback.observations">
+                <h5>Observations Terrain</h5>
+                <div class="p-3 bg-gray-50 border-round">
+                  {{ dossierDetail.commissionFeedback.observations }}
+                </div>
+              </div>
+              
+              <div class="col-12 md:col-6" v-if="dossierDetail.commissionFeedback.recommandations">
+                <h5>Recommandations</h5>
+                <div class="p-3 bg-blue-50 border-round">
+                  {{ dossierDetail.commissionFeedback.recommandations }}
+                </div>
+              </div>
+
+              <div class="col-12" v-if="dossierDetail.commissionFeedback.conclusion">
+                <h5>Conclusion de la Commission</h5>
+                <div class="p-3 border-round" :class="{
+                  'bg-green-50': dossierDetail.commissionFeedback.approved,
+                  'bg-red-50': !dossierDetail.commissionFeedback.approved
+                }">
+                  {{ dossierDetail.commissionFeedback.conclusion }}
+                </div>
+              </div>
+
+              <!-- Technical Details -->
+              <div class="col-12" v-if="hasCommissionVisitDetails()">
+                <h5>Détails de la Visite</h5>
+                <div class="grid">
+                  <div class="col-4" v-if="dossierDetail.commissionFeedback.coordonneesGPS">
+                    <strong>Coordonnées GPS:</strong><br>
+                    <small>{{ dossierDetail.commissionFeedback.coordonneesGPS }}</small>
+                  </div>
+                  <div class="col-4" v-if="dossierDetail.commissionFeedback.dureeVisite">
+                    <strong>Durée:</strong><br>
+                    <small>{{ dossierDetail.commissionFeedback.dureeVisite }} minutes</small>
+                  </div>
+                  <div class="col-4" v-if="dossierDetail.commissionFeedback.conditionsMeteo">
+                    <strong>Conditions météo:</strong><br>
+                    <small>{{ dossierDetail.commissionFeedback.conditionsMeteo }}</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Photos Section -->
+            <div v-if="dossierDetail.commissionFeedback.photosUrls && dossierDetail.commissionFeedback.photosUrls.length > 0" class="mt-4">
+              <h5>Photos du Terrain</h5>
+              <div class="flex gap-2 flex-wrap">
+                <div v-for="(photo, index) in dossierDetail.commissionFeedback.photosUrls" :key="index" class="border-round overflow-hidden">
+                  <img :src="photo" :alt="`Photo terrain ${index + 1}`" class="w-8rem h-6rem object-cover cursor-pointer" 
+                       @click="openPhotoDialog(photo)" />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- No Commission Decision Yet -->
+          <div v-else class="text-center py-4">
+            <i class="pi pi-clock text-4xl text-orange-500 mb-3"></i>
+            <h4>En attente de la décision de la Commission</h4>
+            <p class="text-600">La commission n'a pas encore rendu sa décision concernant la visite terrain.</p>
+            <Tag value="VISITE EN COURS" severity="warning" />
+          </div>
+        </template>
+      </Card>
+
+      <!-- Service Technique Feedback Section -->
+      <Card v-if="dossierDetail.serviceTechniqueFeedback">
+        <template #title>
+          <i class="pi pi-cog mr-2"></i>Retour du Service Technique
+        </template>
+        <template #content>
+          <div v-if="dossierDetail.serviceTechniqueFeedback.decisionMade">
+            <!-- Service Technique Decision -->
+            <div class="flex justify-content-between align-items-center mb-4">
+              <div class="flex align-items-center gap-3">
+                <Tag 
+                  :value="dossierDetail.serviceTechniqueFeedback.approved ? 'RÉALISATION APPROUVÉE' : 'RÉALISATION REJETÉE'" 
+                  :severity="dossierDetail.serviceTechniqueFeedback.approved ? 'success' : 'danger'"
+                  class="text-lg font-bold"
+                />
+                <div class="text-sm text-600">
+                  <i class="pi pi-calendar mr-1"></i>
+                  Visite effectuée le {{ formatDate(dossierDetail.serviceTechniqueFeedback.dateVisite) }}
+                </div>
+              </div>
+              <div class="text-sm text-600" v-if="dossierDetail.serviceTechniqueFeedback.agentServiceTechniqueName">
+                <i class="pi pi-user mr-1"></i>
+                {{ dossierDetail.serviceTechniqueFeedback.agentServiceTechniqueName }}
+              </div>
+            </div>
+
+            <!-- Service Technique Details -->
+            <div class="grid">
+              <!-- Progress and Status -->
+              <div class="col-12 md:col-4" v-if="dossierDetail.serviceTechniqueFeedback.pourcentageAvancement">
+                <h5>Avancement du Projet</h5>
+                <div class="flex align-items-center gap-2 mb-2">
+                  <ProgressBar 
+                    :value="dossierDetail.serviceTechniqueFeedback.pourcentageAvancement" 
+                    class="flex-1"
+                  />
+                  <span class="font-bold">{{ dossierDetail.serviceTechniqueFeedback.pourcentageAvancement }}%</span>
+                </div>
+                <div class="text-sm text-600">
+                  Statut: {{ getStatutVisiteLabel(dossierDetail.serviceTechniqueFeedback.statutVisite) }}
+                </div>
+              </div>
+
+              <!-- Observations -->
+              <div class="col-12 md:col-8" v-if="dossierDetail.serviceTechniqueFeedback.observations">
+                <h5>Observations de la Visite</h5>
+                <div class="p-3 bg-blue-50 border-round">
+                  {{ dossierDetail.serviceTechniqueFeedback.observations }}
+                </div>
+              </div>
+
+              <!-- Recommendations -->
+              <div class="col-12 md:col-6" v-if="dossierDetail.serviceTechniqueFeedback.recommandations">
+                <h5>Recommandations</h5>
+                <div class="p-3 bg-green-50 border-round">
+                  {{ dossierDetail.serviceTechniqueFeedback.recommandations }}
+                </div>
+              </div>
+
+              <!-- Problems Detected -->
+              <div class="col-12 md:col-6" v-if="dossierDetail.serviceTechniqueFeedback.problemesDetectes">
+                <h5>Problèmes Détectés</h5>
+                <div class="p-3 bg-orange-50 border-round">
+                  {{ dossierDetail.serviceTechniqueFeedback.problemesDetectes }}
+                </div>
+              </div>
+
+              <!-- Corrective Actions -->
+              <div class="col-12" v-if="dossierDetail.serviceTechniqueFeedback.actionsCorrectives">
+                <h5>Actions Correctives Prises</h5>
+                <div class="p-3 bg-purple-50 border-round">
+                  {{ dossierDetail.serviceTechniqueFeedback.actionsCorrectives }}
+                </div>
+              </div>
+
+              <!-- Conclusion -->
+              <div class="col-12" v-if="dossierDetail.serviceTechniqueFeedback.conclusion">
+                <h5>Conclusion du Service Technique</h5>
+                <div class="p-3 border-round" :class="{
+                  'bg-green-50': dossierDetail.serviceTechniqueFeedback.approved,
+                  'bg-red-50': !dossierDetail.serviceTechniqueFeedback.approved
+                }">
+                  {{ dossierDetail.serviceTechniqueFeedback.conclusion }}
+                </div>
+              </div>
+
+              <!-- Technical Details -->
+              <div class="col-12" v-if="hasServiceTechniqueVisitDetails()">
+                <h5>Détails de la Visite</h5>
+                <div class="grid">
+                  <div class="col-4" v-if="dossierDetail.serviceTechniqueFeedback.coordonneesGPS">
+                    <strong>Coordonnées GPS:</strong><br>
+                    <small>{{ dossierDetail.serviceTechniqueFeedback.coordonneesGPS }}</small>
+                  </div>
+                  <div class="col-4" v-if="dossierDetail.serviceTechniqueFeedback.dureeVisite">
+                    <strong>Durée:</strong><br>
+                    <small>{{ dossierDetail.serviceTechniqueFeedback.dureeVisite }} minutes</small>
+                  </div>
+                  <div class="col-4" v-if="dossierDetail.serviceTechniqueFeedback.dateConstat">
+                    <strong>Date constat:</strong><br>
+                    <small>{{ formatDate(dossierDetail.serviceTechniqueFeedback.dateConstat) }}</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Photos Section -->
+            <div v-if="dossierDetail.serviceTechniqueFeedback.photosUrls && dossierDetail.serviceTechniqueFeedback.photosUrls.length > 0" class="mt-4">
+              <h5>Photos de la Réalisation</h5>
+              <div class="flex gap-2 flex-wrap">
+                <div v-for="(photo, index) in dossierDetail.serviceTechniqueFeedback.photosUrls" :key="index" class="border-round overflow-hidden">
+                  <img :src="photo" :alt="`Photo réalisation ${index + 1}`" class="w-8rem h-6rem object-cover cursor-pointer" 
+                       @click="openPhotoDialog(photo)" />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- No Service Technique Decision Yet -->
+          <div v-else class="text-center py-4">
+            <i class="pi pi-clock text-4xl text-orange-500 mb-3"></i>
+            <h4>En attente de la décision du Service Technique</h4>
+            <p class="text-600">Le Service Technique n'a pas encore rendu sa décision concernant la réalisation du projet.</p>
+            <Tag value="RÉALISATION EN COURS" severity="warning" />
+          </div>
+        </template>
+      </Card>
+
       <!-- Documents Section -->
       <Card>
         <template #title>
@@ -157,18 +388,6 @@
           Documents soumis par l'antenne - lecture seule
         </template>
         <template #content>
-          <!-- Debug information (remove in production) -->
-          <div v-if="getDocuments().length > 0" class="mb-3 p-2 surface-100 border-round text-xs">
-            <strong>Debug:</strong> {{ getDocuments().length }} document(s) trouvé(s)
-            <div v-for="(doc, index) in getDocuments().slice(0, 2)" :key="doc.id" class="mt-1">
-              Doc {{ index + 1 }}: 
-              File={{ !!hasFile(doc) }}, 
-              Form={{ !!hasFormData(doc) }}, 
-              Preview={{ !!canPreviewDocument(doc) }},
-              Path={{ doc.cheminFichier || 'null' }}
-            </div>
-          </div>
-
           <div v-if="getDocuments().length > 0" class="grid">
             <div 
               v-for="doc in getDocuments()" 
@@ -266,10 +485,6 @@
               <div class="timeline-content">
                 <h5 class="m-0">{{ step.phaseNom }}</h5>
                 <div class="timeline-meta mt-1">
-                  <span class="mr-3">
-                    <i class="pi pi-map-marker mr-1"></i>
-                    {{ getEmplacementLabel(step.emplacementType) }}
-                  </span>
                   <span class="mr-3">
                     <i class="pi pi-calendar mr-1"></i>
                     {{ formatDate(step.dateEntree) }}
@@ -658,6 +873,11 @@
       @add-note="handleAddNoteFromForm"
     />
 
+    <!-- Photo Dialog -->
+    <Dialog v-model:visible="photoDialog.visible" modal :style="{ width: '80vw', height: '80vh' }" header="Photo">
+      <img :src="photoDialog.url" alt="Photo" class="w-full h-full object-contain" />
+    </Dialog>
+
     <ConfirmDialog />
     <Toast />
   </div>
@@ -679,6 +899,7 @@ import SplitButton from 'primevue/splitbutton';
 import Card from 'primevue/card';
 import Tag from 'primevue/tag';
 import ProgressSpinner from 'primevue/progressspinner';
+import ProgressBar from 'primevue/progressbar';
 import Message from 'primevue/message';
 import Dialog from 'primevue/dialog';
 import Textarea from 'primevue/textarea';
@@ -716,6 +937,11 @@ const documentDetailsDialog = ref({
 const formDataDialog = ref({
   visible: false,
   form: null
+});
+
+const photoDialog = ref({
+  visible: false,
+  url: ''
 });
 
 // Blob URLs to clean up
@@ -786,6 +1012,8 @@ async function loadDossierDetail() {
         documents: Array.isArray(response.documents) ? response.documents : [],
         pieceJointes: Array.isArray(response.pieceJointes) ? response.pieceJointes : [],
         availableActions: Array.isArray(response.availableActions) ? response.availableActions : [],
+        commissionFeedback: response.commissionFeedback || { decisionMade: false },
+        serviceTechniqueFeedback: response.serviceTechniqueFeedback || { decisionMade: false },
         // Set default empty arrays for frontend computed properties
         availableForms: [],
         notes: []
@@ -842,17 +1070,6 @@ function getDocumentIcon(doc) {
 }
 
 function getDocumentType(doc) {
-  // Debug logging
-  console.log('Document analysis:', {
-    id: doc.id,
-    nomDocument: doc.nomDocument,
-    cheminFichier: doc.cheminFichier,
-    documentType: doc.documentType,
-    hasFormData: hasFormData(doc),
-    hasFile: hasFile(doc),
-    formData: doc.formData
-  });
-
   // Check if it has form data first
   if (hasFormData(doc)) {
     return 'Formulaire électronique';
@@ -1125,6 +1342,11 @@ function handleAddNoteFromForm(noteData) {
   });
 }
 
+function openPhotoDialog(photoUrl) {
+  photoDialog.value.url = photoUrl;
+  photoDialog.value.visible = true;
+}
+
 // Phase detection
 function detectPhase(dossierDetail) {
   // Use timing information from backend
@@ -1153,8 +1375,11 @@ function detectPhase(dossierDetail) {
   // Fallback based on status and available actions
   if (dossierDetail.availableActions && Array.isArray(dossierDetail.availableActions)) {
     const actions = dossierDetail.availableActions.map(a => a.action);
-    if (actions.includes('approve')) {
+    if (actions.includes('final-approval')) {
       return 4; // Final approval
+    }
+    if (actions.includes('final-realization-approval')) {
+      return 8; // Final realization approval
     }
     if (actions.includes('assign-commission')) {
       return 2; // Initial GUC review
@@ -1189,7 +1414,12 @@ function getPhaseSeverity() {
 
 function needsFinalApproval() {
   const actions = dossierDetail.value?.availableActions || [];
-  return actions.some(action => action.action === 'approve');
+  return actions.some(action => action.action === 'final-approval');
+}
+
+function needsFinalRealizationApproval() {
+  const actions = dossierDetail.value?.availableActions || [];
+  return actions.some(action => action.action === 'final-realization-approval');
 }
 
 function hasApprovedFiche() {
@@ -1232,7 +1462,7 @@ function getPhaseActionMenuItems() {
         icon: 'pi pi-times-circle',
         command: () => showActionDialog('reject')
       },
-      'approve': {
+      'final-approval': {
         label: 'Approuver',
         icon: 'pi pi-check',
         command: () => goToFinalApproval()
@@ -1241,6 +1471,11 @@ function getPhaseActionMenuItems() {
         label: 'Valider Réalisation',
         icon: 'pi pi-check-circle',
         command: () => showActionDialog('validateRealization')
+      },
+      'final-realization-approval': {
+        label: 'Approbation Finale Réalisation',
+        icon: 'pi pi-check-square',
+        command: () => goToFinalRealizationApproval()
       }
     };
     
@@ -1260,8 +1495,9 @@ function getPrimaryPhaseActionLabel() {
   const labelMap = {
     'assign-commission': 'Commission',
     'send-to-service-technique': 'Service Technique',
-    'approve': 'Approuver',
+    'final-approval': 'Approuver',
     'validate-realization': 'Valider',
+    'final-realization-approval': 'Approbation Finale',
     'return': 'Retourner',
     'reject': 'Rejeter'
   };
@@ -1281,11 +1517,14 @@ function handlePrimaryPhaseAction() {
     case 'send-to-service-technique':
       showActionDialog('sendToServiceTechnique');
       break;
-    case 'approve':
+    case 'final-approval':
       goToFinalApproval();
       break;
     case 'validate-realization':
       showActionDialog('validateRealization');
+      break;
+    case 'final-realization-approval':
+      goToFinalRealizationApproval();
       break;
     case 'return':
       showActionDialog('returnToAntenne');
@@ -1318,6 +1557,10 @@ function getWorkflowLocationText() {
 
 function goToFinalApproval() {
   router.push(`/agent_guc/dossiers/${dossierId.value}/final-approval`);
+}
+
+function goToFinalRealizationApproval() {
+  router.push(`/agent_guc/dossiers/${dossierId.value}/final-realization-approval`);
 }
 
 function goToFiche() {
@@ -1414,6 +1657,27 @@ async function confirmAction(action) {
   }
 }
 
+function hasCommissionVisitDetails() {
+  const feedback = dossierDetail.value?.commissionFeedback;
+  return feedback?.coordonneesGPS || feedback?.dureeVisite || feedback?.conditionsMeteo;
+}
+
+function hasServiceTechniqueVisitDetails() {
+  const feedback = dossierDetail.value?.serviceTechniqueFeedback;
+  return feedback?.coordonneesGPS || feedback?.dureeVisite || feedback?.dateConstat;
+}
+
+function getStatutVisiteLabel(statut) {
+  const labels = {
+    'PROGRAMMEE': 'Programmée',
+    'EN_COURS': 'En cours',
+    'TERMINEE': 'Terminée',
+    'REPORTEE': 'Reportée',
+    'ANNULEE': 'Annulée'
+  };
+  return labels[statut] || statut;
+}
+
 // Utility functions
 function getStatusLabel(status) {
   const labels = {
@@ -1447,16 +1711,6 @@ function getStatusSeverity(status) {
     'PENDING_CORRECTION': 'warning'
   };
   return severities[status] || 'secondary';
-}
-
-function getEmplacementLabel(emplacement) {
-  const labels = {
-    'ANTENNE': 'Antenne',
-    'GUC': 'GUC',
-    'COMMISSION_AHA_AF': 'Commission Terrain',
-    'SERVICE_TECHNIQUE': 'Service Technique'
-  };
-  return labels[emplacement] || emplacement;
 }
 
 function formatCurrency(amount) {

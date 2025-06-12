@@ -120,6 +120,13 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresRole: 'AGENT_GUC', title: 'Fiche d\'Approbation' },
       props: true
     },
+    {
+      path: '/agent_guc/dossiers/:dossierId/final-realization-approval',
+      name: 'agent-guc-final-realization-approval',
+      component: () => import('@/components/agent_guc/FinalRealizationApprovalView.vue'),
+      meta: { requiresAuth: true, requiresRole: 'AGENT_GUC', title: 'Approbation Finale de la Réalisation' },
+      props: true
+    },
 
     // Agent Commission Routes
     {
