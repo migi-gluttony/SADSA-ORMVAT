@@ -244,6 +244,16 @@ public class RoleBasedDossierDTOs {
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor
+    public static class StartRealizationRequest {
+        private String commentaire;
+        private String typeReception; // Type of reception: "DEPOT_ATTESTATION", "NOTIFICATION_DIRECTE", etc.
+        private String observations;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
     public static class AssignCommissionRequest {
         private String commentaire;
         private String priorite;
@@ -366,5 +376,7 @@ public class RoleBasedDossierDTOs {
         private Boolean success;
         private String message;
         private LocalDateTime timestamp;
+        private String nextPhase; // Additional info about what happens next
+        private String newStatus; // New dossier status
     }
 }

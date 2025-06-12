@@ -355,6 +355,72 @@
       </template>
     </Dialog>
 
+    <!-- Start Realization Dialog -->
+    <Dialog 
+      v-model:visible="realizationDialog.visible"
+      :header="realizationDialog.title"
+      modal
+      :style="{ width: '500px' }"
+    >
+      <div class="space-y-4">
+        <div>
+          <p>Confirmer le démarrage de la réalisation pour ce dossier ?</p>
+          <div class="mt-2 p-3 bg-blue-50 border-round">
+            <strong>{{ realizationDialog.dossier?.numeroDossier }}</strong><br>
+            {{ realizationDialog.dossier?.agriculteurNom }}<br>
+            <small>Type: {{ realizationDialog.dossier?.projet?.sousRubrique }}</small>
+          </div>
+        </div>
+        
+        <div class="field">
+          <label for="realizationComment" class="block mb-2">Commentaire</label>
+          <Textarea 
+            id="realizationComment"
+            v-model="realizationDialog.commentaire"
+            rows="3"
+            class="w-full"
+            placeholder="Précisez le contexte du démarrage de réalisation (ex: dépôt attestation, notification directe, etc.)"
+          />
+        </div>
+
+        <div class="field">
+          <label for="receptionType" class="block mb-2">Type de réception</label>
+          <Dropdown 
+            id="receptionType"
+            v-model="realizationDialog.typeReception"
+            :options="receptionTypeOptions"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Sélectionner le type de réception"
+            class="w-full"
+          />
+        </div>
+
+        <div class="p-3 bg-yellow-50 border-round border-left-3 border-yellow-500">
+          <div class="flex align-items-center">
+            <i class="pi pi-info-circle text-yellow-700 mr-2"></i>
+            <div class="text-sm text-yellow-800">
+              <strong>Information:</strong> Une fois la réalisation démarrée, le dossier sera automatiquement transmis au GUC pour traitement selon le type de projet.
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <template #footer>
+        <Button 
+          label="Annuler" 
+          @click="realizationDialog.visible = false"
+          class="p-button-outlined"
+        />
+        <Button 
+          label="Démarrer Réalisation"
+          @click="confirmStartRealization"
+          :loading="realizationDialog.loading"
+          class="p-button-success"
+        />
+      </template>
+    </Dialog>
+
     <Toast />
   </div>
 </template>
@@ -377,6 +443,7 @@ import ConfirmDialog from 'primevue/confirmdialog';
 import Toast from 'primevue/toast';
 import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
+import Dropdown from 'primevue/dropdown';
 
 const route = useRoute();
 const router = useRouter();
@@ -422,6 +489,23 @@ const actionDialog = ref({
   loading: false,
   action: null
 });
+
+const realizationDialog = ref({
+  visible: false,
+  title: 'Démarrer la Réalisation',
+  dossier: null,
+  commentaire: '',
+  typeReception: '',
+  loading: false
+});
+
+// Reception type options
+const receptionTypeOptions = ref([
+  { label: 'Dépôt attestation d\'approbation', value: 'DEPOT_ATTESTATION' },
+  { label: 'Notification directe', value: 'NOTIFICATION_DIRECTE' },
+  { label: 'Contact téléphonique', value: 'CONTACT_TELEPHONIQUE' },
+  { label: 'Visite à l\'antenne', value: 'VISITE_ANTENNE' }
+]);
 
 onMounted(() => {
   loadDossierDetail();
@@ -487,9 +571,84 @@ async function executeAction(action) {
     showActionDialog('submit', 'Soumettre le dossier', 'Soumettre', 'p-button-success', action);
     return;
   }
+
+  if (action.action === 'start_realization') {
+    showRealizationDialog();
+    return;
+  }
   
   // Direct action execution for other actions
   await performAction(action);
+}
+
+function showRealizationDialog() {
+  realizationDialog.value = {
+    visible: true,
+    title: 'Démarrer la Réalisation',
+    dossier: dossierDetail.value,
+    commentaire: '',
+    typeReception: '',
+    loading: false
+  };
+}
+
+async function confirmStartRealization() {
+  try {
+    realizationDialog.value.loading = true;
+    
+    if (!realizationDialog.value.typeReception) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Attention',
+        detail: 'Veuillez sélectionner le type de réception',
+        life: 3000
+      });
+      return;
+    }
+
+    const payload = {
+      commentaire: realizationDialog.value.commentaire || 'Démarrage de la réalisation',
+      typeReception: realizationDialog.value.typeReception,
+      observations: ''
+    };
+    
+    const response = await ApiService.post(`/agent_antenne/dossiers/start-realization/${dossierId.value}`, payload);
+    
+    if (response && response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Succès',
+        detail: response.message,
+        life: 3000
+      });
+
+      // Show additional info if available
+      if (response.nextPhase) {
+        setTimeout(() => {
+          toast.add({
+            severity: 'info',
+            summary: 'Prochaine étape',
+            detail: response.nextPhase,
+            life: 5000
+          });
+        }, 1000);
+      }
+      
+      realizationDialog.value.visible = false;
+      await loadDossierDetail();
+    }
+    
+  } catch (err) {
+    console.error('Erreur lors du démarrage de réalisation:', err);
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: err.message || 'Erreur lors du démarrage de réalisation',
+      life: 5000
+    });
+  } finally {
+    realizationDialog.value.loading = false;
+  }
 }
 
 function enableEditMode() {
@@ -724,7 +883,6 @@ function formatDate(dateString) {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return '';
     
-    // Use a more compatible approach
     return date.toLocaleDateString('fr-FR', {
       year: 'numeric',
       month: '2-digit',
@@ -757,8 +915,11 @@ function getStatusLabel(status) {
     'SUBMITTED': 'Soumis',
     'IN_REVIEW': 'En cours',
     'APPROVED': 'Approuvé',
+    'AWAITING_FARMER': 'En attente agriculteur',
+    'REALIZATION_IN_PROGRESS': 'Réalisation en cours',
     'REJECTED': 'Rejeté',
-    'RETURNED_FOR_COMPLETION': 'Retourné'
+    'RETURNED_FOR_COMPLETION': 'Retourné',
+    'COMPLETED': 'Terminé'
   };
   return labels[status] || status;
 }
@@ -769,8 +930,11 @@ function getStatusSeverity(status) {
     'SUBMITTED': 'info',
     'IN_REVIEW': 'warning',
     'APPROVED': 'success',
+    'AWAITING_FARMER': 'success',
+    'REALIZATION_IN_PROGRESS': 'info',
     'REJECTED': 'danger',
-    'RETURNED_FOR_COMPLETION': 'warning'
+    'RETURNED_FOR_COMPLETION': 'warning',
+    'COMPLETED': 'success'
   };
   return severities[status] || 'secondary';
 }

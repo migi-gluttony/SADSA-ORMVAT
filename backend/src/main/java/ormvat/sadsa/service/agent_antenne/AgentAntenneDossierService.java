@@ -149,6 +149,41 @@ public class AgentAntenneDossierService {
     }
 
     @Transactional
+    public ActionResponse startRealization(Long id, StartRealizationRequest request, String userEmail) {
+        Utilisateur user = getUserByEmail(userEmail);
+        Dossier dossier = getDossierForRealization(id, user);
+
+        String oldStatus = dossier.getStatus().name();
+        
+        // Update dossier status to start realization
+        dossier.setStatus(Dossier.DossierStatus.REALIZATION_IN_PROGRESS);
+        dossierRepository.save(dossier);
+
+        // Move to Phase 5 (RP - Phase Antenne)
+        workflowService.moveToStep(dossier.getId(), 5L, user.getId(), 
+                                  request != null ? request.getCommentaire() : "Démarrage de la réalisation");
+
+        // Immediately move to Phase 6 (RP - Phase GUC) as antenne processing is quick
+        workflowService.moveToStep(dossier.getId(), 6L, user.getId(), 
+                                  "Transmission automatique vers GUC pour traitement réalisation");
+
+        // Determine next phase based on project type
+        String nextPhase = determineRealizationPhase(dossier);
+        
+        auditService.logAction(user.getId(), "START_REALIZATION", "Dossier", dossier.getId(),
+                              oldStatus, "REALIZATION_IN_PROGRESS", 
+                              "Démarrage de la phase de réalisation - " + nextPhase);
+
+        return ActionResponse.builder()
+                .success(true)
+                .message("Réalisation démarrée avec succès")
+                .timestamp(LocalDateTime.now())
+                .nextPhase(nextPhase)
+                .newStatus("REALIZATION_IN_PROGRESS")
+                .build();
+    }
+
+    @Transactional
     public ActionResponse deleteDossier(Long id, String userEmail) {
         Utilisateur user = getUserByEmail(userEmail);
         Dossier dossier = getDossierForUpdate(id, user);
@@ -198,6 +233,31 @@ public class AgentAntenneDossierService {
         }
 
         return dossier;
+    }
+
+    private Dossier getDossierForRealization(Long id, Utilisateur user) {
+        Dossier dossier = dossierRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+        if (!dossier.getAntenne().getId().equals(user.getAntenne().getId())) {
+            throw new RuntimeException("Accès non autorisé");
+        }
+
+        if (dossier.getStatus() != Dossier.DossierStatus.AWAITING_FARMER) {
+            throw new RuntimeException("Le dossier n'est pas dans un état permettant de démarrer la réalisation. Statut actuel: " + dossier.getStatus());
+        }
+
+        return dossier;
+    }
+
+    private String determineRealizationPhase(Dossier dossier) {
+        Long rubriqueId = dossier.getSousRubrique().getRubrique().getId();
+        
+        if (rubriqueId == 3L) { // AMENAGEMENT HYDRO-AGRICOLE ET AMELIORATION FONCIERE
+            return "Le dossier sera transmis au Service Technique pour supervision de la réalisation des travaux d'infrastructure";
+        } else { // FILIERES VEGETALES (1) or FILIERES ANIMALES (2)
+            return "Le dossier sera traité par le GUC pour autorisation d'achat direct par l'agriculteur";
+        }
     }
 
     private Agriculteur createOrUpdateAgriculteur(AgriculteurCreateDTO dto) {
@@ -333,19 +393,19 @@ public class AgentAntenneDossierService {
                     ActionDTO.builder()
                             .action("update")
                             .label("Modifier")
-                            .endpoint("/api/agent-antenne/dossiers/update/" + dossierId)
+                            .endpoint("/api/agent_antenne/dossiers/update/" + dossierId)
                             .method("PUT")
                             .build(),
                     ActionDTO.builder()
                             .action("submit")
                             .label("Soumettre")
-                            .endpoint("/api/agent-antenne/dossiers/submit/" + dossierId)
+                            .endpoint("/api/agent_antenne/dossiers/submit/" + dossierId)
                             .method("POST")
                             .build(),
                     ActionDTO.builder()
                             .action("delete")
                             .label("Supprimer")
-                            .endpoint("/api/agent-antenne/dossiers/delete/" + dossierId)
+                            .endpoint("/api/agent_antenne/dossiers/delete/" + dossierId)
                             .method("DELETE")
                             .build()
             );
@@ -353,7 +413,7 @@ public class AgentAntenneDossierService {
                     ActionDTO.builder()
                             .action("start_realization")
                             .label("Démarrer Réalisation")
-                            .endpoint("/api/agent-antenne/dossiers/start-realization/" + dossierId)
+                            .endpoint("/api/agent_antenne/dossiers/start-realization/" + dossierId)
                             .method("POST")
                             .build()
             );

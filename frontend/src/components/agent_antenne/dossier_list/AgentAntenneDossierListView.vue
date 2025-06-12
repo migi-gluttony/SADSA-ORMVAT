@@ -293,7 +293,7 @@
                   <Button 
                     v-if="action.action === 'start_realization'"
                     icon="pi pi-play" 
-                    @click="startRealization(slotProps.data)"
+                    @click="confirmStartRealization(slotProps.data)"
                     class="p-button-info p-button-sm" 
                     v-tooltip.top="action.label" 
                   />
@@ -380,6 +380,72 @@
       </template>
     </Dialog>
 
+    <!-- Start Realization Confirmation Dialog -->
+    <Dialog 
+      v-model:visible="realizationDialog.visible" 
+      modal 
+      header="Démarrer la réalisation"
+      :style="{ width: '500px' }"
+    >
+      <div class="flex align-items-center mb-3">
+        <i class="pi pi-play text-2xl text-blue-500 mr-3"></i>
+        <div>
+          <p>Confirmer le démarrage de la réalisation pour ce dossier ?</p>
+          <div class="mt-2 p-2 bg-blue-50 border-round">
+            <strong>{{ realizationDialog.dossier?.numeroDossier }}</strong><br>
+            {{ realizationDialog.dossier?.agriculteurNom }}<br>
+            <small>SABA: {{ realizationDialog.dossier?.saba }}</small>
+          </div>
+        </div>
+      </div>
+      
+      <div class="field">
+        <label for="realizationComment" class="block mb-2">Commentaire</label>
+        <Textarea 
+          id="realizationComment"
+          v-model="realizationDialog.commentaire"
+          rows="2"
+          class="w-full"
+          placeholder="Précisez le contexte (ex: dépôt attestation, contact direct, etc.)"
+        />
+      </div>
+
+      <div class="field">
+        <label for="receptionType" class="block mb-2">Type de réception</label>
+        <Dropdown 
+          id="receptionType"
+          v-model="realizationDialog.typeReception"
+          :options="receptionTypeOptions"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Sélectionner le type"
+          class="w-full"
+        />
+      </div>
+
+      <div class="p-3 bg-blue-50 border-round">
+        <p class="text-600 text-sm">
+          Le dossier sera automatiquement transmis au GUC pour traitement selon le type de projet.
+        </p>
+      </div>
+      
+      <template #footer>
+        <Button 
+          label="Annuler" 
+          icon="pi pi-times" 
+          @click="realizationDialog.visible = false"
+          class="p-button-outlined"
+        />
+        <Button 
+          label="Démarrer" 
+          icon="pi pi-play" 
+          @click="startRealization"
+          class="p-button-success"
+          :loading="realizationDialog.loading"
+        />
+      </template>
+    </Dialog>
+
     <Toast />
   </div>
 </template>
@@ -401,6 +467,7 @@ import ProgressSpinner from 'primevue/progressspinner';
 import Tag from 'primevue/tag';
 import Dialog from 'primevue/dialog';
 import Toast from 'primevue/toast';
+import Textarea from 'primevue/textarea';
 
 const router = useRouter();
 const toast = useToast();
@@ -426,6 +493,14 @@ const deleteDialog = ref({
   loading: false
 });
 
+const realizationDialog = ref({
+  visible: false,
+  dossier: null,
+  commentaire: '',
+  typeReception: '',
+  loading: false
+});
+
 // Options
 const statusOptions = ref([
   { label: 'Brouillon', value: 'DRAFT' },
@@ -443,6 +518,13 @@ const projectTypeOptions = ref([
   { label: 'Filières Végétales', value: 'FILIERES_VEGETALES' },
   { label: 'Filières Animales', value: 'FILIERES_ANIMALES' },
   { label: 'Aménagement Hydro-Agricole', value: 'AMENAGEMENT_HYDRO_AGRICOLE' }
+]);
+
+const receptionTypeOptions = ref([
+  { label: 'Dépôt attestation d\'approbation', value: 'DEPOT_ATTESTATION' },
+  { label: 'Notification directe', value: 'NOTIFICATION_DIRECTE' },
+  { label: 'Contact téléphonique', value: 'CONTACT_TELEPHONIQUE' },
+  { label: 'Visite à l\'antenne', value: 'VISITE_ANTENNE' }
 ]);
 
 // Computed
@@ -471,7 +553,8 @@ onMounted(() => {
 });
 
 async function loadDossiers() {
-  try {    loading.value = true;
+  try {
+    loading.value = true;
     error.value = null;
     
     const response = await ApiService.get('/agent_antenne/dossiers');
@@ -532,6 +615,16 @@ function confirmDeleteDossier(dossier) {
   };
 }
 
+function confirmStartRealization(dossier) {
+  realizationDialog.value = {
+    visible: true,
+    dossier: dossier,
+    commentaire: '',
+    typeReception: '',
+    loading: false
+  };
+}
+
 async function submitDossier() {
   try {
     submitDialog.value.loading = true;
@@ -567,7 +660,7 @@ async function deleteDossier() {
   try {
     deleteDialog.value.loading = true;
     
-    const response = await ApiService.delete(`/agent-antenne/dossiers/delete/${deleteDialog.value.dossier.id}`);
+    const response = await ApiService.delete(`/agent_antenne/dossiers/delete/${deleteDialog.value.dossier.id}`);
     
     if (response.success) {
       toast.add({
@@ -594,14 +687,63 @@ async function deleteDossier() {
   }
 }
 
-function startRealization(dossier) {
-  // Implementation for starting realization
-  toast.add({
-    severity: 'info',
-    summary: 'Information',
-    detail: 'Fonctionnalité de réalisation à implémenter',
-    life: 3000
-  });
+async function startRealization() {
+  try {
+    realizationDialog.value.loading = true;
+    
+    if (!realizationDialog.value.typeReception) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Attention',
+        detail: 'Veuillez sélectionner le type de réception',
+        life: 3000
+      });
+      return;
+    }
+
+    const payload = {
+      commentaire: realizationDialog.value.commentaire || 'Démarrage de la réalisation',
+      typeReception: realizationDialog.value.typeReception,
+      observations: ''
+    };
+    
+    const response = await ApiService.post(`/agent_antenne/dossiers/start-realization/${realizationDialog.value.dossier.id}`, payload);
+    
+    if (response && response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Succès',
+        detail: response.message,
+        life: 3000
+      });
+
+      // Show additional info if available
+      if (response.nextPhase) {
+        setTimeout(() => {
+          toast.add({
+            severity: 'info',
+            summary: 'Prochaine étape',
+            detail: response.nextPhase,
+            life: 5000
+          });
+        }, 1000);
+      }
+      
+      realizationDialog.value.visible = false;
+      loadDossiers();
+    }
+    
+  } catch (err) {
+    console.error('Erreur lors du démarrage de réalisation:', err);
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: err.message || 'Erreur lors du démarrage de réalisation',
+      life: 3000
+    });
+  } finally {
+    realizationDialog.value.loading = false;
+  }
 }
 
 // Utility methods

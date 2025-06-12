@@ -37,7 +37,8 @@ public class AgentAntenneDossierController {
         } catch (Exception e) {
             log.error("Erreur récupération détail dossier {}: {}", id, e.getMessage());
             return ResponseEntity.badRequest().build();
-        }    }
+        }
+    }
 
     @PutMapping("/update/{id}")
     public ResponseEntity<ActionResponse> updateDossier(@PathVariable Long id,
@@ -63,6 +64,23 @@ public class AgentAntenneDossierController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Erreur soumission dossier {}: {}", id, e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ActionResponse.builder()
+                            .success(false)
+                            .message(e.getMessage())
+                            .build());
+        }
+    }
+
+    @PostMapping("/start-realization/{id}")
+    public ResponseEntity<ActionResponse> startRealization(@PathVariable Long id, 
+                                                          @RequestBody(required = false) StartRealizationRequest request,
+                                                          Authentication authentication) {
+        try {
+            ActionResponse response = dossierService.startRealization(id, request, authentication.getName());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Erreur démarrage réalisation dossier {}: {}", id, e.getMessage());
             return ResponseEntity.badRequest()
                     .body(ActionResponse.builder()
                             .success(false)
