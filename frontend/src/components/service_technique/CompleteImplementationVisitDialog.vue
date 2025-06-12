@@ -60,19 +60,7 @@
             </div>
           </div>
 
-          <div class="col-12 md:col-6">
-            <div class="form-group">
-              <label for="dureeVisite">Durée de la visite (minutes)</label>
-              <InputNumber 
-                id="dureeVisite"
-                v-model="formData.dureeVisite" 
-                :min="1"
-                :max="480"
-                placeholder="120"
-                class="w-full"
-              />
-            </div>
-          </div>
+          
         </div>
 
         <div class="form-group">

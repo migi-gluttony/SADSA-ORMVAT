@@ -1,43 +1,37 @@
 <!-- AdminDocumentRequisView.vue -->
 <template>
-  <div class="document-requis-admin">
-    <!-- Header -->
-    <div class="component-card page-header">
-      <div class="header-info">
-        <h2><i class="pi pi-file-edit"></i> Gestion des Documents Requis</h2>
-        <p>Gérez les documents requis pour chaque sous-rubrique</p>
-      </div>
-    </div>
-
-    <!-- Statistics Cards -->
-    <div class="stats-grid" v-if="statistics">
-      <div class="component-card stat-card">
-        <div class="stat-icon">
-          <i class="pi pi-file"></i>
+  <div class="document-requis-admin compact-layout">
+    <!-- Compact Header with Statistics -->
+    <div class="component-card compact-header">
+      <div class="header-content">
+        <div class="header-info">
+          <h2><i class="pi pi-file-edit"></i> Gestion des Documents Requis</h2>
+          <p>Gérez les documents requis pour chaque sous-rubrique</p>
         </div>
-        <div class="stat-content">
-          <h3>{{ statistics.totalDocuments }}</h3>
-          <p>Total Documents</p>
-        </div>
-      </div>
-      
-      <div class="component-card stat-card">
-        <div class="stat-icon">
-          <i class="pi pi-star-fill"></i>
-        </div>
-        <div class="stat-content">
-          <h3>{{ statistics.totalObligatoires }}</h3>
-          <p>Obligatoires</p>
-        </div>
-      </div>
-      
-      <div class="component-card stat-card">
-        <div class="stat-icon">
-          <i class="pi pi-star"></i>
-        </div>
-        <div class="stat-content">
-          <h3>{{ statistics.totalOptionnels }}</h3>
-          <p>Optionnels</p>
+        
+        <!-- Inline Statistics -->
+        <div class="inline-stats" v-if="statistics">
+          <div class="stat-item">
+            <div class="stat-icon"><i class="pi pi-file"></i></div>
+            <div class="stat-content">
+              <span class="stat-number">{{ statistics.totalDocuments }}</span>
+              <span class="stat-label">Total</span>
+            </div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-icon danger"><i class="pi pi-star-fill"></i></div>
+            <div class="stat-content">
+              <span class="stat-number">{{ statistics.totalObligatoires }}</span>
+              <span class="stat-label">Obligatoires</span>
+            </div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-icon info"><i class="pi pi-star"></i></div>
+            <div class="stat-content">
+              <span class="stat-number">{{ statistics.totalOptionnels }}</span>
+              <span class="stat-label">Optionnels</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -48,16 +42,14 @@
       <div v-if="loading" class="component-card loading-container">
         <ProgressBar mode="indeterminate" />
         <p>Chargement des données...</p>
-      </div>
-
-      <!-- Rubriques List -->
+      </div>      <!-- Rubriques List -->
       <div v-else class="rubriques-container">
-        <div 
+        <div
           v-for="rubrique in rubriques" 
           :key="rubrique.id"
-          class="component-card rubrique-card"
+          class="component-card rubrique-card compact"
         >
-          <div class="rubrique-header">
+          <div class="rubrique-header compact">
             <div class="category-header">
               <div class="category-icon">
                 <i :class="getCategoryIcon(rubrique.designation)"></i>
@@ -69,231 +61,219 @@
             </div>
           </div>
 
-          <!-- Sous-Rubriques -->
-          <div class="sous-rubriques">
+          <!-- Compact Sous-Rubriques Grid -->
+          <div class="sous-rubriques compact-grid">
             <div 
               v-for="sousRubrique in rubrique.sousRubriques"
               :key="sousRubrique.id"
-              class="sous-rubrique-card"
+              class="sous-rubrique-card compact"
             >
-              <div class="sous-rubrique-header">
+              <div class="sous-rubrique-header compact">
                 <div class="sous-rubrique-info">
                   <h4>{{ sousRubrique.designation }}</h4>
-                  <p v-if="sousRubrique.description">{{ sousRubrique.description }}</p>
-                  <span class="document-count">
-                    <i class="pi pi-file"></i>
-                    {{ sousRubrique.documentsRequis.length }} document(s)
-                  </span>
+                  <div class="sous-rubrique-meta">
+                    <span class="document-count">
+                      <i class="pi pi-file"></i>
+                      {{ sousRubrique.documentsRequis.length }} doc(s)
+                    </span>
+                    <Button 
+                      icon="pi pi-plus" 
+                      label="Ajouter"
+                      @click="openCreateDialog(sousRubrique)"
+                      class="p-button-sm btn-primary compact-btn"
+                      size="small"
+                    />
+                  </div>
                 </div>
-                <Button 
-                  icon="pi pi-plus" 
-                  label="Ajouter Document"
-                  @click="openCreateDialog(sousRubrique)"
-                  class="p-button-sm btn-primary"
-                />
               </div>
 
-              <!-- Documents Table -->
-              <div v-if="sousRubrique.documentsRequis.length > 0" class="documents-table">
-                <DataTable 
-                  :value="sousRubrique.documentsRequis" 
-                  :paginator="false"
-                  :responsive-layout="scroll"
-                  class="p-datatable-sm"
+              <!-- Compact Documents List -->
+              <div v-if="sousRubrique.documentsRequis.length > 0" class="documents-compact-list">
+                <div 
+                  v-for="document in sousRubrique.documentsRequis"
+                  :key="document.id"
+                  class="document-item-compact"
                 >
-                  <Column field="nomDocument" header="Nom du Document">
-                    <template #body="slotProps">
-                      <div class="document-name">
-                        <i class="pi pi-file"></i>
-                        <strong>{{ slotProps.data.nomDocument }}</strong>
-                      </div>
-                    </template>
-                  </Column>
-                  
-                  <Column field="description" header="Description">
-                    <template #body="slotProps">
-                      <span class="description-text">
-                        {{ slotProps.data.description || 'Aucune description' }}
-                      </span>
-                    </template>
-                  </Column>
-                  
-                  <Column field="obligatoire" header="Type">
-                    <template #body="slotProps">
+                  <div class="document-info">
+                    <div class="document-name">
+                      <i class="pi pi-file"></i>
+                      <strong>{{ document.nomDocument }}</strong>
+                    </div>
+                    <div class="document-meta">
                       <Tag 
-                        :value="slotProps.data.obligatoire ? 'Obligatoire' : 'Optionnel'"
-                        :severity="slotProps.data.obligatoire ? 'danger' : 'info'"
+                        :value="document.obligatoire ? 'Obligatoire' : 'Optionnel'"
+                        :severity="document.obligatoire ? 'danger' : 'info'"
+                        class="document-tag"
                       />
-                    </template>
-                  </Column>
-                  
-                  <Column field="locationFormulaire" header="Fichier JSON">
-                    <template #body="slotProps">
-                      <div v-if="slotProps.data.locationFormulaire" class="json-file-info">
-                        <i class="pi pi-file"></i>
-                        <span class="file-name">{{ extractFileName(slotProps.data.locationFormulaire) }}</span>
-                        <Button 
-                          icon="pi pi-download" 
-                          @click="downloadJsonFile(slotProps.data)"
-                          class="p-button-rounded p-button-text p-button-sm"
-                          v-tooltip="'Télécharger le fichier JSON'"
-                        />
+                      <div v-if="document.locationFormulaire" class="json-indicator">
+                        <i class="pi pi-file-edit" v-tooltip="'Fichier JSON disponible'"></i>
                       </div>
-                      <span v-else class="no-file-text">
-                        <i class="pi pi-minus"></i>
-                        Aucun fichier
-                      </span>
-                    </template>
-                  </Column>
-                  
-                  <Column header="Actions" :exportable="false">
-                    <template #body="slotProps">
-                      <div class="action-buttons">
-                        <Button 
-                          icon="pi pi-pencil" 
-                          @click="openEditDialog(slotProps.data)"
-                          class="p-button-rounded p-button-text p-button-info action-btn"
-                          v-tooltip.top="'Modifier'"
-                        />
-                        <Button 
-                          icon="pi pi-trash" 
-                          @click="confirmDelete(slotProps.data)"
-                          class="p-button-rounded p-button-text p-button-danger action-btn"
-                          v-tooltip.top="'Supprimer'"
-                        />
-                      </div>
-                    </template>
-                  </Column>
-                </DataTable>
+                    </div>
+                  </div>
+                  <div class="document-actions">
+                    <Button 
+                      icon="pi pi-pencil" 
+                      @click="openEditDialog(document)"
+                      class="p-button-rounded p-button-text p-button-info action-btn-compact"
+                      v-tooltip.top="'Modifier'"
+                      size="small"
+                    />
+                    <Button 
+                      icon="pi pi-trash" 
+                      @click="confirmDelete(document)"
+                      class="p-button-rounded p-button-text p-button-danger action-btn-compact"
+                      v-tooltip.top="'Supprimer'"
+                      size="small"
+                    />
+                    <Button 
+                      v-if="document.locationFormulaire"
+                      icon="pi pi-download" 
+                      @click="downloadJsonFile(document)"
+                      class="p-button-rounded p-button-text action-btn-compact"
+                      v-tooltip.top="'Télécharger JSON'"
+                      size="small"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <!-- Empty State -->
-              <div v-else class="empty-documents">
+              <!-- Compact Empty State -->
+              <div v-else class="empty-documents compact">
                 <div class="empty-content">
                   <i class="pi pi-inbox empty-icon"></i>
-                  <h5>Aucun document requis</h5>
-                  <p>Cette sous-rubrique n'a pas encore de documents requis</p>
+                  <span>Aucun document</span>
                   <Button 
-                    label="Ajouter le premier document" 
+                    label="Ajouter" 
                     icon="pi pi-plus"
                     @click="openCreateDialog(sousRubrique)"
-                    class="p-button-outlined"
+                    class="p-button-outlined p-button-sm"
+                    size="small"
                   />
                 </div>
-              </div>
-            </div>
+              </div>            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Create/Edit Dialog -->
+    <!-- Create/Edit Dialog - Compact -->
     <Dialog 
       v-model:visible="showDialog" 
       :header="dialogMode === 'create' ? 'Ajouter un Document Requis' : 'Modifier le Document Requis'"
       modal 
-      :style="{ width: '600px' }"
+      :style="{ width: '650px' }"
       :closable="true"
+      class="compact-dialog"
     >
-      <form @submit.prevent="submitForm" class="document-form">
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="nomDocument" class="required">Nom du Document</label>
-            <InputText 
-              id="nomDocument"
-              v-model="documentForm.nomDocument"
-              placeholder="Ex: Carte d'identité nationale"
-              :class="{ 'p-invalid': formErrors.nomDocument }"
-              required
-            />
-            <small class="p-error">{{ formErrors.nomDocument }}</small>
-          </div>
+      <form @submit.prevent="submitForm" class="document-form compact">
+        <div class="compact-form-layout">
+          <!-- Row 1: Nom & Type -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="nomDocument" class="required">Nom du Document</label>
+              <InputText 
+                id="nomDocument"
+                v-model="documentForm.nomDocument"
+                placeholder="Ex: Carte d'identité nationale"
+                :class="{ 'p-invalid': formErrors.nomDocument }"
+                required
+              />
+              <small class="p-error">{{ formErrors.nomDocument }}</small>
+            </div>
 
-          <div class="form-group">
-            <label for="description">Description</label>
-            <Textarea
-              id="description"
-              v-model="documentForm.description"
-              placeholder="Description détaillée du document"
-              :rows="3"
-              :class="{ 'p-invalid': formErrors.description }"
-            />
-            <small class="p-error">{{ formErrors.description }}</small>
-          </div>
-
-          <div class="form-group">
-            <label for="obligatoire">Type de Document</label>
-            <div class="form-check-group">
-              <div class="form-check">
-                <RadioButton 
-                  id="obligatoire-oui"
-                  v-model="documentForm.obligatoire"
-                  :value="true"
-                />
-                <label for="obligatoire-oui">Obligatoire</label>
-              </div>
-              <div class="form-check">
-                <RadioButton 
-                  id="obligatoire-non"
-                  v-model="documentForm.obligatoire"
-                  :value="false"
-                />
-                <label for="obligatoire-non">Optionnel</label>
+            <div class="form-group">
+              <label for="obligatoire">Type de Document</label>
+              <div class="form-check-group horizontal">
+                <div class="form-check">
+                  <RadioButton 
+                    id="obligatoire-oui"
+                    v-model="documentForm.obligatoire"
+                    :value="true"
+                  />
+                  <label for="obligatoire-oui">Obligatoire</label>
+                </div>
+                <div class="form-check">
+                  <RadioButton 
+                    id="obligatoire-non"
+                    v-model="documentForm.obligatoire"
+                    :value="false"
+                  />
+                  <label for="obligatoire-non">Optionnel</label>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="form-group">
-            <label for="jsonFile">Fichier de Configuration JSON</label>
-            <FileUpload
-              id="jsonFile"
-              ref="fileUploadRef"
-              mode="basic"
-              accept=".json"
-              :maxFileSize="1000000"
-              :fileLimit="1"
-              @select="onFileSelect"
-              @remove="onFileRemove"
-              :auto="false"
-              chooseLabel="Choisir un fichier JSON"
-              class="custom-file-upload"
-            />
-            <small class="form-help">
-              <i class="pi pi-info-circle"></i>
-              Sélectionnez un fichier JSON contenant la configuration du formulaire (max 1MB)
-            </small>
-            <small class="p-error">{{ formErrors.jsonFile }}</small>
-            
-            <!-- Show current file info if editing -->
-            <div v-if="dialogMode === 'edit' && currentJsonFileName" class="current-file-info">
-              <div class="file-info-card">
-                <i class="pi pi-file"></i>
-                <span>Fichier actuel: {{ currentJsonFileName }}</span>
-                <Button 
-                  icon="pi pi-times" 
-                  @click="clearCurrentFile"
-                  class="p-button-rounded p-button-text p-button-sm p-button-danger"
-                  v-tooltip="'Supprimer le fichier actuel'"
-                />
-              </div>
+          <!-- Row 2: Description -->
+          <div class="form-row">
+            <div class="form-group full-width">
+              <label for="description">Description</label>
+              <Textarea
+                id="description"
+                v-model="documentForm.description"
+                placeholder="Description détaillée du document"
+                :rows="2"
+                :class="{ 'p-invalid': formErrors.description }"
+              />
+              <small class="p-error">{{ formErrors.description }}</small>
             </div>
           </div>
 
-          <div class="form-group full-width">
-            <label for="proprietes">Propriétés JSON (Optionnel)</label>
-            <Textarea
-              id="proprietes"
-              v-model="jsonProprietesText"
-              placeholder='{"validation": {"maxSize": "10MB", "formats": ["pdf", "jpg"]}, "required": true}'
-              :rows="4"
-              :class="{ 'p-invalid': formErrors.proprietes }"
-              @blur="validateJson"
-            />
-            <small class="form-help">
-              <i class="pi pi-info-circle"></i>
-              Configuration JSON pour les propriétés avancées du document
-            </small>
-            <small class="p-error">{{ formErrors.proprietes }}</small>
+          <!-- Row 3: File Upload -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="jsonFile">Fichier JSON</label>
+              <FileUpload
+                id="jsonFile"
+                ref="fileUploadRef"
+                mode="basic"
+                accept=".json"
+                :maxFileSize="1000000"
+                :fileLimit="1"
+                @select="onFileSelect"
+                @remove="onFileRemove"
+                :auto="false"
+                chooseLabel="Choisir JSON"
+                class="custom-file-upload compact"
+              />
+              <small class="form-help compact">
+                <i class="pi pi-info-circle"></i>
+                Fichier JSON pour la configuration (max 1MB)
+              </small>
+              <small class="p-error">{{ formErrors.jsonFile }}</small>
+              
+              <!-- Current file info -->
+              <div v-if="dialogMode === 'edit' && currentJsonFileName" class="current-file-info compact">
+                <div class="file-info-card">
+                  <i class="pi pi-file"></i>
+                  <span>{{ currentJsonFileName }}</span>
+                  <Button 
+                    icon="pi pi-times" 
+                    @click="clearCurrentFile"
+                    class="p-button-rounded p-button-text p-button-sm p-button-danger"
+                    v-tooltip="'Supprimer le fichier actuel'"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 4: JSON Properties -->
+            <div class="form-group">
+              <label for="proprietes">Propriétés JSON</label>
+              <Textarea
+                id="proprietes"
+                v-model="jsonProprietesText"
+                placeholder='{"validation": {"maxSize": "10MB"}}'
+                :rows="3"
+                :class="{ 'p-invalid': formErrors.proprietes }"
+                @blur="validateJson"
+              />
+              <small class="form-help compact">
+                <i class="pi pi-info-circle"></i>
+                Configuration JSON pour propriétés avancées
+              </small>
+              <small class="p-error">{{ formErrors.proprietes }}</small>
+            </div>
           </div>
         </div>
       </form>
@@ -815,4 +795,506 @@ watch(jsonProprietesText, () => {
   validateJson();
 });
 </script>
+
+<style scoped>
+/* Base Layout */
+.document-requis-admin {
+  padding: 1.5rem;
+  background: #f8f9fa;
+  min-height: 100vh;
+}
+
+.document-requis-admin.compact-layout {
+  padding: 1rem;
+}
+
+/* Component Card Base */
+.component-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+/* Compact Header */
+.compact-header {
+  padding: 1.25rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.header-info h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 0.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header-info p {
+  color: #6b7280;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Inline Statistics */
+.inline-stats {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.stat-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #3b82f6;
+  color: white;
+}
+
+.stat-icon.danger {
+  background: #ef4444;
+}
+
+.stat-icon.info {
+  background: #06b6d4;
+}
+
+.stat-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-number {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Compact Rubrique Cards */
+.rubrique-card.compact {
+  padding: 1.25rem !important;
+  margin-bottom: 1.25rem !important;
+}
+
+.rubrique-header.compact {
+  margin-bottom: 1rem;
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.category-icon {
+  width: 40px;
+  height: 40px;
+  background: #3b82f6;
+  color: white;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.category-info h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 0.25rem 0;
+}
+
+.category-info p {
+  color: #6b7280;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Compact Sous-Rubriques Grid */
+.sous-rubriques.compact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 1rem;
+}
+
+.sous-rubrique-card.compact {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.sous-rubrique-header.compact {
+  margin-bottom: 0.75rem;
+}
+
+.sous-rubrique-info h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 0.5rem 0;
+}
+
+.sous-rubrique-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.document-count {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.compact-btn {
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.8rem !important;
+}
+
+/* Compact Documents List */
+.documents-compact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.document-item-compact {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.document-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.document-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.document-name strong {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.9rem;
+}
+
+.document-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.document-tag {
+  font-size: 0.75rem !important;
+  padding: 0.25rem 0.5rem !important;
+}
+
+.json-indicator {
+  display: flex;
+  align-items: center;
+  color: #3b82f6;
+}
+
+.document-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.action-btn-compact {
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+}
+
+/* Compact Empty State */
+.empty-documents.compact {
+  padding: 1rem;
+  text-align: center;
+}
+
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.empty-icon {
+  font-size: 1.5rem;
+  color: #9ca3af;
+}
+
+.empty-content span {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+/* Compact Dialog */
+.compact-dialog :deep(.p-dialog-content) {
+  padding: 1.25rem !important;
+}
+
+.document-form.compact {
+  margin: 0;
+}
+
+.compact-form-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.form-group label.required::after {
+  content: ' *';
+  color: #ef4444;
+}
+
+.form-check-group.horizontal {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.form-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-check label {
+  margin: 0 !important;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.form-help.compact {
+  font-size: 0.8rem;
+}
+
+.current-file-info.compact {
+  margin-top: 0.5rem;
+}
+
+.file-info-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: #f0f9ff;
+  border: 1px solid #0ea5e9;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.custom-file-upload.compact :deep(.p-fileupload-choose) {
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.9rem !important;
+}
+
+/* Loading State */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: #6b7280;
+}
+
+/* Button Styles */
+.btn-primary {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+/* Input Styles */
+:deep(.p-inputtext),
+:deep(.p-dropdown),
+:deep(.p-calendar input) {
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  padding: 0.75rem;
+  transition: border-color 0.2s ease;
+}
+
+:deep(.p-inputtext:focus),
+:deep(.p-dropdown:focus),
+:deep(.p-calendar input:focus) {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Error States */
+:deep(.p-inputtext.p-invalid),
+:deep(.p-dropdown.p-invalid) {
+  border-color: #dc2626;
+}
+
+.p-error {
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.form-help {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .document-requis-admin.compact-layout {
+    padding: 0.75rem;
+  }
+  
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .inline-stats {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    width: 100%;
+  }
+  
+  .stat-item {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .sous-rubriques.compact-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .sous-rubrique-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .document-item-compact {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .document-actions {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .compact-header {
+    padding: 1rem !important;
+  }
+  
+  .rubrique-card.compact {
+    padding: 1rem !important;
+  }
+  
+  .sous-rubrique-card.compact {
+    padding: 0.75rem;
+  }
+  
+  .inline-stats {
+    gap: 0.5rem;
+  }
+  
+  .stat-item {
+    padding: 0.5rem 0.75rem;
+  }
+  
+  .form-check-group.horizontal {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}
+</style>
 

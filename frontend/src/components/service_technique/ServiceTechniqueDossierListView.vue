@@ -231,31 +231,9 @@
             </template>
           </Column>
 
-          <Column header="Antenne">
-            <template #body="slotProps">
-              <div>
-                <div class="font-semibold text-sm">{{ slotProps.data.antenneDesignation }}</div>
-                <div class="text-sm text-600">{{ slotProps.data.cdaNom }}</div>
-              </div>
-            </template>
-          </Column>
+          
 
-          <Column header="État d'Avancement">
-            <template #body="slotProps">
-              <div class="implementation-progress">
-                <div class="progress-info">
-                  <span class="progress-label">Avancement: {{ getProgressPercentage(slotProps.data) }}%</span>
-                  <ProgressBar :value="getProgressPercentage(slotProps.data)" class="mt-1" />
-                </div>
-                <div class="implementation-status mt-1">
-                  <Tag 
-                    :value="getImplementationStatusLabel(slotProps.data)"
-                    :severity="getImplementationSeverity(slotProps.data)" 
-                  />
-                </div>
-              </div>
-            </template>
-          </Column>
+          
 
           <Column field="statut" header="Statut" :sortable="true">
             <template #body="slotProps">
@@ -368,18 +346,7 @@
         />
       </div>
 
-      <div class="field">
-        <label for="progressPercentage">Pourcentage d'avancement initial</label>
-        <InputNumber 
-          id="progressPercentage"
-          v-model="scheduleImplementationVisitDialog.pourcentageAvancement" 
-          suffix="%"
-          :min="0"
-          :max="100"
-          placeholder="0"
-          class="w-full"
-        />
-      </div>
+      
       
       <div class="field">
         <label for="visitComment">Observations *</label>

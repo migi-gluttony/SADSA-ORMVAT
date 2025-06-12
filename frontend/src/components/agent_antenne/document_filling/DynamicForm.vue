@@ -19,19 +19,17 @@
             {{ field.label }}
             <span v-if="field.required" class="text-red-500 ml-1">*</span>
           </label>
-          
-          <!-- Text Input -->
+            <!-- Text Input -->
           <InputText 
             v-if="field.type === 'text'"
             :id="field.name"
             v-model="localFormData[field.name]"
             :placeholder="field.placeholder"
-            :class="{ 'p-invalid': fieldErrors[field.name] }"
+            :invalid="!!fieldErrors[field.name]"
             class="w-full mt-1"
             @input="onFieldChange(field.name, $event.target.value)"
           />
-          
-          <!-- Number Input -->
+            <!-- Number Input -->
           <InputNumber 
             v-else-if="field.type === 'number'"
             :id="field.name"
@@ -39,62 +37,56 @@
             :placeholder="field.placeholder"
             :min="field.min"
             :max="field.max"
-            :class="{ 'p-invalid': fieldErrors[field.name] }"
+            :invalid="!!fieldErrors[field.name]"
             class="w-full mt-1"
             @input="onFieldChange(field.name, $event.value)"
           />
-          
-          <!-- Textarea -->
+            <!-- Textarea -->
           <Textarea 
             v-else-if="field.type === 'textarea'"
             :id="field.name"
             v-model="localFormData[field.name]"
             :placeholder="field.placeholder"
             :rows="field.rows || 3"
-            :class="{ 'p-invalid': fieldErrors[field.name] }"
+            :invalid="!!fieldErrors[field.name]"
             class="w-full mt-1"
             @input="onFieldChange(field.name, $event.target.value)"
-          />
-          
-          <!-- Select/Dropdown -->
+          />            <!-- Select/Dropdown -->
           <Select 
             v-else-if="field.type === 'select'"
             :id="field.name"
             v-model="localFormData[field.name]"
             :options="field.options"
-            optionLabel="label"
-            optionValue="value"
+            option-label="label"
+            option-value="value"
             :placeholder="field.placeholder || 'Sélectionner...'"
-            :class="{ 'p-invalid': fieldErrors[field.name] }"
+            :invalid="!!fieldErrors[field.name]"
             class="w-full mt-1"
-            @change="onFieldChange(field.name, $event.value)"
+            @update:model-value="onFieldChange(field.name, $event)"
           />
           
-          <!-- Date -->
+            <!-- Date -->
           <DatePicker 
             v-else-if="field.type === 'date'"
             :id="field.name"
             v-model="localFormData[field.name]"
             :placeholder="field.placeholder"
-            dateFormat="dd/mm/yy"
-            :class="{ 'p-invalid': fieldErrors[field.name] }"
+            date-format="dd/mm/yy"
+            :invalid="!!fieldErrors[field.name]"
             class="w-full mt-1"
-            @date-select="onFieldChange(field.name, $event)"
-          />
-          
-          <!-- Checkbox -->
+            @update:model-value="onFieldChange(field.name, $event)"
+          />          <!-- Checkbox -->
           <div v-else-if="field.type === 'checkbox'" class="flex align-items-center mt-2">
             <Checkbox 
               :id="field.name"
               v-model="localFormData[field.name]"
               :binary="true"
-              :class="{ 'p-invalid': fieldErrors[field.name] }"
-              @change="onFieldChange(field.name, $event.checked)"
+              :invalid="!!fieldErrors[field.name]"
+              @update:model-value="onFieldChange(field.name, $event)"
             />
             <label :for="field.name" class="ml-2">{{ field.checkboxLabel || field.label }}</label>
           </div>
-          
-          <!-- Radio Group -->
+            <!-- Radio Group -->
           <div v-else-if="field.type === 'radio'" class="mt-2">
             <div class="space-y-2">
               <div 
@@ -106,7 +98,7 @@
                   :id="`${field.name}_${option.value}`"
                   v-model="localFormData[field.name]"
                   :value="option.value"
-                  @change="onFieldChange(field.name, $event.value)"
+                  @update:model-value="onFieldChange(field.name, $event)"
                 />
                 <label :for="`${field.name}_${option.value}`" class="ml-2">
                   {{ option.label }}
@@ -137,16 +129,14 @@
       <div v-else class="text-center p-4 surface-100 border-round">
         <i class="pi pi-info-circle text-color-secondary mr-2"></i>
         <span class="text-color-secondary">Aucun champ configuré dans ce formulaire</span>
-      </div>
-
-      <!-- Form Actions -->
+      </div>      <!-- Form Actions -->
       <div v-if="formFields.length > 0" class="flex justify-content-end gap-2 mt-4 pt-3 border-top-1 surface-border">
         <Button 
           type="button" 
           label="Effacer" 
           icon="pi pi-refresh" 
           @click="resetForm"
-          class="p-button-outlined"
+          variant="outlined"
           size="small"
         />
         <Button 
@@ -154,7 +144,7 @@
           label="Sauvegarder" 
           icon="pi pi-save" 
           :loading="saving"
-          :class="hasRequiredFieldsCompleted ? 'p-button-success' : 'p-button-info'"
+          :severity="hasRequiredFieldsCompleted ? 'success' : 'info'"
         />
       </div>
     </form>

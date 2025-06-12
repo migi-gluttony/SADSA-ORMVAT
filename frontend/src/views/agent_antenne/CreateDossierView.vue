@@ -22,17 +22,19 @@
     <div v-if="currentStep === 1" class="step-content">
       <div class="component-card">
         <h2><i class="pi pi-tags"></i> Sélectionnez le type de projet</h2>
-        
+                    <i class="pi pi-search search-icon"></i>
+
         <!-- Project Type Search Bar -->
         <div class="search-section">
+
           <div class="search-container">
+            
             <InputText 
               v-model="projectSearchTerm" 
               placeholder="Rechercher un type de projet..." 
               @input="searchProjectTypes"
               class="search-input"
             />
-            <i class="pi pi-search search-icon"></i>
           </div>
           <Button 
             v-if="projectSearchTerm" 
@@ -106,58 +108,62 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- Étape 2: Informations de base -->
+    </div>    <!-- Étape 2: Informations de base -->
     <div v-if="currentStep === 2" class="step-content">
-      <div class="component-card">
-<div class="title-section">
-    <h2><i class="pi pi-user"></i> Informations de l'agriculteur</h2>
-    <Button 
-      label="Réinitialiser le formulaire" 
-      icon="pi pi-refresh" 
-      @click="resetForm"
-      class="p-button-danger p-button-outlined"
-    />
-  </div>        <div class="form-grid">
-          <div class="form-group">
-            <label for="cin" class="required">CIN</label>
-            <div class="cin-input-group">
-              <InputText 
-                id="cin" 
-                v-model="formData.agriculteur.cin" 
-                placeholder="Numéro d'identité nationale"
-                @input="onCinInput"
-                :class="{ 'p-invalid': validationErrors.cin }"
-                class="cin-input"
-              />
-              <Button 
-                label="Vérifier" 
-                icon="pi pi-search" 
-                @click="checkFarmerExists"
-                :loading="farmerCheckStatus.checking"
-                :disabled="!formData.agriculteur.cin || formData.agriculteur.cin.trim().length < 5"
-                class="p-button-outlined check-btn"
-                size="small"
-              />
+      <div class="component-card compact-form">
+        <div class="title-section">
+          <h2><i class="pi pi-user"></i> Informations de l'agriculteur</h2>
+          <Button 
+            label="Réinitialiser le formulaire" 
+            icon="pi pi-refresh" 
+            @click="resetForm"
+            class="p-button-danger p-button-outlined"
+          />
+        </div>
+        
+        <!-- Compact form layout for easy screenshot -->
+        <div class="compact-form-layout">
+          <!-- Row 1: CIN with verification -->
+          <div class="form-row">
+            <div class="form-group cin-group">
+              <label for="cin" class="required">CIN</label>
+              <div class="cin-input-group">
+                <InputText 
+                  id="cin" 
+                  v-model="formData.agriculteur.cin" 
+                  placeholder="Numéro d'identité nationale"
+                  @input="onCinInput"
+                  :class="{ 'p-invalid': validationErrors.cin }"
+                  class="cin-input"
+                />
+                <Button 
+                  label="Vérifier" 
+                  icon="pi pi-search" 
+                  @click="checkFarmerExists"
+                  :loading="farmerCheckStatus.checking"
+                  :disabled="!formData.agriculteur.cin || formData.agriculteur.cin.trim().length < 5"
+                  class="p-button-outlined check-btn"
+                  size="small"
+                />
+              </div>
+              <small class="p-error">{{ validationErrors.cin }}</small>
             </div>
-            <small class="p-error">{{ validationErrors.cin }}</small>
-            
-            <!-- Farmer Found Information -->
-            <div v-if="farmerCheckStatus.found && farmerCheckStatus.data" class="farmer-info-card">
-              <div class="farmer-info-header">
-                <i class="pi pi-user"></i>
-                <strong>Agriculteur existant</strong>
-              </div>
-              <div class="farmer-details">
-                <p><strong>Nom:</strong> {{ farmerCheckStatus.data.nom }} {{ farmerCheckStatus.data.prenom }}</p>
-                <p><strong>Téléphone:</strong> {{ farmerCheckStatus.data.telephone }}</p>
-                <p v-if="farmerCheckStatus.previousDossiers.length > 0">
-                  <strong>Dossiers précédents:</strong> {{ farmerCheckStatus.previousDossiers.length }}
-                </p>
-              </div>
+          </div>
+
+          <!-- Farmer Found Information - Compact -->
+          <div v-if="farmerCheckStatus.found && farmerCheckStatus.data" class="farmer-info-card compact">
+            <div class="farmer-info-header">
+              <i class="pi pi-user"></i>
+              <strong>Agriculteur existant</strong>
+            </div>
+            <div class="farmer-details-compact">
+              <span><strong>{{ farmerCheckStatus.data.nom }} {{ farmerCheckStatus.data.prenom }}</strong></span>
+              <span>{{ farmerCheckStatus.data.telephone }}</span>
+              <span v-if="farmerCheckStatus.previousDossiers.length > 0">
+                {{ farmerCheckStatus.previousDossiers.length }} dossier(s)
+              </span>
               <Button 
-                label="Utiliser ces informations" 
+                label="Utiliser" 
                 icon="pi pi-check" 
                 @click="useFarmerData"
                 class="p-button-sm p-button-success"
@@ -166,179 +172,201 @@
             </div>
           </div>
 
-          <div class="form-group">
-            <label for="nom" class="required">Nom</label>
-            <InputText 
-              id="nom" 
-              v-model="formData.agriculteur.nom" 
-              placeholder="Nom de famille"
-              :class="{ 'p-invalid': validationErrors.nom }"
-            />
-            <small class="p-error">{{ validationErrors.nom }}</small>
+          <!-- Row 2: Nom & Prénom -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="nom" class="required">Nom</label>
+              <InputText 
+                id="nom" 
+                v-model="formData.agriculteur.nom" 
+                placeholder="Nom de famille"
+                :class="{ 'p-invalid': validationErrors.nom }"
+              />
+              <small class="p-error">{{ validationErrors.nom }}</small>
+            </div>
+
+            <div class="form-group">
+              <label for="prenom" class="required">Prénom</label>
+              <InputText 
+                id="prenom" 
+                v-model="formData.agriculteur.prenom" 
+                placeholder="Prénom"
+                :class="{ 'p-invalid': validationErrors.prenom }"
+              />
+              <small class="p-error">{{ validationErrors.prenom }}</small>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="prenom" class="required">Prénom</label>
-            <InputText 
-              id="prenom" 
-              v-model="formData.agriculteur.prenom" 
-              placeholder="Prénom"
-              :class="{ 'p-invalid': validationErrors.prenom }"
-            />
-            <small class="p-error">{{ validationErrors.prenom }}</small>
+          <!-- Row 3: Téléphone -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="telephone" class="required">Téléphone</label>
+              <InputText 
+                id="telephone" 
+                v-model="formData.agriculteur.telephone" 
+                placeholder="+212 6XX XXX XXX"
+                :class="{ 'p-invalid': validationErrors.telephone }"
+              />
+              <small class="p-error">{{ validationErrors.telephone }}</small>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="telephone" class="required">Téléphone</label>
-            <InputText 
-              id="telephone" 
-              v-model="formData.agriculteur.telephone" 
-              placeholder="+212 6XX XXX XXX"
-              :class="{ 'p-invalid': validationErrors.telephone }"
-            />
-            <small class="p-error">{{ validationErrors.telephone }}</small>
+          <!-- Row 4: Province & Cercle -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="province" class="required">Province</label>
+              <Select 
+                :key="`province-${refreshKey}`"
+                id="province" 
+                v-model="selectedProvince" 
+                :options="provinces"
+                optionLabel="designation"
+                optionValue="id"
+                placeholder="Sélectionner une province"
+                @change="onProvinceChange"
+                @update:modelValue="triggerAutoSave"
+                :class="{ 'p-invalid': validationErrors.province }"
+                class="w-full"
+              />
+              <small class="p-error">{{ validationErrors.province }}</small>
+            </div>
+
+            <div class="form-group">
+              <label for="cercle" class="required">Cercle</label>
+              <Select 
+                :key="`cercle-${refreshKey}`"
+                id="cercle" 
+                v-model="selectedCercle" 
+                :options="cercles"
+                optionLabel="designation"
+                optionValue="id"
+                placeholder="Sélectionner un cercle"
+                :disabled="!selectedProvince"
+                @change="onCercleChange"
+                @update:modelValue="triggerAutoSave"
+                :class="{ 'p-invalid': validationErrors.cercle }"
+                class="w-full"
+              />
+              <small class="p-error">{{ validationErrors.cercle }}</small>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="province" class="required">Province</label>
-            <Select 
-              :key="`province-${refreshKey}`"
-              id="province" 
-              v-model="selectedProvince" 
-              :options="provinces"
-              optionLabel="designation"
-              optionValue="id"
-              placeholder="Sélectionner une province"
-              @change="onProvinceChange"
-              @update:modelValue="triggerAutoSave"
-              :class="{ 'p-invalid': validationErrors.province }"
-              class="w-full"
-            />
-            <small class="p-error">{{ validationErrors.province }}</small>
-          </div>
+          <!-- Row 5: Commune & Douar -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="commune" class="required">Commune Rurale</label>
+              <Select 
+                :key="`commune-${refreshKey}`"
+                id="commune" 
+                v-model="formData.agriculteur.communeRuraleId" 
+                :options="communesRurales"
+                optionLabel="designation"
+                optionValue="id"
+                placeholder="Sélectionner une commune rurale"
+                :disabled="!selectedCercle"
+                @change="onCommuneChange"
+                @update:modelValue="triggerAutoSave"
+                :class="{ 'p-invalid': validationErrors.communeRuraleId }"
+                class="w-full"
+              />
+              <small class="p-error">{{ validationErrors.communeRuraleId }}</small>
+            </div>
 
-          <div class="form-group">
-            <label for="cercle" class="required">Cercle</label>
-            <Select 
-              :key="`cercle-${refreshKey}`"
-              id="cercle" 
-              v-model="selectedCercle" 
-              :options="cercles"
-              optionLabel="designation"
-              optionValue="id"
-              placeholder="Sélectionner un cercle"
-              :disabled="!selectedProvince"
-              @change="onCercleChange"
-              @update:modelValue="triggerAutoSave"
-              :class="{ 'p-invalid': validationErrors.cercle }"
-              class="w-full"
-            />
-            <small class="p-error">{{ validationErrors.cercle }}</small>
-          </div>
-
-          <div class="form-group">
-            <label for="commune" class="required">Commune Rurale</label>
-            <Select 
-              :key="`commune-${refreshKey}`"
-              id="commune" 
-              v-model="formData.agriculteur.communeRuraleId" 
-              :options="communesRurales"
-              optionLabel="designation"
-              optionValue="id"
-              placeholder="Sélectionner une commune rurale"
-              :disabled="!selectedCercle"
-              @change="onCommuneChange"
-              @update:modelValue="triggerAutoSave"
-              :class="{ 'p-invalid': validationErrors.communeRuraleId }"
-              class="w-full"
-            />
-            <small class="p-error">{{ validationErrors.communeRuraleId }}</small>
-          </div>
-
-          <div class="form-group">
-            <label for="douar">Douar</label>
-            <Select 
-              :key="`douar-${refreshKey}`"
-              id="douar" 
-              v-model="formData.agriculteur.douarId" 
-              :options="douars"
-              optionLabel="designation"
-              optionValue="id"
-              placeholder="Sélectionner un douar"
-              :disabled="!formData.agriculteur.communeRuraleId"
-              @update:modelValue="triggerAutoSave"
-              class="w-full"
-            />
+            <div class="form-group">
+              <label for="douar">Douar</label>
+              <Select 
+                :key="`douar-${refreshKey}`"
+                id="douar" 
+                v-model="formData.agriculteur.douarId" 
+                :options="douars"
+                optionLabel="designation"
+                optionValue="id"
+                placeholder="Sélectionner un douar"
+                :disabled="!formData.agriculteur.communeRuraleId"
+                @update:modelValue="triggerAutoSave"
+                class="w-full"
+              />
+            </div>
           </div>
         </div>
-      </div>
-
-      <div class="component-card">
+      </div>      <div class="component-card compact-form">
         <h2><i class="pi pi-folder"></i> Informations du dossier</h2>
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="saba" class="required">SABA (généré automatiquement)</label>
-            <InputText 
-              id="saba" 
-              v-model="formData.dossier.saba" 
-              placeholder="000000/2025/001"
-              readonly
-              :class="{ 'p-invalid': validationErrors.saba }"
-            />
-            <small class="form-help">Numéro généré automatiquement</small>
-            <small class="p-error">{{ validationErrors.saba }}</small>
+        
+        <div class="compact-form-layout">
+          <!-- Row 1: SABA & Antenne -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="saba" class="required">SABA (généré automatiquement)</label>
+              <InputText 
+                id="saba" 
+                v-model="formData.dossier.saba" 
+                placeholder="000000/2025/001"
+                readonly
+                :class="{ 'p-invalid': validationErrors.saba }"
+              />
+              <small class="form-help">Numéro généré automatiquement</small>
+              <small class="p-error">{{ validationErrors.saba }}</small>
+            </div>
+
+            <div class="form-group">
+              <label for="antenne" class="required">Antenne</label>
+              <InputText 
+                id="antenne" 
+                :value="userAntenne?.designation || 'Chargement...'" 
+                readonly
+                class="w-full"
+              />
+              <small class="form-help">Votre antenne par défaut</small>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="antenne" class="required">Antenne</label>
-            <InputText 
-              id="antenne" 
-              :value="userAntenne?.designation || 'Chargement...'" 
-              readonly
-              class="w-full"
-            />
-            <small class="form-help">Votre antenne par défaut</small>
+          <!-- Row 2: Date & Montant -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="dateDepot" class="required">Date de dépôt</label>
+              <InputText 
+                id="dateDepot" 
+                :value="formatDate(formData.dossier.dateDepot)"
+                readonly
+                class="w-full"
+              />
+              <small class="form-help">Date du jour</small>
+            </div>
+
+            <div class="form-group">
+              <label for="montant" class="required">Montant demandé (DH)</label>
+              <InputNumber 
+                id="montant" 
+                v-model="formData.dossier.montantDemande" 
+                mode="currency" 
+                currency="MAD" 
+                locale="fr-MA"
+                :class="{ 'p-invalid': validationErrors.montantDemande }"
+              />
+              <small class="p-error">{{ validationErrors.montantDemande }}</small>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="dateDepot" class="required">Date de dépôt</label>
-            <InputText 
-              id="dateDepot" 
-              :value="formatDate(formData.dossier.dateDepot)"
-              readonly
-              class="w-full"
-            />
-            <small class="form-help">Date du jour</small>
-          </div>
-
-          <div class="form-group">
-            <label for="montant" class="required">Montant demandé (DH)</label>
-            <InputNumber 
-              id="montant" 
-              v-model="formData.dossier.montantDemande" 
-              mode="currency" 
-              currency="MAD" 
-              locale="fr-MA"
-              :class="{ 'p-invalid': validationErrors.montantDemande }"
-            />
-            <small class="p-error">{{ validationErrors.montantDemande }}</small>
-          </div>
-
-          <div class="form-group full-width">
-            <div class="selected-project-info">
-              <h4>Projet sélectionné:</h4>
-              <p><strong>{{ selectedSousRubrique?.designation }}</strong></p>
-              <small>{{ selectedSousRubrique?.documentsRequis?.length || 0 }} document(s) requis</small>
+          <!-- Row 3: Selected Project Info -->
+          <div class="form-row">
+            <div class="selected-project-info-compact">
+              <div class="project-header">
+                <h4><i class="pi pi-folder"></i> Projet sélectionné:</h4>
+                <span class="project-name">{{ selectedSousRubrique?.designation }}</span>
+              </div>
               
-              <!-- Documents requis list -->
-              <div v-if="selectedSousRubrique?.documentsRequis?.length > 0" class="documents-required-list">
-                <h5>Documents requis:</h5>
-                <ul>
-                  <li v-for="document in selectedSousRubrique.documentsRequis" :key="document">
-                    <i class="pi pi-file"></i>
-                    <span>{{ document }}</span>
-                  </li>
-                </ul>
+              <!-- Documents requis in compact format -->
+              <div v-if="selectedSousRubrique?.documentsRequis?.length > 0" class="documents-required-compact">
+                <h5><i class="pi pi-file"></i> Documents requis ({{ selectedSousRubrique.documentsRequis.length }}):</h5>
+                <div class="documents-tags">
+                  <span 
+                    v-for="document in selectedSousRubrique.documentsRequis" 
+                    :key="document"
+                    class="document-tag"
+                  >
+                    {{ document }}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -369,64 +397,138 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- Étape 3: Aperçu et finalisation -->
+    </div>    <!-- Étape 3: Aperçu et finalisation -->
     <div v-if="currentStep === 3" class="step-content">
-      <div class="component-card">
-        <h2><i class="pi pi-eye"></i> Aperçu du dossier</h2>
+      <div class="component-card preview-container">
+        <div class="preview-header">
+          <h2><i class="pi pi-eye"></i> Aperçu du dossier</h2>
+          <div class="preview-status">
+            <i class="pi pi-check-circle"></i>
+            <span>Prêt à créer</span>
+          </div>
+        </div>
         
-        <div class="summary-sections">
-          <div class="summary-section">
-            <h3>Informations agriculteur</h3>
-            <div class="info-grid">
-              <div><strong>Nom complet:</strong> {{ formData.agriculteur.prenom }} {{ formData.agriculteur.nom }}</div>
-              <div><strong>CIN:</strong> {{ formData.agriculteur.cin }}</div>
-              <div><strong>Téléphone:</strong> {{ formData.agriculteur.telephone }}</div>
-              <div v-if="selectedCommuneName"><strong>Commune Rurale:</strong> {{ selectedCommuneName }}</div>
-              <div v-if="selectedDouarName"><strong>Douar:</strong> {{ selectedDouarName }}</div>
+        <div class="preview-grid">
+          <!-- Agriculteur Card -->
+          <div class="preview-card farmer-card">
+            <div class="card-header">
+              <div class="card-icon farmer">
+                <i class="pi pi-user"></i>
+              </div>
+              <h3>Agriculteur</h3>
+            </div>
+            <div class="card-content">
+              <div class="info-row primary">
+                <div class="info-item">
+                  <span class="label">Nom complet</span>
+                  <span class="value">{{ formData.agriculteur.prenom }} {{ formData.agriculteur.nom }}</span>
+                </div>
+              </div>
+              <div class="info-row">
+                <div class="info-item">
+                  <span class="label">CIN</span>
+                  <span class="value">{{ formData.agriculteur.cin }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">Téléphone</span>
+                  <span class="value">{{ formData.agriculteur.telephone }}</span>
+                </div>
+              </div>
+              <div class="info-row" v-if="selectedCommuneName || selectedDouarName">
+                <div class="info-item" v-if="selectedCommuneName">
+                  <span class="label">Commune</span>
+                  <span class="value">{{ selectedCommuneName }}</span>
+                </div>
+                <div class="info-item" v-if="selectedDouarName">
+                  <span class="label">Douar</span>
+                  <span class="value">{{ selectedDouarName }}</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="summary-section">
-            <h3>Informations projet</h3>
-            <div class="info-grid">
-              <div><strong>Type:</strong> {{ selectedSousRubrique?.designation }}</div>
-              <div><strong>SABA:</strong> {{ formData.dossier.saba }}</div>
-              <div><strong>Montant:</strong> {{ formatCurrency(formData.dossier.montantDemande) }}</div>
-              <div><strong>Antenne:</strong> {{ getSelectedAntenneName() }}</div>
+          <!-- Projet Card -->
+          <div class="preview-card project-card">
+            <div class="card-header">
+              <div class="card-icon project">
+                <i class="pi pi-folder"></i>
+              </div>
+              <h3>Projet</h3>
+            </div>
+            <div class="card-content">
+              <div class="info-row primary">
+                <div class="info-item full-width">
+                  <span class="label">Type de projet</span>
+                  <span class="value project-type">{{ selectedSousRubrique?.designation }}</span>
+                </div>
+              </div>
+              <div class="info-row">
+                <div class="info-item">
+                  <span class="label">SABA</span>
+                  <span class="value code">{{ formData.dossier.saba }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">Antenne</span>
+                  <span class="value">{{ getSelectedAntenneName() }}</span>
+                </div>
+              </div>
+              <div class="info-row">
+                <div class="info-item amount">
+                  <span class="label">Montant demandé</span>
+                  <span class="value amount-value">{{ formatCurrency(formData.dossier.montantDemande) }}</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="summary-section" v-if="selectedSousRubrique?.documentsRequis?.length > 0">
-            <h3>Documents requis</h3>
-            <div class="documents-summary">
-              <div 
-                v-for="document in selectedSousRubrique.documentsRequis"
-                :key="document"
-                class="document-item"
-              >
-                <i class="pi pi-file"></i>
-                <span>{{ document }}</span>
+          <!-- Documents Card -->
+          <div class="preview-card documents-card" v-if="selectedSousRubrique?.documentsRequis?.length > 0">
+            <div class="card-header">
+              <div class="card-icon documents">
+                <i class="pi pi-file-edit"></i>
+              </div>
+              <h3>Documents requis</h3>
+              <div class="docs-count">
+                <span>{{ selectedSousRubrique.documentsRequis.length }}</span>
+              </div>
+            </div>
+            <div class="card-content">
+              <div class="documents-grid">
+                <div 
+                  v-for="(document, index) in selectedSousRubrique.documentsRequis"
+                  :key="document"
+                  class="document-badge"
+                >
+                  <div class="doc-number">{{ index + 1 }}</div>
+                  <div class="doc-info">
+                    <i class="pi pi-file"></i>
+                    <span>{{ document }}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="step-actions">
-          <Button 
-            label="Retour" 
-            icon="pi pi-arrow-left" 
-            @click="previousStep"
-            class="p-button-outlined"
-          />
-          <Button 
-            label="Créer le dossier" 
-            icon="pi pi-check" 
-            @click="createDossier"
-            class="p-button-success btn-primary"
-            :loading="loading.create"
-          />
+        <!-- Action Bar -->
+        <div class="preview-actions">
+          <div class="action-left">
+            <Button 
+              label="Retour" 
+              icon="pi pi-arrow-left" 
+              @click="previousStep"
+              class="p-button-outlined action-btn"
+            />
+          </div>
+          <div class="action-right">
+            <Button 
+              label="Créer le dossier" 
+              icon="pi pi-check" 
+              @click="createDossier"
+              class="p-button-success btn-primary action-btn create-btn"
+              :loading="loading.create"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -1622,11 +1724,22 @@ h3 {
   margin-bottom: 0;
 }
 
+/* Compact Form Layout for Screenshots */
+.compact-form {
+  padding: 1.25rem !important;
+}
+
+.compact-form-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0;
 }
 
 .form-group {
@@ -1644,6 +1757,122 @@ h3 {
 .form-group label.required::after {
   content: ' *';
   color: #ef4444;
+}
+
+/* Compact CIN Group */
+.cin-group {
+  grid-column: 1 / -1;
+}
+
+.cin-input-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.cin-input {
+  flex: 1;
+}
+
+.check-btn {
+  flex-shrink: 0;
+  height: 42px;
+}
+
+/* Compact Farmer Info Card */
+.farmer-info-card.compact {
+  background: #f0f9ff;
+  border: 1px solid #0ea5e9;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+  grid-column: 1 / -1;
+}
+
+.farmer-info-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  color: #0369a1;
+}
+
+.farmer-details-compact {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.farmer-details-compact span {
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+/* Project Info Compact */
+.selected-project-info-compact {
+  grid-column: 1 / -1;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.project-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.project-header h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.project-name {
+  font-weight: 600;
+  color: #3b82f6;
+}
+
+.documents-required-compact h5 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.documents-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.document-tag {
+  background: #3b82f6;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+/* Title Section */
+.title-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 :deep(.p-inputtext),
@@ -1666,7 +1895,292 @@ h3 {
   padding: 0.75rem;
 }
 
-/* Summary Section */
+/* Preview Container */
+.preview-container {
+  padding: 1.5rem !important;
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.preview-header h2 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.5rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.preview-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #dcfce7;
+  border: 1px solid #16a34a;
+  border-radius: 6px;
+  color: #16a34a;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+/* Preview Grid */
+.preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.preview-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.preview-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.documents-card {
+  grid-column: 1 / -1;
+}
+
+/* Card Headers */
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+  position: relative;
+}
+
+.card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.1rem;
+}
+
+.card-icon.farmer {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+}
+
+.card-icon.project {
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
+.card-icon.documents {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+}
+
+.card-header h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+  flex: 1;
+}
+
+.docs-count {
+  background: #3b82f6;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Card Content */
+.card-content {
+  padding: 1.25rem;
+}
+
+.info-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.info-row:last-child {
+  margin-bottom: 0;
+}
+
+.info-row.primary {
+  background: #f8fafc;
+  margin: -1.25rem -1.25rem 1rem -1.25rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.info-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.info-item.amount {
+  grid-column: 1 / -1;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1f2937;
+  word-break: break-word;
+}
+
+.value.project-type {
+  color: #059669;
+  font-size: 1rem;
+}
+
+.value.code {
+  font-family: 'Courier New', monospace;
+  background: #f3f4f6;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.value.amount-value {
+  font-size: 1.25rem;
+  color: #f59e0b;
+  font-weight: 700;
+}
+
+/* Documents Grid */
+.documents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem;
+}
+
+.document-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.document-badge:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.doc-number {
+  width: 24px;
+  height: 24px;
+  background: #3b82f6;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.doc-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-info i {
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.doc-info span {
+  font-size: 0.9rem;
+  color: #374151;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+/* Preview Actions */
+.preview-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e5e7eb;
+}
+
+.action-left,
+.action-right {
+  display: flex;
+  gap: 1rem;
+}
+
+.action-btn {
+  padding: 0.75rem 1.5rem !important;
+  font-weight: 500 !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease !important;
+}
+
+.create-btn {
+  background: linear-gradient(135deg, #16a34a, #15803d) !important;
+  border-color: #16a34a !important;
+  box-shadow: 0 2px 4px rgba(22, 163, 74, 0.2) !important;
+}
+
+.create-btn:hover {
+  background: linear-gradient(135deg, #15803d, #166534) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 8px rgba(22, 163, 74, 0.3) !important;
+}
+
+/* Summary Section (Legacy - keeping for compatibility) */
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -1710,6 +2224,40 @@ h3 {
 .summary-value {
   font-weight: 600;
   color: #1f2937;
+}
+
+/* Responsive Design for Preview */
+@media (max-width: 768px) {
+  .preview-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .preview-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .info-row {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .documents-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .preview-actions {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .action-left,
+  .action-right {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* Navigation Buttons */
@@ -1810,9 +2358,27 @@ h3 {
   .search-results-grid {
     grid-template-columns: 1fr;
   }
-  
-  .form-row {
+    .form-row {
     grid-template-columns: 1fr;
+  }
+  
+  .compact-form-layout .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .farmer-details-compact {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .title-section {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .documents-tags {
+    flex-direction: column;
   }
   
   .summary-grid {

@@ -37,161 +37,201 @@
             <p class="mt-1 mb-0">Fiche d'approbation disponible</p>
           </div>
         </div>
-      </Message>
-
-      <!-- Printable Document -->
-      <Card class="print-document">
-        <template #content>
-          <!-- Print Header -->
-          <div class="print-header text-center mb-4">
-            <div class="flex justify-content-between align-items-center mb-3">
-              <img src="/src/assets/logo/logo_ministre.jpg" alt="Armoiries" class="h-4rem" />
-              <div class="text-center">
-                <div class="font-bold">Royaume du Maroc</div>
-                <div class="text-sm">Ministère de l'Agriculture, de la Pêche Maritime</div>
-                <div class="text-sm">et du Développement Rural et des Eaux et Forêts</div>
-                <div class="font-bold">OFFICE RÉGIONAL DE MISE EN VALEUR AGRICOLE DU TADLA</div>
-              </div>
-              <img src="/src/assets/logo/logo-ormvat-full-original.jpg" alt="ORMVAT" class="h-4rem" />
-            </div>
-            
-            <Divider />
-            
-            <div class="my-4">
-              <h1 class="text-xl font-bold">Système Automatisé de Demande de Subventions Agricoles (SADSA)</h1>
-              <h2 class="text-lg font-bold mt-2">FICHE D'APPROBATION</h2>
-              <div class="inline-block border-2 border-primary p-2 mt-2">
-                <strong>N° {{ ficheData.numeroFiche }}</strong>
-              </div>
-              <p class="mt-2 font-bold">Date d'approbation: {{ formatDate(ficheData.dateApprobation) }}</p>
+      </Message>      <!-- Printable Document -->
+      <div class="printable-fiche print-only">
+        <!-- Header with logos and title -->
+        <div class="print-header">
+          <div class="header-logo left-logo">
+            <img src="/src/assets/logo/logo_ministre.jpg" alt="Armoiries" />
+          </div>
+          <div class="header-text">
+            <div class="header-title">
+              <p>Royaume du Maroc</p>
+              <p>Ministère de l'Agriculture, de la Pêche Maritime,</p>
+              <p>du Développement Rural et des Eaux et Forêts</p>
+              <p>Office Régional de Mise en Valeur Agricole du Tadla</p>
+              <p><strong>Système Automatisé de Demande de Subventions Agricoles (SADSA)</strong></p>
             </div>
           </div>
+          <div class="header-logo right-logo">
+            <img src="/src/assets/logo/logo-ormvat-full-original.jpg" alt="ORMVAT" />
+          </div>
+        </div>
+        
+        <hr class="header-separator" />
+        
+        <!-- Document Title -->
+        <div class="document-title">
+          <h1>Fiche d'Approbation</h1>
+          <h2>N° {{ ficheData.numeroFiche }}</h2>
+          <h3>Date d'approbation: {{ formatDate(ficheData.dateApprobation) }}</h3>
+        </div>
+        
+        <!-- Content Area -->
+        <div class="content-area">
+          <!-- Main Information Table -->
+          <table class="fiche-table">
+            <thead>
+              <tr>
+                <th colspan="4">INFORMATIONS DU BÉNÉFICIAIRE ET DU PROJET</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="label-cell">Nom et Prénom</td>
+                <td>{{ ficheData.agriculteurNom }} {{ ficheData.agriculteurPrenom }}</td>
+                <td class="label-cell">Référence Dossier</td>
+                <td class="reference-cell">{{ ficheData.reference }}</td>
+              </tr>
+              <tr>
+                <td class="label-cell">CIN</td>
+                <td>{{ ficheData.agriculteurCin }}</td>
+                <td class="label-cell">Numéro SABA</td>
+                <td class="saba-cell">{{ ficheData.saba }}</td>
+              </tr>
+              <tr>
+                <td class="label-cell">Téléphone</td>
+                <td>{{ ficheData.agriculteurTelephone }}</td>
+                <td class="label-cell">Type de projet</td>
+                <td>{{ ficheData.rubriqueDesignation }}</td>
+              </tr>
+              <tr>
+                <td class="label-cell">Localisation</td>
+                <td>{{ getFullLocation() }}</td>
+                <td class="label-cell">Description</td>
+                <td>{{ ficheData.sousRubriqueDesignation }}</td>
+              </tr>
+            </tbody>
+          </table>
 
-          <!-- Content Sections -->
-          <div class="grid">
-            <!-- Beneficiary Info -->
-            <div class="col-12 mb-4">
-              <Panel header="INFORMATIONS DU BÉNÉFICIAIRE">
-                <div class="grid">
-                  <div class="col-6"><strong>Nom et Prénom:</strong></div>
-                  <div class="col-6">{{ ficheData.agriculteurNom }} {{ ficheData.agriculteurPrenom }}</div>
-                  <div class="col-6"><strong>CIN:</strong></div>
-                  <div class="col-6">{{ ficheData.agriculteurCin }}</div>
-                  <div class="col-6"><strong>Téléphone:</strong></div>
-                  <div class="col-6">{{ ficheData.agriculteurTelephone }}</div>
-                  <div class="col-6"><strong>Localisation:</strong></div>
-                  <div class="col-6">{{ getFullLocation() }}</div>
-                </div>
-              </Panel>
-            </div>
+          <!-- Financial Information Table -->
+          <table class="fiche-table">
+            <thead>
+              <tr>
+                <th colspan="4">INFORMATIONS FINANCIÈRES ET APPROBATION</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="label-cell">Montant demandé</td>
+                <td>{{ formatCurrency(ficheData.montantDemande) }}</td>
+                <td class="label-cell">Montant approuvé</td>
+                <td class="approved-amount">{{ formatCurrency(ficheData.montantApprouve) }}</td>
+              </tr>
+              <tr>
+                <td class="label-cell">Statut</td>
+                <td class="status-cell">{{ ficheData.statutApprobation }}</td>
+                <td class="label-cell">Validité jusqu'au</td>
+                <td>{{ ficheData.validiteJusquau }}</td>
+              </tr>
+            </tbody>
+          </table>
 
-            <!-- Project Info -->
-            <div class="col-12 mb-4">
-              <Panel header="INFORMATIONS DU PROJET">
-                <div class="grid">
-                  <div class="col-6"><strong>Référence Dossier:</strong></div>
-                  <div class="col-6">{{ ficheData.reference }}</div>
-                  <div class="col-6"><strong>Numéro SABA:</strong></div>
-                  <div class="col-6"><strong>{{ ficheData.saba }}</strong></div>
-                  <div class="col-6"><strong>Type de projet:</strong></div>
-                  <div class="col-6">{{ ficheData.rubriqueDesignation }}</div>
-                  <div class="col-6"><strong>Description détaillée:</strong></div>
-                  <div class="col-6">{{ ficheData.sousRubriqueDesignation }}</div>
-                  <div class="col-6"><strong>Montant demandé:</strong></div>
-                  <div class="col-6">{{ formatCurrency(ficheData.montantDemande) }}</div>
-                  <div class="col-6"><strong>Montant approuvé:</strong></div>
-                  <div class="col-6 text-green-600 font-bold">{{ formatCurrency(ficheData.montantApprouve) }}</div>
-                </div>
-              </Panel>
-            </div>
+          <!-- Administrative Information Table -->
+          <table class="fiche-table">
+            <thead>
+              <tr>
+                <th colspan="4">INFORMATIONS ADMINISTRATIVES</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="label-cell">Antenne</td>
+                <td>{{ ficheData.antenneDesignation }}</td>
+                <td class="label-cell">CDA</td>
+                <td>{{ ficheData.cdaNom }}</td>
+              </tr>
+              <tr>
+                <td class="label-cell">Province</td>
+                <td>{{ ficheData.agriculteurProvince }}</td>
+                <td class="label-cell">Agent GUC</td>
+                <td>{{ ficheData.agentGucNom }}</td>
+              </tr>
+            </tbody>
+          </table>
 
-            <!-- Approval Details -->
-            <div class="col-12 mb-4">
-              <Panel header="DÉTAILS DE L'APPROBATION">
-                <div class="grid">
-                  <div class="col-6"><strong>Statut:</strong></div>
-                  <div class="col-6"><strong>{{ ficheData.statutApprobation }}</strong></div>
-                  <div class="col-6"><strong>Date d'approbation:</strong></div>
-                  <div class="col-6">{{ formatDate(ficheData.dateApprobation) }}</div>
-                  <div class="col-6"><strong>Validité:</strong></div>
-                  <div class="col-6">{{ ficheData.validiteJusquau }}</div>
-                  <div v-if="ficheData.commentaireApprobation" class="col-6"><strong>Commentaire:</strong></div>
-                  <div v-if="ficheData.commentaireApprobation" class="col-6">{{ ficheData.commentaireApprobation }}</div>
-                  <div v-if="ficheData.conditionsSpecifiques" class="col-6"><strong>Conditions spécifiques:</strong></div>
-                  <div v-if="ficheData.conditionsSpecifiques" class="col-6">{{ ficheData.conditionsSpecifiques }}</div>
-                </div>
-              </Panel>
-            </div>
-
-            <!-- Administrative Info -->
-            <div class="col-12 mb-4">
-              <Panel header="INFORMATIONS ADMINISTRATIVES">
-                <div class="grid">
-                  <div class="col-6"><strong>Antenne:</strong></div>
-                  <div class="col-6">{{ ficheData.antenneDesignation }}</div>
-                  <div class="col-6"><strong>CDA:</strong></div>
-                  <div class="col-6">{{ ficheData.cdaNom }}</div>
-                  <div class="col-6"><strong>Province:</strong></div>
-                  <div class="col-6">{{ ficheData.agriculteurProvince }}</div>
-                  <div class="col-6"><strong>Agent GUC:</strong></div>
-                  <div class="col-6">{{ ficheData.agentGucNom }}</div>
-                </div>
-              </Panel>
-            </div>
-
-            <!-- Important Notice -->
-            <div class="col-12 mb-4">
-              <Panel header="INFORMATIONS IMPORTANTES" class="border-2 border-primary">
-                <ul class="list-disc pl-4 text-sm line-height-3">
-                  <li>Cette fiche atteste de l'approbation de votre demande de subvention agricole.</li>
-                  <li>Conservez précieusement ce document pour la phase de réalisation de votre projet.</li>
-                  <li>La validité de cette approbation est de 6 mois à compter de la date d'émission.</li>
-                  <li>Tout changement dans les spécifications du projet nécessite une nouvelle approbation.</li>
-                  <li>Vous devez respecter toutes les conditions mentionnées ci-dessus.</li>
-                  <li>Présentez cette fiche lors de la mise en œuvre de votre projet.</li>
-                </ul>
-              </Panel>
-            </div>
-
-            <!-- Signatures -->
-            <div class="col-12">
-              <div class="grid">
-                <div class="col-6 text-center">
-                  <div class="border-1 border-300 p-3">
-                    <strong>Agent GUC</strong>
-                    <p class="mt-2">{{ ficheData.agentGucNom }}</p>
-                    <p class="text-sm italic">{{ ficheData.agentGucSignature }}</p>
-                    <div class="h-3rem border-top-1 border-900 mt-3"></div>
-                  </div>
-                </div>
-                <div class="col-6 text-center">
-                  <div class="border-1 border-300 p-3">
-                    <strong>Responsable ORMVAT</strong>
-                    <p class="mt-2">{{ ficheData.responsableNom }}</p>
-                    <p class="text-sm italic">{{ ficheData.responsableSignature }}</p>
-                    <div class="h-3rem border-top-1 border-900 mt-3"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <!-- Comments and Conditions (if any) -->
+          <div v-if="ficheData.commentaireApprobation || ficheData.conditionsSpecifiques">
+            <table class="fiche-table">
+              <thead>
+                <tr>
+                  <th>COMMENTAIRES ET CONDITIONS SPÉCIFIQUES</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="ficheData.commentaireApprobation">
+                  <td>
+                    <strong>Commentaire:</strong><br/>
+                    {{ ficheData.commentaireApprobation }}
+                  </td>
+                </tr>
+                <tr v-if="ficheData.conditionsSpecifiques">
+                  <td>
+                    <strong>Conditions spécifiques:</strong><br/>
+                    {{ ficheData.conditionsSpecifiques }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
-          <!-- Footer -->
-          <div class="flex justify-content-between align-items-end mt-4 pt-3 border-top-1 border-300">
-            <div class="text-xs">
+          <!-- Important Notice -->
+          <table class="fiche-table notice-table">
+            <thead>
+              <tr>
+                <th>INFORMATIONS IMPORTANTES</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <ul class="notice-list">
+                    <li>Cette fiche atteste de l'approbation de votre demande de subvention agricole.</li>
+                    <li>Conservez précieusement ce document pour la phase de réalisation de votre projet.</li>
+                    <li>La validité de cette approbation est de 6 mois à compter de la date d'émission.</li>
+                    <li>Tout changement dans les spécifications du projet nécessite une nouvelle approbation.</li>
+                    <li>Vous devez respecter toutes les conditions mentionnées ci-dessus.</li>
+                    <li>Présentez cette fiche lors de la mise en œuvre de votre projet.</li>
+                  </ul>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- Signature section -->
+        <div class="signature-section">
+          <div class="date-section">
+            <p>Fait à {{ ficheData.antenneDesignation }}, le {{ formatDate(ficheData.dateApprobation) }}</p>
+          </div>
+          
+          <div class="signatures-row">
+            <div class="signature">
+              <p>Signature de l'Agent GUC</p>
+              <p class="name">{{ ficheData.agentGucNom }}</p>
+              <div class="signature-line"></div>
+            </div>
+            <div class="signature">
+              <p>Signature du Responsable ORMVAT</p>
+              <p class="name">{{ ficheData.responsableNom }}</p>
+              <div class="signature-line"></div>
+            </div>
+          </div>
+          
+          <div class="footer-info">
+            <div class="contact-info">
               <strong>Pour toute information:</strong><br/>
               ORMVAT - BP 244, Fquih Ben Salah<br/>
               Tél: +212 5 23 43 50 23/35/48<br/>
               Email: sadsa@ormvatadla.ma
             </div>
-            <div class="text-xs text-right">
-              Fait à {{ ficheData.antenneDesignation }}, le {{ formatDate(ficheData.dateApprobation) }}<br/>
+            <div class="generation-info">
               Document généré automatiquement par SADSA<br/>
               {{ formatDateTime(ficheData.dateGeneration) }}
             </div>
           </div>
-        </template>
-      </Card>
+        </div>
+      </div>
     </div>
 
     <Toast />
@@ -319,12 +359,312 @@ function formatDateTime(date) {
 </script>
 
 <style>
+/* These styles will only apply when printing */
 @media print {
-  .no-print { display: none !important; }
-  .print-document { box-shadow: none !important; border: none !important; }
-  body * { visibility: hidden; }
-  .print-document, .print-document * { visibility: visible; }
-  .print-document { position: absolute; left: 0; top: 0; width: 100%; }
-  @page { size: A4; margin: 1.5cm; }
+  body * {
+    visibility: hidden;
+  }
+  
+  .print-only, .print-only * {
+    visibility: visible;
+  }
+  
+  .printable-fiche {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  
+  /* Reset all styles */
+  .printable-fiche * {
+    color: black !important;
+    background: white !important;
+    font-family: Arial, sans-serif !important;
+    box-shadow: none !important;
+  }
+  
+  @page {
+    size: A4;
+    margin: 1cm;
+  }
+  
+  .page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+}
+
+/* Document structure - matches PrintableNotes exactly */
+.printable-fiche {
+  position: relative;
+  min-height: 100vh;
+  padding: 20px;
+  padding-bottom: 200px; /* Increased padding to make room for signature */
+  box-sizing: border-box;
+  page-break-after: always;
+  background: white;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+/* Header styles - exactly like PrintableNotes */
+.print-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.header-logo {
+  width: 80px;
+  height: 80px;
+}
+
+.header-logo img {
+  width: 100%;
+  height: auto;
+}
+
+.header-text {
+  text-align: center;
+}
+
+.header-title p {
+  margin: 2px 0;
+  font-size: 12px;
+}
+
+.header-separator {
+  border: none;
+  border-top: 1px solid black;
+  margin: 10px 0 20px 0;
+}
+
+/* Document title */
+.document-title {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.document-title h1 {
+  font-size: 18px;
+  margin-bottom: 5px;
+}
+
+.document-title h2, .document-title h3 {
+  font-size: 14px;
+  font-weight: normal;
+  margin: 5px 0;
+}
+
+/* Content area */
+.content-area {
+  width: 100%;
+  margin-bottom: 60px; /* Added margin to separate from signature */
+}
+
+/* Table styles - exactly like PrintableNotes */
+.fiche-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 30px;
+  page-break-inside: avoid;
+}
+
+.fiche-table th, .fiche-table td {
+  border: 1px solid black;
+  padding: 8px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.fiche-table th {
+  font-weight: bold;
+  background-color: #f2f2f2;
+}
+
+.fiche-table tr {
+  page-break-inside: avoid;
+  page-break-after: auto;
+}
+
+/* Label cells */
+.label-cell {
+  background-color: #f9f9f9;
+  font-weight: bold;
+  text-align: left;
+  width: 25%;
+}
+
+.fiche-table td:not(.label-cell) {
+  text-align: left;
+}
+
+/* Special highlighting */
+.reference-cell, .saba-cell {
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.approved-amount {
+  background-color: #e8f5e8;
+  font-weight: bold;
+  color: #2d5016;
+}
+
+.status-cell {
+  font-weight: bold;
+  color: #27ae60;
+}
+
+/* Notice table - special styling */
+.notice-table th {
+  background-color: #fff3cd;
+  border-color: #ffc107;
+}
+
+.notice-table td {
+  border-color: #ffc107;
+  text-align: left;
+}
+
+.notice-list {
+  margin: 0;
+  padding-left: 20px;
+  list-style-type: disc;
+}
+
+.notice-list li {
+  margin-bottom: 5px;
+  line-height: 1.4;
+}
+
+/* Signature section at bottom of page - exactly like PrintableNotes */
+.signature-section {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  background: white; /* Ensure signature section has white background */
+}
+
+.date-section {
+  text-align: center;
+  margin-bottom: 20px;
+  font-weight: bold;
+}
+
+.signatures-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.signature {
+  width: 45%;
+  text-align: center;
+  border: 1px solid #ddd;
+  padding: 15px;
+  background-color: #fafafa;
+}
+
+.signature p {
+  margin: 5px 0;
+  font-size: 12px;
+}
+
+.signature .name {
+  font-weight: bold;
+}
+
+.signature-line {
+  border-top: 1px solid black;
+  height: 40px;
+  margin-top: 20px;
+}
+
+.footer-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #666;
+  border-top: 1px solid #ddd;
+  padding-top: 10px;
+}
+
+.contact-info, .generation-info {
+  line-height: 1.4;
+}
+
+.generation-info {
+  text-align: right;
+}
+
+/* Print specific overrides */
+@media print {
+  .no-print { 
+    display: none !important; 
+  }
+    .printable-fiche {
+    box-shadow: none;
+    border-radius: 0;
+    margin: 0;
+    padding: 15px;
+    padding-bottom: 160px; /* Increased padding for print */
+  }
+  
+  .fiche-table th {
+    background-color: #f2f2f2 !important;
+  }
+  
+  .label-cell {
+    background-color: #f9f9f9 !important;
+  }
+  
+  .approved-amount {
+    background-color: #e8f5e8 !important;
+  }
+  
+  .notice-table th {
+    background-color: #fff3cd !important;
+  }
+  
+  .signature {
+    background-color: #fafafa !important;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .print-header {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .header-logo {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .fiche-table {
+    font-size: 11px;
+  }
+  
+  .signatures-row {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .signature {
+    width: 100%;
+  }
+  
+  .footer-info {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
 }
 </style>
