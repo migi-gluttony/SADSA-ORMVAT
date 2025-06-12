@@ -433,7 +433,7 @@ const statusOptions = ref([
   { label: 'En révision', value: 'IN_REVIEW' },
   { label: 'Retourné pour complétion', value: 'RETURNED_FOR_COMPLETION' },
   { label: 'Approuvé', value: 'APPROVED' },
-  { label: 'Approuvé - En attente fermier', value: 'APPROVED_AWAITING_FARMER' },
+  { label: 'Approuvé - En attente fermier', value: 'AWAITING_FARMER' },
   { label: 'Réalisation en cours', value: 'REALIZATION_IN_PROGRESS' },
   { label: 'Rejeté', value: 'REJECTED' },
   { label: 'Terminé', value: 'COMPLETED' }
@@ -458,7 +458,7 @@ const statistics = computed(() => {
     ['SUBMITTED', 'IN_REVIEW', 'RETURNED_FOR_COMPLETION'].includes(d.statut)
   ).length;
   const approuves = dossiers.value.filter(d => 
-    ['APPROVED', 'APPROVED_AWAITING_FARMER', 'COMPLETED'].includes(d.statut)
+    ['APPROVED', 'AWAITING_FARMER', 'COMPLETED'].includes(d.statut)
   ).length;
   const enRetard = dossiers.value.filter(d => d.enRetard).length;
   
@@ -616,7 +616,7 @@ function getStatusSeverity(status) {
     'SUBMITTED': 'info',
     'IN_REVIEW': 'warning',
     'APPROVED': 'success',
-    'APPROVED_AWAITING_FARMER': 'success',
+    'AWAITING_FARMER': 'success',
     'REALIZATION_IN_PROGRESS': 'info',
     'REJECTED': 'danger',
     'COMPLETED': 'success',

@@ -45,17 +45,18 @@
       <!-- Dossier Summary -->
       <Card class="mb-4">
         <template #title>
-          <i class="pi pi-clipboard-check mr-2"></i>Décision Finale d'Approbation
+          <i class="pi pi-gavel mr-2"></i>Décision Finale d'Approbation
         </template>
         <template #content>
           <div class="grid">
             <div class="col-12 md:col-6">
               <Panel header="Informations Dossier">
                 <div class="flex flex-column gap-2">
-                  <div><strong>Référence:</strong> {{ dossierDetail.dossier.reference }}</div>
-                  <div><strong>SABA:</strong> {{ dossierDetail.dossier.saba }}</div>
-                  <div><strong>Agriculteur:</strong> {{ dossierDetail.agriculteur.prenom }} {{ dossierDetail.agriculteur.nom }}</div>
-                  <div><strong>CIN:</strong> {{ dossierDetail.agriculteur.cin }}</div>
+                  <div><strong>Référence:</strong> {{ dossierDetail.reference }}</div>
+                  <div><strong>SABA:</strong> {{ dossierDetail.saba }}</div>
+                  <div><strong>Agriculteur:</strong> {{ dossierDetail.agriculteur?.prenom }} {{ dossierDetail.agriculteur?.nom }}</div>
+                  <div><strong>CIN:</strong> {{ dossierDetail.agriculteur?.cin }}</div>
+                  <div><strong>Téléphone:</strong> {{ dossierDetail.agriculteur?.telephone }}</div>
                 </div>
               </Panel>
             </div>
@@ -63,10 +64,11 @@
             <div class="col-12 md:col-6">
               <Panel header="Projet">
                 <div class="flex flex-column gap-2">
-                  <div><strong>Type:</strong> {{ dossierDetail.dossier.sousRubriqueDesignation }}</div>
-                  <div><strong>Rubrique:</strong> {{ dossierDetail.dossier.rubriqueDesignation }}</div>
-                  <div><strong>Montant demandé:</strong> {{ formatCurrency(dossierDetail.dossier.montantSubvention) }}</div>
-                  <div><strong>Antenne:</strong> {{ dossierDetail.dossier.antenneDesignation }}</div>
+                  <div><strong>Type:</strong> {{ dossierDetail.projet?.sousRubrique }}</div>
+                  <div><strong>Rubrique:</strong> {{ dossierDetail.projet?.rubrique }}</div>
+                  <div><strong>Montant demandé:</strong> {{ formatCurrency(dossierDetail.montantSubvention) }}</div>
+                  <div><strong>Antenne:</strong> {{ dossierDetail.antenne?.designation }}</div>
+                  <div><strong>Localisation:</strong> {{ getFullLocation() }}</div>
                 </div>
               </Panel>
             </div>
@@ -75,24 +77,103 @@
       </Card>
 
       <!-- Commission Feedback -->
-      <Card class="mb-4">
+      <Card class="mb-4" v-if="dossierDetail.commissionFeedback">
         <template #title>
-          <i class="pi pi-chat-square-text mr-2"></i>Retour de la Commission AHA-AF
+          <i class="pi pi-map-marker mr-2"></i>Retour de la Commission Visite Terrain
         </template>
         <template #content>
-          <div class="flex justify-content-between align-items-center mb-3">
-            <Tag value="TERRAIN APPROUVÉ" severity="success" />
-            <span class="text-sm text-500">Visite effectuée</span>
+          <div v-if="dossierDetail.commissionFeedback.decisionMade">
+            <!-- Commission Decision -->
+            <div class="flex justify-content-between align-items-center mb-4">
+              <div class="flex align-items-center gap-3">
+                <Tag 
+                  :value="dossierDetail.commissionFeedback.approved ? 'TERRAIN APPROUVÉ' : 'TERRAIN REJETÉ'" 
+                  :severity="dossierDetail.commissionFeedback.approved ? 'success' : 'danger'"
+                  class="text-lg font-bold"
+                />
+                <div class="text-sm text-600">
+                  <i class="pi pi-calendar mr-1"></i>
+                  Visite effectuée le {{ formatDate(dossierDetail.commissionFeedback.dateVisite) }}
+                </div>
+              </div>
+              <div class="text-sm text-600" v-if="dossierDetail.commissionFeedback.agentCommissionName">
+                <i class="pi pi-user mr-1"></i>
+                Par: {{ dossierDetail.commissionFeedback.agentCommissionName }}
+              </div>
+            </div>
+
+            <!-- Commission Details -->
+            <div class="grid">
+              <div class="col-12 md:col-6" v-if="dossierDetail.commissionFeedback.observations">
+                <h5>Observations Terrain</h5>
+                <div class="p-3 bg-gray-50 border-round">
+                  {{ dossierDetail.commissionFeedback.observations }}
+                </div>
+              </div>
+              
+              <div class="col-12 md:col-6" v-if="dossierDetail.commissionFeedback.recommandations">
+                <h5>Recommandations</h5>
+                <div class="p-3 bg-blue-50 border-round">
+                  {{ dossierDetail.commissionFeedback.recommandations }}
+                </div>
+              </div>
+
+              <div class="col-12" v-if="dossierDetail.commissionFeedback.conclusion">
+                <h5>Conclusion de la Commission</h5>
+                <div class="p-3 border-round" :class="{
+                  'bg-green-50': dossierDetail.commissionFeedback.approved,
+                  'bg-red-50': !dossierDetail.commissionFeedback.approved
+                }">
+                  {{ dossierDetail.commissionFeedback.conclusion }}
+                </div>
+              </div>
+
+              <!-- Technical Details -->
+              <div class="col-12" v-if="hasVisitDetails()">
+                <h5>Détails de la Visite</h5>
+                <div class="grid">
+                  <div class="col-4" v-if="dossierDetail.commissionFeedback.coordonneesGPS">
+                    <strong>Coordonnées GPS:</strong><br>
+                    <small>{{ dossierDetail.commissionFeedback.coordonneesGPS }}</small>
+                  </div>
+                  <div class="col-4" v-if="dossierDetail.commissionFeedback.dureeVisite">
+                    <strong>Durée:</strong><br>
+                    <small>{{ dossierDetail.commissionFeedback.dureeVisite }} minutes</small>
+                  </div>
+                  <div class="col-4" v-if="dossierDetail.commissionFeedback.conditionsMeteo">
+                    <strong>Conditions météo:</strong><br>
+                    <small>{{ dossierDetail.commissionFeedback.conditionsMeteo }}</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Photos Section -->
+            <div v-if="dossierDetail.commissionFeedback.photosUrls && dossierDetail.commissionFeedback.photosUrls.length > 0" class="mt-4">
+              <h5>Photos du Terrain</h5>
+              <div class="flex gap-2 flex-wrap">
+                <div v-for="(photo, index) in dossierDetail.commissionFeedback.photosUrls" :key="index" class="border-round overflow-hidden">
+                  <img :src="photo" :alt="`Photo terrain ${index + 1}`" class="w-8rem h-6rem object-cover cursor-pointer" 
+                       @click="openPhotoDialog(photo)" />
+                </div>
+              </div>
+            </div>
           </div>
-          <p class="mb-2"><strong>Observations:</strong> Terrain conforme aux exigences du projet.</p>
-          <p class="mb-0"><strong>Recommandations:</strong> Procéder à l'approbation du projet.</p>
+          
+          <!-- No Commission Decision Yet -->
+          <div v-else class="text-center py-4">
+            <i class="pi pi-clock text-4xl text-orange-500 mb-3"></i>
+            <h4>En attente de la décision de la Commission</h4>
+            <p class="text-600">La commission n'a pas encore rendu sa décision concernant la visite terrain.</p>
+            <Tag value="VISITE EN COURS" severity="warning" />
+          </div>
         </template>
       </Card>
 
       <!-- Decision Form -->
-      <Card v-if="!isAlreadyApproved()">
+      <Card v-if="!isAlreadyApproved() && canMakeDecision()">
         <template #title>
-          <i class="pi pi-gavel mr-2"></i>Votre Décision
+          <i class="pi pi-balance-scale mr-2"></i>Votre Décision Finale
         </template>
         <template #content>
           <form @submit.prevent="submitDecision">
@@ -140,6 +221,7 @@
                     v-model="formData.commentaireApprobation" 
                     rows="3"
                     class="w-full"
+                    placeholder="Commentaires sur l'approbation..."
                   />
                 </div>
               </div>
@@ -152,6 +234,7 @@
                     v-model="formData.conditionsSpecifiques" 
                     rows="3"
                     class="w-full"
+                    placeholder="Conditions particulières à respecter..."
                   />
                 </div>
               </div>
@@ -162,8 +245,10 @@
               <Textarea 
                 id="motifRejet"
                 v-model="formData.motifRejet" 
-                rows="3"
+                rows="4"
                 class="w-full"
+                placeholder="Expliquez clairement les motifs du rejet..."
+                :class="{ 'p-invalid': formData.decision === 'reject' && !formData.motifRejet?.trim() }"
               />
             </div>
 
@@ -174,10 +259,28 @@
                 v-model="formData.observationsCommission" 
                 rows="2"
                 class="w-full"
+                placeholder="Synthèse des observations de la commission..."
               />
             </div>
 
-            <div class="flex justify-content-end gap-2 pt-3">
+            <!-- Decision Summary -->
+            <div v-if="formData.decision" class="mt-4 p-3 border-round" :class="{
+              'bg-green-50 border-green-200': formData.decision === 'approve',
+              'bg-red-50 border-red-200': formData.decision === 'reject'
+            }">
+              <h5 class="mt-0">Résumé de la décision</h5>
+              <div v-if="formData.decision === 'approve'">
+                <p class="mb-2"><strong>Action:</strong> Approbation du dossier</p>
+                <p class="mb-2"><strong>Montant approuvé:</strong> {{ formatCurrency(formData.montantApprouve) }}</p>
+                <p class="mb-0"><strong>Prochaine étape:</strong> Génération de la fiche d'approbation et envoi à l'antenne pour la phase de réalisation</p>
+              </div>
+              <div v-else>
+                <p class="mb-2"><strong>Action:</strong> Rejet définitif du dossier</p>
+                <p class="mb-0"><strong>Prochaine étape:</strong> Génération de la fiche de rejet et notification à l'antenne</p>
+              </div>
+            </div>
+
+            <div class="flex justify-content-end gap-2 pt-4">
               <Button 
                 label="Annuler" 
                 icon="pi pi-times" 
@@ -197,7 +300,31 @@
           </form>
         </template>
       </Card>
+
+      <!-- Cannot Make Decision (Commission not done) -->
+      <Card v-else-if="!isAlreadyApproved() && !canMakeDecision()">
+        <template #content>
+          <div class="text-center py-6">
+            <i class="pi pi-clock text-6xl text-orange-500 mb-4"></i>
+            <h3>Décision en attente</h3>
+            <p class="text-600 mb-4">
+              Vous ne pouvez pas prendre de décision finale tant que la Commission n'a pas rendu son verdict sur la visite terrain.
+            </p>
+            <Button 
+              label="Actualiser" 
+              icon="pi pi-refresh" 
+              @click="loadDossierDetail"
+              class="p-button-outlined"
+            />
+          </div>
+        </template>
+      </Card>
     </div>
+
+    <!-- Photo Dialog -->
+    <Dialog v-model:visible="photoDialog.visible" modal :style="{ width: '80vw', height: '80vh' }" header="Photo du Terrain">
+      <img :src="photoDialog.url" alt="Photo terrain" class="w-full h-full object-contain" />
+    </Dialog>
 
     <Toast />
   </div>
@@ -220,6 +347,7 @@ import Tag from 'primevue/tag';
 import Toast from 'primevue/toast';
 import Message from 'primevue/message';
 import Breadcrumb from 'primevue/breadcrumb';
+import Dialog from 'primevue/dialog';
 
 const router = useRouter();
 const route = useRoute();
@@ -230,6 +358,11 @@ const error = ref(null);
 const submitting = ref(false);
 const dossierDetail = ref(null);
 
+const photoDialog = ref({
+  visible: false,
+  url: ''
+});
+
 const formData = reactive({
   decision: null,
   montantApprouve: null,
@@ -237,7 +370,7 @@ const formData = reactive({
   commentaireApprobation: '',
   conditionsSpecifiques: '',
   motifRejet: '',
-  observationsCommission: 'Terrain conforme selon visite commission'
+  observationsCommission: ''
 });
 
 const decisionOptions = [
@@ -249,7 +382,7 @@ const dossierId = computed(() => route.params.dossierId);
 
 const breadcrumbItems = computed(() => [
   { label: 'Dossiers GUC', route: '/agent_guc/dossiers' },
-  { label: dossierDetail.value?.dossier?.reference || 'Dossier' },
+  { label: dossierDetail.value?.reference || 'Dossier' },
   { label: 'Décision Finale' }
 ]);
 
@@ -262,7 +395,7 @@ async function loadDossierDetail() {
     loading.value = true;
     error.value = null;
     
-    const response = await ApiService.get(`/dossiers/${dossierId.value}`);
+    const response = await ApiService.get(`/agent-guc/dossiers/detail/${dossierId.value}`);
     dossierDetail.value = response;
     
     // Check if already approved
@@ -270,14 +403,21 @@ async function loadDossierDetail() {
       toast.add({
         severity: 'info',
         summary: 'Information',
-        detail: 'Ce dossier a déjà été approuvé',
+        detail: 'Ce dossier a déjà été traité',
         life: 3000
       });
     }
     
-    // Initialize form
-    formData.montantDemande = response.dossier.montantSubvention;
-    formData.montantApprouve = response.dossier.montantSubvention;
+    // Initialize form with commission observations
+    formData.montantDemande = response.montantSubvention;
+    formData.montantApprouve = response.montantSubvention;
+    
+    if (response.commissionFeedback?.observations) {
+      formData.observationsCommission = `Observations terrain: ${response.commissionFeedback.observations}`;
+      if (response.commissionFeedback.recommandations) {
+        formData.observationsCommission += `\nRecommandations: ${response.commissionFeedback.recommandations}`;
+      }
+    }
     
   } catch (err) {
     error.value = err.message || 'Impossible de charger le dossier';
@@ -305,6 +445,10 @@ function isFormValid() {
   } else {
     return formData.motifRejet?.trim();
   }
+}
+
+function canMakeDecision() {
+  return dossierDetail.value?.commissionFeedback?.decisionMade;
 }
 
 function getSubmitButtonLabel() {
@@ -335,14 +479,14 @@ async function submitDecision() {
       observationsCommission: formData.observationsCommission
     };
 
-    const response = await ApiService.post('/fiche-approbation/final-approval', requestData);
+    const response = await ApiService.post('/agent-guc/dossiers/final-approval', requestData);
     
     if (response.success !== false) {
       toast.add({
         severity: 'success',
         summary: 'Succès',
         detail: response.message || 'Décision prise avec succès',
-        life: 3000
+        life: 4000
       });
       
       if (formData.decision === 'approve') {
@@ -350,7 +494,9 @@ async function submitDecision() {
           router.push(`/agent_guc/dossiers/${dossierId.value}/fiche`);
         }, 2000);
       } else {
-        router.push('/agent_guc/dossiers');
+        setTimeout(() => {
+          router.push('/agent_guc/dossiers');
+        }, 2000);
       }
     }
     
@@ -369,10 +515,31 @@ async function submitDecision() {
 function isAlreadyApproved() {
   if (!dossierDetail.value) return false;
   
-  return dossierDetail.value.dossier.statut === 'APPROVED' || 
-         dossierDetail.value.dossier.statut === 'APPROVED_AWAITING_FARMER' ||
-         dossierDetail.value.dossier.dateApprobation || 
-         dossierDetail.value.dossier.statut === 'COMPLETED';
+  return dossierDetail.value.statut === 'APPROVED' || 
+         dossierDetail.value.statut === 'AWAITING_FARMER' ||
+         dossierDetail.value.dateApprobation || 
+         dossierDetail.value.statut === 'COMPLETED' ||
+         dossierDetail.value.statut === 'REJECTED';
+}
+
+function hasVisitDetails() {
+  const feedback = dossierDetail.value?.commissionFeedback;
+  return feedback?.coordonneesGPS || feedback?.dureeVisite || feedback?.conditionsMeteo;
+}
+
+function getFullLocation() {
+  const agriculteur = dossierDetail.value?.agriculteur;
+  if (!agriculteur) return 'Non spécifiée';
+  
+  const parts = [];
+  if (agriculteur.douar) parts.push(agriculteur.douar);
+  if (agriculteur.communeRurale) parts.push(agriculteur.communeRurale);
+  return parts.join(', ') || 'Non spécifiée';
+}
+
+function openPhotoDialog(photoUrl) {
+  photoDialog.value.url = photoUrl;
+  photoDialog.value.visible = true;
 }
 
 function goBack() {
@@ -386,6 +553,15 @@ function formatCurrency(amount) {
     currency: 'MAD'
   }).format(amount);
 }
+
+function formatDate(date) {
+  if (!date) return '';
+  return new Intl.DateTimeFormat('fr-FR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date(date));
+}
 </script>
 
 <style scoped>
@@ -395,44 +571,17 @@ function formatCurrency(amount) {
   padding: 1rem;
 }
 
-.loading-container,
-.error-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem;
-  gap: 1rem;
-}
-
-.approval-header {
-  margin-bottom: 1.5rem;
-}
-
-.header-nav {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--text-color-secondary);
-  font-size: 0.9rem;
-}
-
-.breadcrumb span:last-child {
-  color: var(--primary-color);
-  font-weight: 500;
-}
-
 .field-group > div {
   margin-bottom: 0.5rem;
 }
 
 .field-group strong {
   color: var(--text-color);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
 }
 </style>

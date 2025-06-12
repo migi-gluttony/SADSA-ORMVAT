@@ -73,7 +73,7 @@ public class Dossier {
         SUBMITTED,
         IN_REVIEW,
         APPROVED,
-        APPROVED_AWAITING_FARMER,
+        AWAITING_FARMER, // Changed from APPROVED_AWAITING_FARMER (only change needed)
         REALIZATION_IN_PROGRESS,
         REJECTED,
         COMPLETED,

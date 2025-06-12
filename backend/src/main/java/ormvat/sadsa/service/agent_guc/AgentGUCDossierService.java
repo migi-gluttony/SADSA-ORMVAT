@@ -8,10 +8,16 @@ import ormvat.sadsa.model.*;
 import ormvat.sadsa.repository.*;
 import ormvat.sadsa.service.workflow.WorkflowService;
 import ormvat.sadsa.service.workflow.AuditService;
+import ormvat.sadsa.service.agent_guc.FicheApprobationService;
 import ormvat.sadsa.dto.role_based.RoleBasedDossierDTOs.*;
+import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.FinalApprovalRequest;
+import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.FinalApprovalResponse;
+import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.GenerateFicheRequest;
+import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.FicheApprobationResponse;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -22,11 +28,11 @@ public class AgentGUCDossierService {
     private final DossierRepository dossierRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final PieceJointeRepository pieceJointeRepository;
+    private final VisiteTerrainRepository visiteTerrainRepository;
     private final WorkflowService workflowService;
     private final AuditService auditService;
-
-    public DossierListResponse getAllDossiers(String userEmail) {
-        Utilisateur user = getUserByEmail(userEmail);
+    private final FicheApprobationService ficheApprobationService;    public DossierListResponse getAllDossiers(String userEmail) {
+        getUserByEmail(userEmail); // Validate user exists
         
         List<Dossier> dossiers = dossierRepository.findAll();
         
@@ -37,10 +43,8 @@ public class AgentGUCDossierService {
         return DossierListResponse.builder()
                 .dossiers(summaries)
                 .build();
-    }
-
-    public DossierListResponse getPendingDossiers(String userEmail) {
-        Utilisateur user = getUserByEmail(userEmail);
+    }    public DossierListResponse getPendingDossiers(String userEmail) {
+        getUserByEmail(userEmail); // Validate user exists
         
         List<Dossier> dossiers = dossierRepository.findByStatusIn(List.of(
                 Dossier.DossierStatus.SUBMITTED,
@@ -55,10 +59,8 @@ public class AgentGUCDossierService {
         return DossierListResponse.builder()
                 .dossiers(summaries)
                 .build();
-    }
-
-    public DossierDetailResponse getDossierById(Long id, String userEmail) {
-        Utilisateur user = getUserByEmail(userEmail);
+    }    public DossierDetailResponse getDossierById(Long id, String userEmail) {
+        getUserByEmail(userEmail); // Validate user exists
         Dossier dossier = dossierRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
 
@@ -88,23 +90,96 @@ public class AgentGUCDossierService {
     }
 
     @Transactional
-    public ActionResponse approveDossier(Long id, ApproveRequest request, String userEmail) {
+    public FinalApprovalResponse processFinalApproval(FinalApprovalRequest request, String userEmail) {
         Utilisateur user = getUserByEmail(userEmail);
-        Dossier dossier = getDossierForGUCAction(id);
+        Dossier dossier = getDossierForFinalApproval(request.getDossierId());
 
-        dossier.setStatus(Dossier.DossierStatus.APPROVED_AWAITING_FARMER);
-        dossier.setDateApprobation(LocalDateTime.now());
-        dossierRepository.save(dossier);
+        if (request.getApproved()) {
+            return processFinalApproval(dossier, request, user);
+        } else {
+            return processFinalRejection(dossier, request, user);
+        }
+    }
 
-        auditService.logAction(user.getId(), "APPROVE_DOSSIER", "Dossier", dossier.getId(),
-                              dossier.getStatus().name(), "APPROVED_AWAITING_FARMER", 
-                              "Approbation finale - " + request.getCommentaire());
+    @Transactional
+    private FinalApprovalResponse processFinalApproval(Dossier dossier, FinalApprovalRequest request, Utilisateur user) {
+        try {
+            // Update dossier status and details
+            dossier.setStatus(Dossier.DossierStatus.AWAITING_FARMER);
+            dossier.setDateApprobation(LocalDateTime.now());
+            if (request.getMontantApprouve() != null) {
+                dossier.setMontantSubvention(request.getMontantApprouve());
+            }
+            dossierRepository.save(dossier);
 
-        return ActionResponse.builder()
-                .success(true)
-                .message("Dossier approuvé avec succès")
-                .timestamp(LocalDateTime.now())
-                .build();
+            // Generate fiche d'approbation
+            GenerateFicheRequest ficheRequest = GenerateFicheRequest.builder()
+                    .dossierId(dossier.getId())
+                    .commentaireApprobation(request.getCommentaireApprobation())
+                    .observationsCommission(request.getObservationsCommission())
+                    .montantApprouve(request.getMontantApprouve() != null ? 
+                        request.getMontantApprouve() : dossier.getMontantSubvention())
+                    .conditionsSpecifiques(request.getConditionsSpecifiques())
+                    .build();
+
+            FicheApprobationResponse ficheResponse = ficheApprobationService.generateFicheApprobation(ficheRequest, user.getEmail());
+
+            // Move to next phase (Phase 5 - Antenne Realization)
+            workflowService.moveToStep(dossier.getId(), 5L, user.getId(), 
+                    "Approbation finale - Fiche générée: " + ficheResponse.getNumeroFiche());
+
+            auditService.logAction(user.getId(), "FINAL_APPROVAL", "Dossier", dossier.getId(),
+                    "IN_REVIEW", "APPROVED_AWAITING_FARMER", 
+                    "Approbation finale avec génération fiche: " + ficheResponse.getNumeroFiche());
+
+            return FinalApprovalResponse.builder()
+                    .success(true)
+                    .message("Dossier approuvé avec succès - Fiche d'approbation générée")
+                    .newStatut("APPROVED_AWAITING_FARMER")
+                    .numeroFiche(ficheResponse.getNumeroFiche())
+                    .dateAction(LocalDateTime.now())
+                    .ficheGenerated(true)
+                    .nextStep("Dossier envoyé à l'antenne pour phase de réalisation")
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors de l'approbation finale du dossier {}: {}", dossier.getId(), e.getMessage());
+            throw new RuntimeException("Erreur lors de l'approbation: " + e.getMessage());
+        }
+    }
+
+    @Transactional
+    private FinalApprovalResponse processFinalRejection(Dossier dossier, FinalApprovalRequest request, Utilisateur user) {
+        try {
+            // Update dossier status
+            dossier.setStatus(Dossier.DossierStatus.REJECTED);
+            dossierRepository.save(dossier);
+
+            // TODO: Generate fiche de rejet here (similar to fiche d'approbation but for rejection)
+            String ficheRejetNumber = generateFicheRejetNumber(dossier);
+
+            // Move back to Antenne for archiving (but stays visible for 15 days)
+            workflowService.moveToStep(dossier.getId(), 1L, user.getId(), 
+                    "Rejet final - Fiche de rejet générée: " + ficheRejetNumber);
+
+            auditService.logAction(user.getId(), "FINAL_REJECTION", "Dossier", dossier.getId(),
+                    "IN_REVIEW", "REJECTED", 
+                    "Rejet final - Motif: " + request.getMotifRejet());
+
+            return FinalApprovalResponse.builder()
+                    .success(true)
+                    .message("Dossier rejeté - Fiche de rejet générée")
+                    .newStatut("REJECTED")
+                    .numeroFiche(ficheRejetNumber)
+                    .dateAction(LocalDateTime.now())
+                    .ficheGenerated(true)
+                    .nextStep("Dossier rejeté - Visible à l'antenne pour 15 jours avant archivage")
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors du rejet final du dossier {}: {}", dossier.getId(), e.getMessage());
+            throw new RuntimeException("Erreur lors du rejet: " + e.getMessage());
+        }
     }
 
     @Transactional
@@ -149,13 +224,6 @@ public class AgentGUCDossierService {
                 .build();
     }
 
-    public List<ActionDTO> getAvailableActions(Long dossierId, String userEmail) {
-        Dossier dossier = dossierRepository.findById(dossierId)
-                .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
-
-        return getActionsForCurrentState(dossier, dossierId);
-    }
-
     // Helper methods
     private Utilisateur getUserByEmail(String email) {
         return utilisateurRepository.findByEmail(email)
@@ -168,6 +236,19 @@ public class AgentGUCDossierService {
 
         if (!canGUCActOn(dossier)) {
             throw new RuntimeException("Action GUC non autorisée sur ce dossier");
+        }
+
+        return dossier;
+    }
+
+    private Dossier getDossierForFinalApproval(Long id) {
+        Dossier dossier = dossierRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Dossier non trouvé"));
+
+        // Check if dossier is in Phase 4 (final approval)
+        var currentStep = workflowService.getCurrentStep(dossier.getId());
+        if (currentStep == null || !currentStep.getIdEtape().equals(4L)) {
+            throw new RuntimeException("Le dossier n'est pas en phase d'approbation finale");
         }
 
         return dossier;
@@ -191,6 +272,7 @@ public class AgentGUCDossierService {
 
     private DossierSummaryDTO mapToSummaryDTO(Dossier dossier) {
         TimingDTO timing = workflowService.getTimingInfo(dossier.getId());
+        CommissionFeedbackDTO commissionFeedback = getCommissionFeedback(dossier.getId());
 
         return DossierSummaryDTO.builder()
                 .id(dossier.getId())
@@ -206,15 +288,24 @@ public class AgentGUCDossierService {
                 .enRetard(timing.getEnRetard())
                 .joursRetard(timing.getJoursRetard())
                 .joursRestants(timing.getJoursRestants())
+                .sousRubriqueDesignation(dossier.getSousRubrique().getDesignation())
+                .antenneDesignation(dossier.getAntenne().getDesignation())
+                .cdaNom(dossier.getAntenne().getCda() != null ? dossier.getAntenne().getCda().getDescription() : "")
+                .notesCount(0) // TODO: Count actual notes
                 .availableActions(getActionsForCurrentState(dossier, dossier.getId()))
+                // Commission feedback
+                .commissionDecisionMade(commissionFeedback.getDecisionMade())
+                .commissionApproved(commissionFeedback.getApproved())
+                .commissionComments(commissionFeedback.getObservations())
+                .commissionDecisionDate(commissionFeedback.getDateDecision())
+                .commissionAgentName(commissionFeedback.getAgentCommissionName())
                 .build();
     }
 
     private DossierDetailResponse mapToDetailDTO(Dossier dossier) {
         TimingDTO timing = workflowService.getTimingInfo(dossier.getId());
-
-        // Fetch piece jointes for this dossier
         List<PieceJointe> pieceJointes = pieceJointeRepository.findByDossierIdOrderByDateUploadDesc(dossier.getId());
+        CommissionFeedbackDTO commissionFeedback = getCommissionFeedback(dossier.getId());
 
         return DossierDetailResponse.builder()
                 .id(dossier.getId())
@@ -234,6 +325,47 @@ public class AgentGUCDossierService {
                 .workflowHistory(mapToWorkflowHistoryDTOs(dossier.getId()))
                 .documents(mapToPieceJointeDTOs(pieceJointes))
                 .availableActions(getActionsForCurrentState(dossier, dossier.getId()))
+                .commissionFeedback(commissionFeedback)
+                .build();
+    }
+
+    private CommissionFeedbackDTO getCommissionFeedback(Long dossierId) {        // Get the latest terrain visit for this dossier
+        List<VisiteTerrain> visites = visiteTerrainRepository.findByDossierId(dossierId);
+        Optional<VisiteTerrain> latestVisit = visites.stream()
+                .filter(v -> v.getDateCreation() != null)
+                .max((v1, v2) -> v1.getDateCreation().compareTo(v2.getDateCreation()));
+        if (latestVisit.isPresent()) {
+            VisiteTerrain visit = latestVisit.get();
+            return CommissionFeedbackDTO.builder()
+                    .decisionMade(visit.getStatutVisite() == VisiteTerrain.StatutVisite.TERMINEE)
+                    .approved(visit.getApprouve())
+                    .observations(visit.getObservations())
+                    .recommandations(visit.getRecommandations())
+                    .conclusion(visit.getConclusion())
+                    .dateVisite(visit.getDateVisite() != null ? visit.getDateVisite().atStartOfDay() : null)
+                    .dateDecision(visit.getDateModification())
+                    .agentCommissionName(visit.getUtilisateurCommission() != null ? 
+                            visit.getUtilisateurCommission().getPrenom() + " " + visit.getUtilisateurCommission().getNom() : null)
+                    .coordonneesGPS(visit.getCoordonneesGPS())
+                    .conditionsMeteo(visit.getConditionsMeteo())
+                    .dureeVisite(visit.getDureeVisite())
+                    .photosUrls(List.of()) // TODO: Get actual photos from PieceJointe with type TERRAIN_PHOTO
+                    .build();
+        }
+
+        return CommissionFeedbackDTO.builder()
+                .decisionMade(false)
+                .approved(null)
+                .observations(null)
+                .recommandations(null)
+                .conclusion(null)
+                .dateVisite(null)
+                .dateDecision(null)
+                .agentCommissionName(null)
+                .coordonneesGPS(null)
+                .conditionsMeteo(null)
+                .dureeVisite(null)
+                .photosUrls(List.of())
                 .build();
     }
 
@@ -292,7 +424,6 @@ public class AgentGUCDossierService {
                 .collect(Collectors.toList());
     }
 
-    // Enhanced mapping method that includes all necessary fields for frontend
     private List<DocumentDTO> mapToPieceJointeDTOs(List<PieceJointe> pieceJointes) {
         return pieceJointes.stream()
                 .map(pj -> DocumentDTO.builder()
@@ -305,7 +436,7 @@ public class AgentGUCDossierService {
                         .title(pj.getTitle())
                         .description(pj.getDescription())
                         .formData(pj.getFormData())
-                        .formConfig(null) // FormConfig is not stored in PieceJointe currently
+                        .formConfig(null)
                         .isValidated(pj.getIsValidated())
                         .validationNotes(pj.getValidationNotes())
                         .build())
@@ -339,18 +470,12 @@ public class AgentGUCDossierService {
                             .method("POST")
                             .build()
             );
-            case 4 -> List.of( // Phase 4: Final approval
+            case 4 -> List.of( // Phase 4: Final approval - ONLY final approval action
                     ActionDTO.builder()
-                            .action("approve")
-                            .label("Approuver")
-                            .endpoint("/api/agent-guc/dossiers/approve/" + dossierId)
-                            .method("POST")
-                            .build(),
-                    ActionDTO.builder()
-                            .action("reject")
-                            .label("Rejeter")
-                            .endpoint("/api/agent-guc/dossiers/reject/" + dossierId)
-                            .method("POST")
+                            .action("final-approval")
+                            .label("Finaliser l'Approbation")
+                            .endpoint("/api/agent-guc/dossiers/" + dossierId + "/final-approval")
+                            .method("GET") // Navigate to final approval page
                             .build()
             );
             case 6, 8 -> List.of( // Phase 6, 8: Realization phases
@@ -363,5 +488,11 @@ public class AgentGUCDossierService {
             );
             default -> List.of();
         };
+    }
+
+    private String generateFicheRejetNumber(Dossier dossier) {
+        return "FR-" + java.time.LocalDate.now().getYear() + "-" + 
+               String.format("%02d", java.time.LocalDate.now().getMonthValue()) + "-" + 
+               String.format("%06d", dossier.getId());
     }
 }

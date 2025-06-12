@@ -259,6 +259,30 @@
             </template>
           </Column>
 
+          <Column header="Commission">
+            <template #body="slotProps">
+              <div class="text-sm">
+                <div v-if="slotProps.data.commissionDecisionMade" class="flex flex-column gap-1">
+                  <Tag 
+                    :value="slotProps.data.commissionApproved ? 'TERRAIN APPROUVÉ' : 'TERRAIN REJETÉ'" 
+                    :severity="slotProps.data.commissionApproved ? 'success' : 'danger'"
+                    class="text-xs"
+                  />
+                  <div class="text-xs text-600" v-if="slotProps.data.commissionComments">
+                    {{ truncateText(slotProps.data.commissionComments, 50) }}
+                  </div>
+                  <div class="text-xs text-500" v-if="slotProps.data.commissionDecisionDate">
+                    {{ formatDate(slotProps.data.commissionDecisionDate) }}
+                  </div>
+                </div>
+                <div v-else class="flex align-items-center gap-1">
+                  <Tag value="EN ATTENTE" severity="warning" class="text-xs" />
+                  <i class="pi pi-clock text-xs text-600"></i>
+                </div>
+              </div>
+            </template>
+          </Column>
+
           <Column field="statut" header="Statut" :sortable="true">
             <template #body="slotProps">
               <Tag 
@@ -315,6 +339,7 @@
 
                 <!-- Available Actions from Backend -->
                 <template v-for="action in slotProps.data.availableActions" :key="action.action">
+                  <!-- Assign to Commission -->
                   <Button 
                     v-if="action.action === 'assign-commission'"
                     icon="pi pi-forward" 
@@ -322,25 +347,31 @@
                     class="p-button-info p-button-sm" 
                     v-tooltip.top="action.label" 
                   />
+                  
+                  <!-- Final Approval Button for Phase 4 -->
                   <Button 
-                    v-if="action.action === 'approve'"
-                    icon="pi pi-check" 
-                    @click="confirmApproveDossier(slotProps.data)"
+                    v-if="action.action === 'final-approval'"
+                    icon="pi pi-gavel" 
+                    @click="goToFinalApproval(slotProps.data)"
                     class="p-button-success p-button-sm" 
-                    v-tooltip.top="action.label" 
+                    v-tooltip.top="'Finaliser l\'Approbation'" 
                   />
-                  <Button 
-                    v-if="action.action === 'reject'"
-                    icon="pi pi-times" 
-                    @click="confirmRejectDossier(slotProps.data)"
-                    class="p-button-danger p-button-outlined p-button-sm" 
-                    v-tooltip.top="action.label" 
-                  />
+                  
+                  <!-- Return to Antenne -->
                   <Button 
                     v-if="action.action === 'return'"
                     icon="pi pi-undo" 
                     @click="confirmReturnToAntenne(slotProps.data)"
                     class="p-button-warning p-button-outlined p-button-sm" 
+                    v-tooltip.top="action.label" 
+                  />
+                  
+                  <!-- Reject (only for phase 2) -->
+                  <Button 
+                    v-if="action.action === 'reject'"
+                    icon="pi pi-times" 
+                    @click="confirmRejectDossier(slotProps.data)"
+                    class="p-button-danger p-button-outlined p-button-sm" 
                     v-tooltip.top="action.label" 
                   />
                 </template>
@@ -422,56 +453,6 @@
           class="p-button-info"
           :loading="assignCommissionDialog.loading"
           :disabled="!assignCommissionDialog.comment?.trim()"
-        />
-      </template>
-    </Dialog>
-
-    <!-- Approve Dialog -->
-    <Dialog 
-      v-model:visible="approveDialog.visible" 
-      modal 
-      header="Approuver le Dossier"
-      :style="{ width: '500px' }"
-    >
-      <div class="flex align-items-center mb-3">
-        <i class="pi pi-check text-2xl text-green-500 mr-3"></i>
-        <div>
-          <p>Confirmer l'approbation de ce dossier ?</p>
-          <div class="mt-2 p-2 bg-green-50 border-round">
-            <strong>{{ approveDialog.dossier?.reference }}</strong><br>
-            {{ approveDialog.dossier?.agriculteurNom }}
-          </div>
-        </div>
-      </div>
-      
-      <div class="field">
-        <label for="approveComment">Commentaire (optionnel)</label>
-        <Textarea 
-          id="approveComment"
-          v-model="approveDialog.comment" 
-          rows="3" 
-          placeholder="Commentaires sur l'approbation..."
-          class="w-full"
-        />
-      </div>
-
-      <p class="text-600 text-sm">
-        Cette action approuvera définitivement le dossier.
-      </p>
-      
-      <template #footer>
-        <Button 
-          label="Annuler" 
-          icon="pi pi-times" 
-          @click="approveDialog.visible = false"
-          class="p-button-outlined"
-        />
-        <Button 
-          label="Approuver" 
-          icon="pi pi-check" 
-          @click="approveDossier"
-          class="p-button-success"
-          :loading="approveDialog.loading"
         />
       </template>
     </Dialog>
@@ -664,7 +645,7 @@ const statusOptions = ref([
   { label: 'Soumis', value: 'SUBMITTED' },
   { label: 'En révision', value: 'IN_REVIEW' },
   { label: 'Approuvé', value: 'APPROVED' },
-  { label: 'En attente fermier', value: 'APPROVED_AWAITING_FARMER' },
+  { label: 'En attente fermier', value: 'AWAITING_FARMER' },
   { label: 'Rejeté', value: 'REJECTED' },
   { label: 'Terminé', value: 'COMPLETED' }
 ]);
@@ -699,13 +680,6 @@ const assignCommissionDialog = ref({
   loading: false,
   comment: '',
   priority: 'NORMALE'
-});
-
-const approveDialog = ref({
-  visible: false,
-  dossier: null,
-  loading: false,
-  comment: ''
 });
 
 const rejectDialog = ref({
@@ -792,7 +766,7 @@ async function loadDossiers() {
 function calculateStatistics() {
   const total = dossiers.value.length;
   const enAttente = dossiers.value.filter(d => d.statut === 'SUBMITTED' || d.statut === 'IN_REVIEW').length;
-  const approuves = dossiers.value.filter(d => d.statut === 'APPROVED' || d.statut === 'APPROVED_AWAITING_FARMER' || d.statut === 'COMPLETED').length;
+  const approuves = dossiers.value.filter(d => d.statut === 'APPROVED' || d.statut === 'AWAITING_FARMER' || d.statut === 'COMPLETED').length;
   const enRetard = dossiers.value.filter(d => d.enRetard).length;
 
   statistics.value = {
@@ -847,15 +821,6 @@ function confirmAssignCommission(dossier) {
   };
 }
 
-function confirmApproveDossier(dossier) {
-  approveDialog.value = {
-    visible: true,
-    dossier: dossier,
-    loading: false,
-    comment: ''
-  };
-}
-
 function confirmRejectDossier(dossier) {
   rejectDialog.value = {
     visible: true,
@@ -881,6 +846,10 @@ function showAddNoteDialog(dossier) {
     content: '',
     loading: false
   };
+}
+
+function goToFinalApproval(dossier) {
+  router.push(`/agent_guc/dossiers/${dossier.id}/final-approval`);
 }
 
 // Action methods
@@ -918,40 +887,6 @@ async function assignToCommission() {
     });
   } finally {
     assignCommissionDialog.value.loading = false;
-  }
-}
-
-async function approveDossier() {
-  try {
-    approveDialog.value.loading = true;
-    
-    const dossier = approveDialog.value.dossier;
-    const endpoint = `/agent-guc/dossiers/approve/${dossier.id}`;
-    const payload = { commentaire: approveDialog.value.comment };
-
-    const response = await ApiService.post(endpoint, payload);
-
-    if (response.success) {
-      toast.add({
-        severity: 'success',
-        summary: 'Succès',
-        detail: response.message || 'Dossier approuvé avec succès',
-        life: 3000
-      });
-      
-      approveDialog.value.visible = false;
-      setTimeout(() => loadDossiers(), 500);
-    }
-
-  } catch (err) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erreur',
-      detail: err.message || 'Une erreur est survenue',
-      life: 3000
-    });
-  } finally {
-    approveDialog.value.loading = false;
   }
 }
 
@@ -1076,7 +1011,7 @@ function getStatusLabel(status) {
     'SUBMITTED': 'Soumis',
     'IN_REVIEW': 'En révision',
     'APPROVED': 'Approuvé',
-    'APPROVED_AWAITING_FARMER': 'En attente fermier',
+    'AWAITING_FARMER': 'En attente fermier',
     'REJECTED': 'Rejeté',
     'COMPLETED': 'Terminé',
     'RETURNED_FOR_COMPLETION': 'Retourné'
@@ -1090,7 +1025,7 @@ function getStatusSeverity(status) {
     'SUBMITTED': 'info',
     'IN_REVIEW': 'warning',
     'APPROVED': 'success',
-    'APPROVED_AWAITING_FARMER': 'success',
+    'AWAITING_FARMER': 'success',
     'REJECTED': 'danger',
     'COMPLETED': 'success',
     'RETURNED_FOR_COMPLETION': 'warning'
@@ -1100,7 +1035,7 @@ function getStatusSeverity(status) {
 
 function hasApprovedFiche(dossier) {
   return dossier.statut === 'APPROVED' || 
-         dossier.statut === 'APPROVED_AWAITING_FARMER' ||
+         dossier.statut === 'AWAITING_FARMER' ||
          dossier.statut === 'COMPLETED' ||
          !!dossier.dateApprobation;
 }
@@ -1116,6 +1051,12 @@ function formatCurrency(amount) {
 function formatDate(date) {
   if (!date) return '';
   return new Intl.DateTimeFormat('fr-FR').format(new Date(date));
+}
+
+function truncateText(text, maxLength) {
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
 }
 
 async function exportToExcel() {

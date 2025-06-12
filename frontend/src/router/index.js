@@ -106,7 +106,7 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresRole: 'AGENT_GUC', title: 'Détails du Dossier' },
       props: true
     },
-    {
+     {
       path: '/agent_guc/dossiers/:dossierId/final-approval',
       name: 'agent-guc-final-approval',
       component: () => import('@/views/agent_guc/FinalApprobationView.vue'),
@@ -197,7 +197,7 @@ router.beforeEach((to, from, next) => {
       case 'ADMIN':
         next({ path: '/admin/documents-requis' });
         break;
-      default:
+      default:final
         next({ name: 'dashboard' });
     }
   }

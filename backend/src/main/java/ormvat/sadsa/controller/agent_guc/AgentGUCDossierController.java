@@ -6,8 +6,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import ormvat.sadsa.service.agent_guc.AgentGUCDossierService;
-// import ormvat.sadsa.service.agent_guc.AgentGUCDocumentService; // Temporarily commented out
 import ormvat.sadsa.dto.role_based.RoleBasedDossierDTOs.*;
+import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.FinalApprovalRequest;
+import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.FinalApprovalResponse;
 
 import jakarta.validation.Valid;
 
@@ -18,8 +19,6 @@ import jakarta.validation.Valid;
 public class AgentGUCDossierController {
 
     private final AgentGUCDossierService dossierService;
-    // Temporarily commented out to fix compilation issue
-    // private final AgentGUCDocumentService documentService;
 
     @GetMapping
     public ResponseEntity<DossierListResponse> getAllDossiers(Authentication authentication) {
@@ -71,17 +70,16 @@ public class AgentGUCDossierController {
         }
     }
 
-    @PostMapping("/approve/{id}")
-    public ResponseEntity<ActionResponse> approveDossier(@PathVariable Long id,
-                                                        @Valid @RequestBody ApproveRequest request,
-                                                        Authentication authentication) {
+    @PostMapping("/final-approval")
+    public ResponseEntity<FinalApprovalResponse> processFinalApproval(@Valid @RequestBody FinalApprovalRequest request,
+                                                                     Authentication authentication) {
         try {
-            ActionResponse response = dossierService.approveDossier(id, request, authentication.getName());
+            FinalApprovalResponse response = dossierService.processFinalApproval(request, authentication.getName());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("Erreur approbation dossier {}: {}", id, e.getMessage());
+            log.error("Erreur approbation finale dossier {}: {}", request.getDossierId(), e.getMessage());
             return ResponseEntity.badRequest()
-                    .body(ActionResponse.builder()
+                    .body(FinalApprovalResponse.builder()
                             .success(false)
                             .message(e.getMessage())
                             .build());
@@ -118,8 +116,7 @@ public class AgentGUCDossierController {
                     .body(ActionResponse.builder()
                             .success(false)
                             .message(e.getMessage())
-                            .build());        }
+                            .build());
+        }
     }
-
-    // TODO: Add document preview and download endpoints once AgentGUCDocumentService compilation issue is resolved
 }

@@ -37,7 +37,18 @@ public class RoleBasedDossierDTOs {
         private Boolean enRetard;
         private Integer joursRetard;
         private Integer joursRestants;
+        private String sousRubriqueDesignation;
+        private String antenneDesignation;
+        private String cdaNom;
+        private Integer notesCount;
         private List<ActionDTO> availableActions;
+        
+        // Commission feedback fields
+        private Boolean commissionDecisionMade;
+        private Boolean commissionApproved;
+        private String commissionComments;
+        private LocalDateTime commissionDecisionDate;
+        private String commissionAgentName;
     }
 
     @Data
@@ -62,6 +73,28 @@ public class RoleBasedDossierDTOs {
         private List<WorkflowHistoryDTO> workflowHistory;
         private List<DocumentDTO> documents;
         private List<ActionDTO> availableActions;
+        
+        // Commission feedback details
+        private CommissionFeedbackDTO commissionFeedback;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class CommissionFeedbackDTO {
+        private Boolean decisionMade;
+        private Boolean approved;
+        private String observations;
+        private String recommandations;
+        private String conclusion;
+        private LocalDateTime dateVisite;
+        private LocalDateTime dateDecision;
+        private String agentCommissionName;
+        private String coordonneesGPS;
+        private String conditionsMeteo;
+        private Integer dureeVisite;
+        private List<String> photosUrls;
     }
 
     @Data
@@ -240,6 +273,34 @@ public class RoleBasedDossierDTOs {
     public static class ReturnRequest {
         private String motif;
         private String commentaire;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class FinalApprovalRequest {
+        private Long dossierId;
+        private Boolean approved;
+        private String commentaireApprobation;
+        private String motifRejet;
+        private BigDecimal montantApprouve;
+        private String conditionsSpecifiques;
+        private String observationsCommission;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class FinalApprovalResponse {
+        private Boolean success;
+        private String message;
+        private String newStatut;
+        private String numeroFiche;
+        private LocalDateTime dateAction;
+        private Boolean ficheGenerated;
+        private String nextStep;
     }
 
     @Data

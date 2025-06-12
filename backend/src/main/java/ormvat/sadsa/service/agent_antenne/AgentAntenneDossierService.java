@@ -349,7 +349,7 @@ public class AgentAntenneDossierService {
                             .method("DELETE")
                             .build()
             );
-            case APPROVED_AWAITING_FARMER -> List.of(
+            case AWAITING_FARMER -> List.of(
                     ActionDTO.builder()
                             .action("start_realization")
                             .label("Démarrer Réalisation")

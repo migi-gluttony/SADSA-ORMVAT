@@ -7,8 +7,8 @@
           <i class="pi pi-map mr-2"></i>
           Dossiers - Commission Visite Terrain
         </h1>
-        <p class="text-600" v-if="dossiers.length > 0">
-          {{ dossiers.length }} dossier(s) trouvé(s) - {{ getCommissionTeamDisplayName() }}
+        <p class="text-600" v-if="combinedData.length > 0">
+          {{ combinedData.length }} dossier(s) trouvé(s) - {{ getCommissionTeamDisplayName() }}
         </p>
       </div>
       <div class="flex gap-2">
@@ -21,7 +21,7 @@
         <Button 
           label="Actualiser" 
           icon="pi pi-refresh" 
-          @click="loadDossiers" 
+          @click="loadData" 
           :loading="loading"
           class="p-button-outlined" 
         />
@@ -170,14 +170,14 @@
         <Button 
           label="Réessayer" 
           icon="pi pi-refresh" 
-          @click="loadDossiers" 
+          @click="loadData" 
           class="p-button-outlined mt-3" 
         />
       </template>
     </Card>
 
     <!-- Empty State -->
-    <Card v-else-if="dossiers.length === 0" class="text-center">
+    <Card v-else-if="combinedData.length === 0" class="text-center">
       <template #content>
         <i class="pi pi-map text-4xl text-600 mb-3"></i>
         <h3>Aucun dossier trouvé</h3>
@@ -203,7 +203,7 @@
     <Card v-else>
       <template #content>
         <DataTable 
-          :value="dossiers" 
+          :value="combinedData" 
           :paginator="true" 
           :rows="10"
           :rowsPerPageOptions="[5, 10, 20, 50]"
@@ -223,7 +223,7 @@
           <Column field="agriculteurNom" header="Agriculteur" :sortable="true">
             <template #body="slotProps">
               <div>
-                <div class="font-semibold">{{ slotProps.data.agriculteurNom }}</div>
+                <div class="font-semibold">{{ slotProps.data.agriculteurPrenom }} {{ slotProps.data.agriculteurNom }}</div>
                 <div class="text-sm text-600">
                   <i class="pi pi-id-card mr-1"></i>
                   {{ slotProps.data.agriculteurCin }}
@@ -306,7 +306,9 @@
                 </div>
               </div>
             </template>
-          </Column>          <Column field="actions" header="Actions">
+          </Column>
+
+          <Column field="actions" header="Actions">
             <template #body="slotProps">
               <div class="flex gap-1">
                 <!-- View Details -->
@@ -325,7 +327,7 @@
                   v-tooltip.top="'Ajouter note'" 
                 />
 
-                <!-- Schedule Visit Button - only if no visit is scheduled or needs to be programmed -->
+                <!-- Schedule Visit Button - only if no visit is scheduled -->
                 <Button 
                   v-if="canScheduleVisit(slotProps.data)"
                   icon="pi pi-calendar-plus" 
@@ -370,7 +372,7 @@
           <p>Programmer une visite terrain pour ce dossier ?</p>
           <div class="mt-2 p-2 bg-blue-50 border-round">
             <strong>{{ scheduleVisitDialog.dossier?.reference }}</strong><br>
-            {{ scheduleVisitDialog.dossier?.agriculteurNom }}<br>
+            {{ scheduleVisitDialog.dossier?.agriculteurPrenom }} {{ scheduleVisitDialog.dossier?.agriculteurNom }}<br>
             <small>Type: {{ scheduleVisitDialog.dossier?.sousRubriqueDesignation }}</small>
           </div>
         </div>
@@ -422,7 +424,9 @@
           :disabled="!scheduleVisitDialog.dateVisite || !scheduleVisitDialog.comment?.trim()"
         />
       </template>
-    </Dialog>    <!-- Complete Visit Dialog -->
+    </Dialog>
+
+    <!-- Complete Visit Dialog -->
     <CompleteVisitComponent 
       v-if="finalizeVisitDialog.visit"
       v-model:visible="finalizeVisitDialog.visible"
@@ -503,6 +507,8 @@ const toast = useToast();
 const loading = ref(false);
 const error = ref(null);
 const dossiers = ref([]);
+const terrainVisits = ref([]);
+const combinedData = ref([]);
 const statistics = ref(null);
 const searchTerm = ref('');
 
@@ -573,43 +579,88 @@ const hasActiveFilters = computed(() => {
 
 // Methods
 onMounted(() => {
-  loadDossiers();
+  loadData();
 });
 
-async function loadDossiers() {
+async function loadData() {
   try {
     loading.value = true;
     error.value = null;
 
-    const params = {};
-    
-    // Add search and filters
-    if (searchTerm.value?.trim()) params.searchTerm = searchTerm.value.trim();
-    if (filters.statut) params.statut = filters.statut;
-    if (filters.sousRubriqueId) params.sousRubriqueId = filters.sousRubriqueId;
-    if (filters.antenneId) params.antenneId = filters.antenneId;
-    if (filters.priorite) params.priorite = filters.priorite;
+    // Load both dossiers and terrain visits data
+    const [dossiersResponse, visitsResponse] = await Promise.all([
+      loadDossiers(),
+      loadTerrainVisits()
+    ]);
 
-    const response = await ApiService.get('/agent-commission/dossiers', params);
-    dossiers.value = response.dossiers || [];
-    
-    // Calculate statistics from loaded data
+    combinedData.value = combineDossierAndVisitData(dossiers.value, terrainVisits.value);
     calculateStatistics();
     
   } catch (err) {
-    console.error('Erreur lors du chargement des dossiers:', err);
-    error.value = err.message || 'Impossible de charger les dossiers';
-    dossiers.value = [];
+    console.error('Erreur lors du chargement des données:', err);
+    error.value = err.message || 'Impossible de charger les données';
+    combinedData.value = [];
     statistics.value = null;
   } finally {
     loading.value = false;
   }
 }
 
+async function loadDossiers() {
+  const params = {};
+  
+  // Add search and filters
+  if (searchTerm.value?.trim()) params.searchTerm = searchTerm.value.trim();
+  if (filters.statut) params.statut = filters.statut;
+  if (filters.sousRubriqueId) params.sousRubriqueId = filters.sousRubriqueId;
+  if (filters.antenneId) params.antenneId = filters.antenneId;
+  if (filters.priorite) params.priorite = filters.priorite;
+
+  const response = await ApiService.get('/agent-commission/dossiers', params);
+  dossiers.value = response.dossiers || [];
+  return response;
+}
+
+async function loadTerrainVisits() {
+  const response = await ApiService.get('/agent_commission/terrain-visits', {
+    size: 1000 // Get all visits to match with dossiers
+  });
+  terrainVisits.value = response.visites || [];
+  return response;
+}
+
+function combineDossierAndVisitData(dossiersData, visitsData) {
+  return dossiersData.map(dossier => {
+    // Find the latest terrain visit for this dossier
+    const terrainVisit = visitsData
+      .filter(visit => visit.dossierId === dossier.id)
+      .sort((a, b) => new Date(b.dateVisite || 0) - new Date(a.dateVisite || 0))[0];
+
+    return {
+      ...dossier,
+      // Add terrain visit information
+      visiteTerrainStatus: terrainVisit?.statut || null,
+      dateVisite: terrainVisit?.dateVisite || null,
+      dateConstat: terrainVisit?.dateConstat || null,
+      visiteApprouvee: terrainVisit?.approuve || null,
+      visitId: terrainVisit?.id || null,
+      // Add missing fields from the terrain visit data
+      sousRubriqueDesignation: terrainVisit?.sousRubriqueDesignation || dossier.sousRubriqueDesignation,
+      antenneDesignation: terrainVisit?.antenneDesignation || dossier.antenneDesignation,
+      cdaNom: terrainVisit?.cdaNom || dossier.cdaNom,
+      agriculteurPrenom: terrainVisit?.agriculteurPrenom || dossier.agriculteurPrenom,
+      agriculteurTelephone: terrainVisit?.agriculteurTelephone || dossier.agriculteurTelephone,
+      agriculteurCommune: terrainVisit?.agriculteurCommune || dossier.agriculteurCommune,
+      agriculteurDouar: terrainVisit?.agriculteurDouar || dossier.agriculteurDouar
+    };
+  });
+}
+
 function calculateStatistics() {
-  const total = dossiers.value.length;
-  const enCommission = dossiers.value.filter(d => d.statut === 'IN_REVIEW').length;  const approuves = dossiers.value.filter(d => d.statut === 'APPROVED' || d.statut === 'COMPLETED').length;
-  const enRetard = dossiers.value.filter(d => d.enRetard).length;
+  const total = combinedData.value.length;
+  const enCommission = combinedData.value.filter(d => d.statut === 'IN_REVIEW').length;
+  const approuves = combinedData.value.filter(d => d.statut === 'APPROVED' || d.statut === 'COMPLETED').length;
+  const enRetard = combinedData.value.filter(d => d.enRetard).length;
 
   statistics.value = {
     totalDossiers: total,
@@ -630,7 +681,7 @@ function handleSearch() {
 let searchTimeout = null;
 
 function applyFilters() {
-  loadDossiers();
+  loadData();
 }
 
 function clearFilters() {
@@ -641,7 +692,7 @@ function clearFilters() {
     priorite: null
   });
   searchTerm.value = '';
-  loadDossiers();
+  loadData();
 }
 
 function getCommissionTeamDisplayName() {
@@ -667,21 +718,20 @@ function viewDossierDetail(dossierId) {
   router.push(`/agent_commission/dossiers/${dossierId}`);
 }
 
-// Visit scheduling logic
-function hasScheduledVisit(dossier) {
-  return dossier.visiteTerrainStatus && dossier.visiteTerrainStatus !== 'A_PROGRAMMER';
-}
-
+// Visit scheduling logic with correct data
 function canScheduleVisit(dossier) {
   return dossier.statut === 'IN_REVIEW' && 
-         (!dossier.visiteTerrainStatus || dossier.visiteTerrainStatus === 'A_PROGRAMMER');
+         (!dossier.visiteTerrainStatus || 
+          dossier.visiteTerrainStatus === 'A_PROGRAMMER' ||
+          dossier.visiteTerrainStatus === 'NOUVELLE');
 }
 
 function canFinalizeVisit(dossier) {
   return dossier.visiteTerrainStatus && 
          (dossier.visiteTerrainStatus === 'PROGRAMMEE' || 
           dossier.visiteTerrainStatus === 'EN_COURS' ||
-          dossier.visiteTerrainStatus === 'COMPLETEE');
+          dossier.visiteTerrainStatus === 'COMPLETEE') &&
+         !dossier.dateConstat;
 }
 
 // Dialog functions
@@ -691,7 +741,8 @@ function confirmScheduleVisit(dossier) {
     dossier: dossier,
     loading: false,
     dateVisite: null,
-    comment: ''  };
+    comment: ''
+  };
 }
 
 function showAddNoteDialog(dossier) {
@@ -727,7 +778,7 @@ async function scheduleVisit() {
       });
       
       scheduleVisitDialog.value.visible = false;
-      setTimeout(() => loadDossiers(), 500);
+      setTimeout(() => loadData(), 500);
     }
 
   } catch (err) {
@@ -744,7 +795,7 @@ async function scheduleVisit() {
 
 function handleVisitCompleted() {
   finalizeVisitDialog.value.visible = false;
-  loadDossiers();
+  loadData();
   
   toast.add({
     severity: 'success',
@@ -756,8 +807,18 @@ function handleVisitCompleted() {
 
 async function showFinalizeVisitDialog(dossier) {
   try {
-    // Load the visit data for this dossier
-    const response = await ApiService.get(`/agent_commission/terrain-visits/by-dossier/${dossier.id}`);
+    if (!dossier.visitId) {
+      toast.add({
+        severity: 'error',
+        summary: 'Erreur',
+        detail: 'Aucune visite terrain trouvée pour ce dossier',
+        life: 4000
+      });
+      return;
+    }
+
+    // Load the visit data for this dossier using the visit ID
+    const response = await ApiService.get(`/agent_commission/terrain-visits/${dossier.visitId}`);
     
     if (response && response.id) {
       finalizeVisitDialog.value = {
@@ -798,7 +859,7 @@ async function addNote() {
     });
 
     addNoteDialog.value.visible = false;
-    setTimeout(() => loadDossiers(), 500);
+    setTimeout(() => loadData(), 500);
 
   } catch (err) {
     toast.add({
@@ -816,6 +877,7 @@ async function addNote() {
 function getInspectionStatusLabel(status) {
   const statusMap = {
     'A_PROGRAMMER': 'À programmer',
+    'NOUVELLE': 'À programmer',
     'PROGRAMMEE': 'Programmée',
     'EN_COURS': 'En cours',
     'COMPLETEE': 'Complétée',
@@ -828,6 +890,7 @@ function getInspectionStatusLabel(status) {
 function getInspectionSeverity(status) {
   const severityMap = {
     'A_PROGRAMMER': 'warning',
+    'NOUVELLE': 'warning',
     'PROGRAMMEE': 'info',
     'EN_COURS': 'info',
     'COMPLETEE': 'warning',

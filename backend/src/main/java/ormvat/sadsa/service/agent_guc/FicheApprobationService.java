@@ -42,7 +42,7 @@ public class FicheApprobationService {
             }
 
             // Update dossier with approval details
-            dossier.setStatus(Dossier.DossierStatus.APPROVED_AWAITING_FARMER);
+            dossier.setStatus(Dossier.DossierStatus.AWAITING_FARMER);
             dossier.setDateApprobation(LocalDateTime.now());
             dossier.setMontantSubvention(request.getMontantApprouve());
             dossierRepository.save(dossier);
@@ -85,7 +85,7 @@ public class FicheApprobationService {
             }
 
             // Verify dossier is approved and waiting for retrieval
-            if (!dossier.getStatus().equals(Dossier.DossierStatus.APPROVED_AWAITING_FARMER)) {
+            if (!dossier.getStatus().equals(Dossier.DossierStatus.AWAITING_FARMER)) {
                 throw new RuntimeException("Le dossier n'est pas en attente de récupération par l'agriculteur");
             }
 
@@ -131,7 +131,7 @@ public class FicheApprobationService {
             }
 
             // Check if dossier has been approved
-            if (!dossier.getStatus().equals(Dossier.DossierStatus.APPROVED_AWAITING_FARMER) && 
+            if (!dossier.getStatus().equals(Dossier.DossierStatus.AWAITING_FARMER) && 
                 !dossier.getStatus().equals(Dossier.DossierStatus.REALIZATION_IN_PROGRESS) &&
                 !dossier.getStatus().equals(Dossier.DossierStatus.COMPLETED)) {
                 throw new RuntimeException("Le dossier n'est pas approuvé ou sa fiche n'est pas encore générée");
@@ -170,7 +170,7 @@ public class FicheApprobationService {
             // A dossier is waiting for farmer retrieval if:
             // 1. Status is APPROVED_AWAITING_FARMER
             // 2. Has approval date
-            return dossier.getStatus().equals(Dossier.DossierStatus.APPROVED_AWAITING_FARMER) && 
+            return dossier.getStatus().equals(Dossier.DossierStatus.AWAITING_FARMER) && 
                    dossier.getDateApprobation() != null;
         } catch (Exception e) {
             log.warn("Error checking farmer retrieval status for dossier {}: {}", dossierId, e.getMessage());

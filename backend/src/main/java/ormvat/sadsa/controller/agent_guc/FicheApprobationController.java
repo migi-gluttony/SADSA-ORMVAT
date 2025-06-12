@@ -9,8 +9,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.*;
-import ormvat.sadsa.dto.role_based.RoleBasedDossierDTOs.*;
+import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.FinalApprovalRequest;
+import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.FinalApprovalResponse;
+import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.GenerateFicheRequest;
+import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.FicheApprobationResponse;
+import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.FarmerRetrievalRequest;
+import ormvat.sadsa.dto.agent_guc.FicheApprobationDTOs.FarmerRetrievalResponse;
+
 import ormvat.sadsa.service.agent_guc.FicheApprobationService;
 import ormvat.sadsa.service.agent_guc.AgentGUCDossierService;
 
@@ -21,8 +26,12 @@ import java.util.Map;
 @RequestMapping("/api/fiche-approbation")
 @RequiredArgsConstructor
 @Slf4j
-public class FicheApprobationController {    private final FicheApprobationService ficheApprobationService;
-    private final AgentGUCDossierService agentGUCDossierService;    /**
+public class FicheApprobationController {
+    
+    private final FicheApprobationService ficheApprobationService;
+    private final AgentGUCDossierService agentGUCDossierService;
+    
+    /**
      * Make final approval decision (Phase 4) - UPDATED to use AgentGUCDossierService methods
      */
     @PostMapping("/final-approval")
@@ -34,47 +43,8 @@ public class FicheApprobationController {    private final FicheApprobationServi
             String userEmail = authentication.getName();
             log.info("Décision finale d'approbation pour dossier {} par {}", request.getDossierId(), userEmail);
 
-            FinalApprovalResponse response;
-
-            if (request.getApproved()) {
-                // Use approveDossier for approval case
-                ApproveRequest approveRequest = ApproveRequest.builder()
-                    .commentaire(request.getCommentaireApprobation() != null ? 
-                        request.getCommentaireApprobation() : "Approbation finale")
-                    .build();
-                
-                ActionResponse actionResponse = agentGUCDossierService.approveDossier(
-                    request.getDossierId(), approveRequest, userEmail);
-                
-                // Build fiche-specific response
-                response = FinalApprovalResponse.builder()
-                        .success(actionResponse.getSuccess())
-                        .message(actionResponse.getMessage())
-                        .newStatut("APPROVED_AWAITING_FARMER")
-                        .dateAction(actionResponse.getTimestamp())
-                        .ficheGenerated(true)
-                        .nextStep("En attente de récupération par l'agriculteur")
-                        .build();
-            } else {
-                // Use rejectDossier for rejection case
-                RejectRequest rejectRequest = RejectRequest.builder()
-                        .motif(request.getMotifRejet() != null ? request.getMotifRejet() : "Rejet final")
-                        .commentaire("Rejet en phase finale d'approbation")
-                        .build();
-                
-                ActionResponse actionResponse = agentGUCDossierService.rejectDossier(
-                    request.getDossierId(), rejectRequest, userEmail);
-                
-                // Build rejection response
-                response = FinalApprovalResponse.builder()
-                        .success(actionResponse.getSuccess())
-                        .message(actionResponse.getMessage())
-                        .newStatut("REJECTED")
-                        .dateAction(actionResponse.getTimestamp())
-                        .ficheGenerated(false)
-                        .nextStep("Dossier rejeté définitivement")
-                        .build();
-            }
+            // Use the processFinalApproval method from AgentGUCDossierService
+            FinalApprovalResponse response = agentGUCDossierService.processFinalApproval(request, userEmail);
             
             log.info("Décision finale prise avec succès pour dossier {}", request.getDossierId());
             return ResponseEntity.ok(response);
